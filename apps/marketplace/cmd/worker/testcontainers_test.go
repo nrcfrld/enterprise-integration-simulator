@@ -1,0 +1,336 @@
+//go:build testcontainers
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
+	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/testsupport"
+	"github.com/hibiken/asynq"
+)
+
+func TestContainerWorkerPublishesOutboxAndRetriesWebhook(t *testing.T) {
+	env := testsupport.Start(t)
+	if err := platform.RunMigrations(context.Background(), env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	if err := env.Redis.Ping(context.Background()).Err(); err != nil {
+		t.Fatalf("ping test Redis: %v", err)
+	}
+	var calls atomic.Int32
+	receiver := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if calls.Add(1) == 1 {
+			http.Error(writer, "retry", http.StatusInternalServerError)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+
+	cfg := platform.Config{EncryptionKey: []byte("01234567890123456789012345678901")}
+	secret, err := platform.Encrypt(cfg.EncryptionKey, "webhook-test-secret")
+	if err != nil {
+		t.Fatalf("encrypt webhook secret: %v", err)
+	}
+	ctx := context.Background()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,$3,'ADMIN')`, []any{"usr_worker", "worker@test.local", "unused"}},
+		{`INSERT INTO shops(id,owner_user_id,name) VALUES($1,$2,$3)`, []any{"shop_worker", "usr_worker", "Worker shop"}},
+		{`INSERT INTO shop_scenarios(shop_id) VALUES($1)`, []any{"shop_worker"}},
+		{`INSERT INTO webhooks(id,shop_id,url,secret_ciphertext,enabled,subscribed_events) VALUES($1,$2,$3,$4,true,$5)`, []any{"wh_worker", "shop_worker", receiver.URL, secret, []byte(`["order.created"]`)}},
+		{`INSERT INTO domain_events(id,shop_id,event_type,aggregate_id,payload) VALUES($1,$2,$3,$4,$5)`, []any{"evt_worker", "shop_worker", "order.created", "ord_worker", []byte(`{"id":"ord_worker"}`)}},
+		{`INSERT INTO outbox(id,event_id) VALUES($1,$2)`, []any{"out_worker", "evt_worker"}},
+	} {
+		if _, err := env.DB.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed worker test data: %v", err)
+		}
+	}
+
+	redisOptions, err := asynq.ParseRedisURI(env.RedisURL)
+	if err != nil {
+		t.Fatalf("parse Testcontainers Redis URL: %v", err)
+	}
+	asynqClient := asynq.NewClient(redisOptions)
+	t.Cleanup(func() {
+		if err := asynqClient.Close(); err != nil {
+			t.Errorf("close test Asynq client: %v", err)
+		}
+	})
+	w := &worker{db: env.DB, cfg: cfg, client: asynqClient, logger: slog.New(slog.NewTextHandler(io.Discard, nil)), http: receiver.Client()}
+	if err := w.publishOutbox(ctx); err != nil {
+		t.Fatalf("publish outbox: %v", err)
+	}
+	if err := w.scheduleDeliveries(ctx); err != nil {
+		t.Fatalf("schedule initial delivery through Redis: %v", err)
+	}
+	var deliveryID string
+	var publishedAt *time.Time
+	if err := env.DB.QueryRow(ctx, `SELECT d.id,o.published_at FROM webhook_deliveries d JOIN outbox o ON o.event_id=d.event_id WHERE d.event_id='evt_worker'`).Scan(&deliveryID, &publishedAt); err != nil {
+		t.Fatalf("read published delivery: %v", err)
+	}
+	if publishedAt == nil {
+		t.Fatal("outbox was not marked as published")
+	}
+	payload, _ := json.Marshal(deliveryPayload{DeliveryID: deliveryID})
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatalf("first webhook attempt: %v", err)
+	}
+	var status string
+	var attempts int
+	var retryAt time.Time
+	if err := env.DB.QueryRow(ctx, `SELECT status,attempt_count,next_attempt_at FROM webhook_deliveries WHERE id=$1`, deliveryID).Scan(&status, &attempts, &retryAt); err != nil {
+		t.Fatalf("read failed delivery: %v", err)
+	}
+	if status != "PENDING" || attempts != 1 || retryAt.Before(time.Now().Add(25*time.Second)) {
+		t.Fatalf("retry was not scheduled correctly: status=%s attempts=%d retry_at=%s", status, attempts, retryAt)
+	}
+
+	if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET next_attempt_at=now(),leased_until=NULL WHERE id=$1`, deliveryID); err != nil {
+		t.Fatalf("make retry eligible: %v", err)
+	}
+	if err := w.scheduleDeliveries(ctx); err != nil {
+		t.Fatalf("schedule retry through Redis: %v", err)
+	}
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatalf("retry webhook attempt: %v", err)
+	}
+	if err := env.DB.QueryRow(ctx, `SELECT status,attempt_count FROM webhook_deliveries WHERE id=$1`, deliveryID).Scan(&status, &attempts); err != nil {
+		t.Fatalf("read successful delivery: %v", err)
+	}
+	if status != "DELIVERED" || attempts != 2 || calls.Load() != 2 {
+		t.Fatalf("delivery retry result: status=%s attempts=%d calls=%d", status, attempts, calls.Load())
+	}
+	var attemptRows int
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM webhook_delivery_attempts WHERE delivery_id=$1`, deliveryID).Scan(&attemptRows); err != nil {
+		t.Fatalf("count immutable attempts: %v", err)
+	}
+	if attemptRows != 2 {
+		t.Fatalf("attempt rows = %d, want 2", attemptRows)
+	}
+
+	if _, err := env.DB.Exec(ctx, `UPDATE shop_scenarios SET webhook_out_of_order=true WHERE shop_id='shop_worker'`); err != nil {
+		t.Fatalf("enable out-of-order scenario: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `UPDATE webhooks SET subscribed_events=$1 WHERE id='wh_worker'`, []byte(`["order.created","order.paid"]`)); err != nil {
+		t.Fatalf("subscribe webhook to payment event: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO domain_events(id,shop_id,event_type,aggregate_id,payload) VALUES('evt_paid','shop_worker','order.paid','ord_worker','{}')`); err != nil {
+		t.Fatalf("insert payment event: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO outbox(id,event_id) VALUES('out_paid','evt_paid')`); err != nil {
+		t.Fatalf("insert payment outbox: %v", err)
+	}
+	if err := w.publishOutbox(ctx); err != nil {
+		t.Fatalf("publish out-of-order event: %v", err)
+	}
+	var delayedAt time.Time
+	if err := env.DB.QueryRow(ctx, `SELECT next_attempt_at FROM webhook_deliveries WHERE event_id='evt_paid'`).Scan(&delayedAt); err != nil {
+		t.Fatalf("read out-of-order delivery: %v", err)
+	}
+	if delayedAt.Before(time.Now().Add(9 * time.Second)) {
+		t.Fatalf("out-of-order delivery was not delayed: %s", delayedAt)
+	}
+
+	if _, err := env.DB.Exec(ctx, `UPDATE shop_scenarios SET webhook_duplicate=true,webhook_delay_seconds=2,webhook_force_failure=true WHERE shop_id='shop_worker'`); err != nil {
+		t.Fatalf("enable duplicate, delay, and failure scenarios: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO domain_events(id,shop_id,event_type,aggregate_id,payload) VALUES('evt_forced_failure','shop_worker','order.created','ord_worker','{}')`); err != nil {
+		t.Fatalf("insert scenario event: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO outbox(id,event_id) VALUES('out_forced_failure','evt_forced_failure')`); err != nil {
+		t.Fatalf("insert scenario outbox: %v", err)
+	}
+	if err := w.publishOutbox(ctx); err != nil {
+		t.Fatalf("publish duplicate/delayed scenario event: %v", err)
+	}
+	var delayedCopies int
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM webhook_deliveries WHERE event_id='evt_forced_failure' AND next_attempt_at>=now()+interval '1 second'`).Scan(&delayedCopies); err != nil {
+		t.Fatalf("count delayed duplicate deliveries: %v", err)
+	}
+	if delayedCopies != 2 {
+		t.Fatalf("duplicate scenario deliveries = %d, want 2", delayedCopies)
+	}
+	var forcedDeliveryID string
+	if err := env.DB.QueryRow(ctx, `SELECT id FROM webhook_deliveries WHERE event_id='evt_forced_failure' ORDER BY id LIMIT 1`).Scan(&forcedDeliveryID); err != nil {
+		t.Fatalf("read forced-failure delivery: %v", err)
+	}
+	if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET next_attempt_at=now(),leased_until=now()+interval '30 seconds' WHERE id=$1`, forcedDeliveryID); err != nil {
+		t.Fatalf("make forced-failure delivery eligible: %v", err)
+	}
+	forcedPayload, _ := json.Marshal(deliveryPayload{DeliveryID: forcedDeliveryID})
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, forcedPayload)); err != nil {
+		t.Fatalf("record forced webhook failure: %v", err)
+	}
+	var forcedStatus string
+	if err := env.DB.QueryRow(ctx, `SELECT status FROM webhook_delivery_attempts WHERE delivery_id=$1 AND attempt=1`, forcedDeliveryID).Scan(&forcedStatus); err != nil {
+		t.Fatalf("read forced-failure attempt: %v", err)
+	}
+	if forcedStatus != "FAILURE" {
+		t.Fatalf("forced failure attempt status = %s, want FAILURE", forcedStatus)
+	}
+}
+
+func TestContainerWorkerEnforcesPaymentExpiryAndSellerSLA(t *testing.T) {
+	env := testsupport.Start(t)
+	ctx := context.Background()
+	if err := platform.RunMigrations(ctx, env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users(id,email,password_hash,role) VALUES('usr_deadline','deadline@test.local','unused','ADMIN')`, nil},
+		{`INSERT INTO shops(id,owner_user_id,name,provider_profile) VALUES('shop_deadline','usr_deadline','Deadline shop','SHOPEE_LIKE')`, nil},
+		{`INSERT INTO warehouses(id,shop_id,code,name) VALUES('wh_deadline','shop_deadline','WH-DEFAULT','Deadline warehouse')`, nil},
+		{`INSERT INTO products(id,shop_id,sku,name,category,description,price,stock,status) VALUES('prd_deadline','shop_deadline','DEADLINE-1','Deadline inventory','Test','',1,1,'ACTIVE')`, nil},
+		{`INSERT INTO warehouse_inventory(warehouse_id,product_id,on_hand_quantity,reserved_quantity) VALUES('wh_deadline','prd_deadline',2,1)`, nil},
+		{`INSERT INTO orders(id,order_number,shop_id,fulfillment_warehouse_id,customer_data,shipping_address,total_amount,status,payment_status,payment_expires_at) VALUES('ord_payment_expired','PAY-EXPIRED','shop_deadline','wh_deadline','{}','{}',1,'UNPAID','PENDING',now()-interval '1 second')`, nil},
+		{`INSERT INTO order_items(id,order_id,product_id,sku,product_name,price,quantity,subtotal) VALUES('item_deadline','ord_payment_expired','prd_deadline','DEADLINE-1','Deadline inventory',1,1,1)`, nil},
+		{`INSERT INTO inventory_reservations(id,order_id,order_item_id,product_id,warehouse_id,quantity) VALUES('res_deadline','ord_payment_expired','item_deadline','prd_deadline','wh_deadline',1)`, nil},
+		{`INSERT INTO orders(id,order_number,shop_id,customer_data,shipping_address,total_amount,status,payment_status,seller_deadline_at) VALUES('ord_sla_expired','SLA-EXPIRED','shop_deadline','{}','{}',1,'PROCESSING','PAID',now()-interval '1 second')`, nil},
+	} {
+		if _, err := env.DB.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed deadline order: %v", err)
+		}
+	}
+	w := &worker{db: env.DB, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := w.enforceOrderDeadlines(ctx); err != nil {
+		t.Fatalf("enforce deadlines: %v", err)
+	}
+	for _, want := range []struct{ id, payment, reason, event string }{
+		{"ord_payment_expired", "EXPIRED", "PAYMENT_EXPIRED", "order.payment_expired"},
+		{"ord_sla_expired", "PAID", "SELLER_SLA_EXPIRED", "order.sla_expired"},
+	} {
+		var status, payment, reason string
+		if err := env.DB.QueryRow(ctx, `SELECT status,payment_status,cancellation_reason FROM orders WHERE id=$1`, want.id).Scan(&status, &payment, &reason); err != nil {
+			t.Fatalf("read %s: %v", want.id, err)
+		}
+		if status != "CANCELLED" || payment != want.payment || reason != want.reason {
+			t.Fatalf("deadline state for %s = %s/%s/%s", want.id, status, payment, reason)
+		}
+		var events int
+		if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM domain_events WHERE aggregate_id=$1 AND event_type=$2`, want.id, want.event).Scan(&events); err != nil || events != 1 {
+			t.Fatalf("deadline event for %s = %d err=%v", want.id, events, err)
+		}
+	}
+	var onHand, reserved, stock int
+	if err := env.DB.QueryRow(ctx, `SELECT i.on_hand_quantity,i.reserved_quantity,p.stock FROM warehouse_inventory i JOIN products p ON p.id=i.product_id WHERE i.warehouse_id='wh_deadline' AND i.product_id='prd_deadline'`).Scan(&onHand, &reserved, &stock); err != nil {
+		t.Fatalf("read released deadline inventory: %v", err)
+	}
+	if onHand != 2 || reserved != 0 || stock != 2 {
+		t.Fatalf("deadline release inventory = on_hand=%d reserved=%d stock=%d, want 2/0/2", onHand, reserved, stock)
+	}
+}
+
+func TestContainerWorkerDeliversShopeeLikeWebhookContract(t *testing.T) {
+	env := testsupport.Start(t)
+	ctx := context.Background()
+	if err := platform.RunMigrations(ctx, env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	var gotHeaders http.Header
+	var gotBody map[string]any
+	receiver := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		gotHeaders = request.Header.Clone()
+		if err := json.NewDecoder(request.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode Shopee webhook: %v", err)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	cfg := platform.Config{EncryptionKey: []byte("01234567890123456789012345678901")}
+	secret, err := platform.Encrypt(cfg.EncryptionKey, "shopee-webhook-secret")
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users(id,email,password_hash,role) VALUES('usr_shopee_hook','hook@test.local','unused','ADMIN')`, nil},
+		{`INSERT INTO shops(id,owner_user_id,name,provider_profile) VALUES('shop_shopee_hook','usr_shopee_hook','Shopee hook','SHOPEE_LIKE')`, nil},
+		{`INSERT INTO shop_scenarios(shop_id) VALUES('shop_shopee_hook')`, nil},
+		{`INSERT INTO webhooks(id,shop_id,url,secret_ciphertext,enabled,subscribed_events) VALUES('wh_shopee_hook','shop_shopee_hook',$1,$2,true,$3)`, []any{receiver.URL, secret, []byte(`["order.paid"]`)}},
+		{`INSERT INTO domain_events(id,shop_id,event_type,aggregate_id,payload) VALUES('evt_shopee_paid','shop_shopee_hook','order.paid','ord_shopee', '{"id":"ord_shopee","status":"PAID"}')`, nil},
+		{`INSERT INTO webhook_deliveries(id,webhook_id,event_id,leased_until) VALUES('del_shopee_hook','wh_shopee_hook','evt_shopee_paid',now()+interval '30 seconds')`, nil},
+	} {
+		if _, err := env.DB.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed Shopee webhook: %v", err)
+		}
+	}
+	w := &worker{db: env.DB, cfg: cfg, logger: slog.New(slog.NewTextHandler(io.Discard, nil)), http: receiver.Client()}
+	payload, _ := json.Marshal(deliveryPayload{DeliveryID: "del_shopee_hook"})
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatalf("deliver Shopee webhook: %v", err)
+	}
+	if gotHeaders.Get("X-Shopee-Event") != "order_status_update" || gotHeaders.Get("X-Shopee-Signature") == "" || gotHeaders.Get("X-Marketplace-Event") != "" {
+		t.Fatalf("Shopee webhook headers = %#v", gotHeaders)
+	}
+	if gotBody["code"] != float64(0) || gotBody["response"].(map[string]any)["event_type"] != "order_status_update" {
+		t.Fatalf("Shopee webhook body = %#v", gotBody)
+	}
+}
+
+func TestContainerWorkerDeliversTokopediaLikeWebhookContract(t *testing.T) {
+	env := testsupport.Start(t)
+	ctx := context.Background()
+	if err := platform.RunMigrations(ctx, env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	var headers http.Header
+	var body map[string]any
+	receiver := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		headers = request.Header.Clone()
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode Tokopedia webhook: %v", err)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	cfg := platform.Config{EncryptionKey: []byte("01234567890123456789012345678901")}
+	webhookSecret, err := platform.Encrypt(cfg.EncryptionKey, "registration-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appSecret, err := platform.Encrypt(cfg.EncryptionKey, "tokopedia-app-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users(id,email,password_hash,role) VALUES('usr_toko_hook','toko-hook@test.local','unused','ADMIN')`, nil},
+		{`INSERT INTO shops(id,owner_user_id,name,provider_profile) VALUES('shop_toko_hook','usr_toko_hook','Tokopedia hook','TOKOPEDIA_LIKE')`, nil},
+		{`INSERT INTO shop_scenarios(shop_id) VALUES('shop_toko_hook')`, nil},
+		{`INSERT INTO credentials(id,shop_id,client_id,secret_ciphertext,status) VALUES('cred_toko_hook','shop_toko_hook','toko-app-key',$1,'ACTIVE')`, []any{appSecret}},
+		{`INSERT INTO webhooks(id,shop_id,url,secret_ciphertext,enabled,subscribed_events) VALUES('wh_toko_hook','shop_toko_hook',$1,$2,true,$3)`, []any{receiver.URL, webhookSecret, []byte(`["order.paid"]`)}},
+		{`INSERT INTO domain_events(id,shop_id,event_type,aggregate_id,payload) VALUES('evt_toko_paid','shop_toko_hook','order.paid','ord_toko', '{"order_id":"ord_toko","status":"PAID"}')`, nil},
+		{`INSERT INTO webhook_deliveries(id,webhook_id,event_id,leased_until) VALUES('del_toko_hook','wh_toko_hook','evt_toko_paid',now()+interval '30 seconds')`, nil},
+	} {
+		if _, err := env.DB.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed Tokopedia webhook: %v", err)
+		}
+	}
+	w := &worker{db: env.DB, cfg: cfg, logger: slog.New(slog.NewTextHandler(io.Discard, nil)), http: receiver.Client()}
+	payload, _ := json.Marshal(deliveryPayload{DeliveryID: "del_toko_hook"})
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatalf("deliver Tokopedia webhook: %v", err)
+	}
+	if headers.Get("Authorization") == "" || headers.Get("X-Marketplace-Event") != "" || body["type"] != float64(1) || body["tts_notification_id"] != "evt_toko_paid" {
+		t.Fatalf("Tokopedia webhook=%#v %#v", headers, body)
+	}
+}

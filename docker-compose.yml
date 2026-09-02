@@ -1,0 +1,73 @@
+services:
+  marketplace-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - marketplace-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  marketplace-api:
+    build:
+      context: .
+      dockerfile: ./apps/marketplace/Dockerfile
+      target: api
+    environment: &marketplace-env
+      MARKETPLACE_DATABASE_URL: postgres://marketplace:marketplace@marketplace-db:5432/marketplace?sslmode=disable
+      MARKETPLACE_REDIS_URL: redis://redis:6379/0
+      MARKETPLACE_ADMIN_EMAIL: admin@example.test
+      MARKETPLACE_ADMIN_PASSWORD: change-me-now
+      MARKETPLACE_ENCRYPTION_KEY: development-only-encryption-key-change-me
+      MARKETPLACE_SESSION_SECRET: development-only-session-secret-change-me
+      MARKETPLACE_RATE_LIMIT_PER_MINUTE: "100"
+      MARKETPLACE_SEED_ON_BOOT: "true"
+    ports:
+      - "18080:8080"
+    depends_on:
+      marketplace-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  marketplace-worker:
+    build:
+      context: .
+      dockerfile: ./apps/marketplace/Dockerfile
+      target: worker
+    environment: *marketplace-env
+    depends_on:
+      marketplace-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  marketplace-admin:
+    build:
+      context: ./apps/marketplace/admin
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "5173:80"
+    depends_on:
+      - marketplace-api
+
+volumes:
+  marketplace-data:
