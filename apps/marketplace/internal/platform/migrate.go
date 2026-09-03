@@ -14,7 +14,7 @@ const migrationLockID int64 = 826315
 // RunMigrations applies committed Goose migrations. Goose maintains its own
 // version ledger; the idempotent SQL keeps existing development databases safe
 // while they transition away from the former custom migration ledger.
-func RunMigrations(ctx context.Context, pool *pgxpool.Pool, directory string) error {
+func RunMigrations(ctx context.Context, pool *pgxpool.Pool, directory string) (err error) {
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire migration lock connection: %w", err)
@@ -26,7 +26,11 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, directory string) er
 	defer func() { _, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationLockID) }()
 
 	db := stdlib.OpenDBFromPool(pool)
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close goose database: %w", closeErr)
+		}
+	}()
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("configure goose postgres dialect: %w", err)
 	}

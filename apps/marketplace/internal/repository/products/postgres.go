@@ -9,6 +9,7 @@ import (
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/events"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/inventory"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/products"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,6 +18,7 @@ import (
 type PostgreSQLCreator struct{ pool *pgxpool.Pool }
 
 var _ products.Creator = (*PostgreSQLCreator)(nil)
+var _ products.Manager = (*PostgreSQLCreator)(nil)
 
 // NewPostgreSQLCreator constructs a product creation repository.
 func NewPostgreSQLCreator(pool *pgxpool.Pool) *PostgreSQLCreator {
@@ -62,6 +64,97 @@ func (r *PostgreSQLCreator) Create(ctx context.Context, product products.Product
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit product transaction: %w", err)
+	}
+	return nil
+}
+
+// Get returns one non-archived shop product.
+func (r *PostgreSQLCreator) Get(ctx context.Context, shopID, productID string) (products.Product, error) {
+	var product products.Product
+	err := r.pool.QueryRow(ctx, `SELECT id,shop_id,sku,name,category,description,price,stock,status FROM products WHERE id=$1 AND shop_id=$2 AND status<>'DELETED'`, productID, shopID).Scan(
+		&product.ID, &product.ShopID, &product.SKU, &product.Name, &product.Category, &product.Description, &product.Price, &product.Stock, &product.Status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return products.Product{}, products.ErrProductNotFound
+	}
+	if err != nil {
+		return products.Product{}, fmt.Errorf("select product: %w", err)
+	}
+	return product, nil
+}
+
+// Update persists catalogue metadata and its domain event atomically.
+func (r *PostgreSQLCreator) Update(ctx context.Context, shopID, productID string, patch products.Patch) (products.Product, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return products.Product{}, fmt.Errorf("begin product update: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var product products.Product
+	err = tx.QueryRow(ctx, `
+		UPDATE products SET
+		  name=COALESCE($1,name),category=COALESCE($2,category),description=COALESCE($3,description),
+		  price=COALESCE($4,price),status=COALESCE($5,status),updated_at=now()
+		WHERE id=$6 AND shop_id=$7 AND status<>'DELETED'
+		RETURNING id,shop_id,sku,name,category,description,price,stock,status`,
+		patch.Name, patch.Category, patch.Description, patch.Price, patch.Status, productID, shopID,
+	).Scan(&product.ID, &product.ShopID, &product.SKU, &product.Name, &product.Category, &product.Description, &product.Price, &product.Stock, &product.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return products.Product{}, products.ErrProductNotFound
+	}
+	if err != nil {
+		return products.Product{}, fmt.Errorf("update product row: %w", err)
+	}
+	payload := map[string]any{"id": product.ID, "sku": product.SKU, "name": product.Name, "category": product.Category, "price": product.Price, "stock": product.Stock, "status": product.Status}
+	if err := events.Record(ctx, tx, shopID, "product.updated", productID, payload); err != nil {
+		return products.Product{}, fmt.Errorf("record product update event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return products.Product{}, fmt.Errorf("commit product update: %w", err)
+	}
+	return product, nil
+}
+
+// Archive soft-deletes a product only when no reservation still depends on it.
+func (r *PostgreSQLCreator) Archive(ctx context.Context, shopID, productID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin product archive: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var lockedProductID string
+	err = tx.QueryRow(ctx, `SELECT id FROM products WHERE id=$1 AND shop_id=$2 AND status<>'DELETED' FOR UPDATE`, productID, shopID).Scan(&lockedProductID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return products.ErrProductNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("lock product for archive: %w", err)
+	}
+	var activeReservations bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+		  SELECT 1 FROM inventory_reservations r
+		  JOIN products p ON p.id=r.product_id
+		  WHERE p.id=$1 AND p.shop_id=$2 AND r.status IN ('ACTIVE','COMMITTED')
+		)`, productID, shopID).Scan(&activeReservations)
+	if err != nil {
+		return fmt.Errorf("check product reservations: %w", err)
+	}
+	if activeReservations {
+		return products.ErrProductInUse
+	}
+	command, err := tx.Exec(ctx, `UPDATE products SET status='DELETED',updated_at=now() WHERE id=$1 AND shop_id=$2 AND status<>'DELETED'`, productID, shopID)
+	if err != nil {
+		return fmt.Errorf("archive product row: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return products.ErrProductNotFound
+	}
+	if err := events.Record(ctx, tx, shopID, "product.deleted", productID, map[string]any{"id": productID}); err != nil {
+		return fmt.Errorf("record product archive event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit product archive: %w", err)
 	}
 	return nil
 }

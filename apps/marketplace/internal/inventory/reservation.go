@@ -48,6 +48,15 @@ func Allocate(ctx context.Context, tx pgx.Tx, shopID, orderID string, lines []Li
 	}
 	ordered := append([]Line(nil), lines...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ProductID < ordered[j].ProductID })
+	requiredByProduct, err := aggregateRequiredQuantity(ordered)
+	if err != nil {
+		return Warehouse{}, err
+	}
+	productIDs := make([]string, 0, len(requiredByProduct))
+	for productID := range requiredByProduct {
+		productIDs = append(productIDs, productID)
+	}
+	sort.Strings(productIDs)
 	rows, err := tx.Query(ctx, `SELECT id,code,name,priority FROM warehouses WHERE shop_id=$1 AND status='ACTIVE' ORDER BY priority DESC,code ASC FOR UPDATE`, shopID)
 	if err != nil {
 		return Warehouse{}, fmt.Errorf("lock active warehouses: %w", err)
@@ -69,10 +78,11 @@ func Allocate(ctx context.Context, tx pgx.Tx, shopID, orderID string, lines []Li
 
 	for _, warehouse := range candidates {
 		eligible := true
-		for _, line := range ordered {
+		for _, productID := range productIDs {
+			required := requiredByProduct[productID]
 			var onHand, reserved int
-			err := tx.QueryRow(ctx, `SELECT on_hand_quantity,reserved_quantity FROM warehouse_inventory WHERE warehouse_id=$1 AND product_id=$2 FOR UPDATE`, warehouse.ID, line.ProductID).Scan(&onHand, &reserved)
-			if err != nil || onHand-reserved < line.Quantity {
+			err := tx.QueryRow(ctx, `SELECT on_hand_quantity,reserved_quantity FROM warehouse_inventory WHERE warehouse_id=$1 AND product_id=$2 FOR UPDATE`, warehouse.ID, productID).Scan(&onHand, &reserved)
+			if err != nil || onHand-reserved < required {
 				eligible = false
 				break
 			}
@@ -84,7 +94,7 @@ func Allocate(ctx context.Context, tx pgx.Tx, shopID, orderID string, lines []Li
 			if _, err := tx.Exec(ctx, `UPDATE warehouse_inventory SET reserved_quantity=reserved_quantity+$1,updated_at=now() WHERE warehouse_id=$2 AND product_id=$3`, line.Quantity, warehouse.ID, line.ProductID); err != nil {
 				return Warehouse{}, fmt.Errorf("reserve warehouse inventory: %w", err)
 			}
-			command, err := tx.Exec(ctx, `UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2 AND stock >= $1`, line.Quantity, line.ProductID)
+			command, err := tx.Exec(ctx, `UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2 AND status='ACTIVE' AND stock >= $1`, line.Quantity, line.ProductID)
 			if err != nil {
 				return Warehouse{}, fmt.Errorf("update available product stock: %w", err)
 			}
@@ -101,6 +111,17 @@ func Allocate(ctx context.Context, tx pgx.Tx, shopID, orderID string, lines []Li
 		return warehouse, nil
 	}
 	return Warehouse{}, ErrNoEligibleWarehouse
+}
+
+func aggregateRequiredQuantity(lines []Line) (map[string]int, error) {
+	required := make(map[string]int, len(lines))
+	for _, line := range lines {
+		if line.ProductID == "" || line.OrderItemID == "" || line.Quantity <= 0 {
+			return nil, ErrNoEligibleWarehouse
+		}
+		required[line.ProductID] += line.Quantity
+	}
+	return required, nil
 }
 
 // Commit marks reservations as paid while keeping them physically reserved.
@@ -177,6 +198,9 @@ func FulfillPackage(ctx context.Context, tx pgx.Tx, packageID string) error {
 		return fmt.Errorf("read package reservations: %w", err)
 	}
 	rows.Close()
+	if len(items) == 0 {
+		return fmt.Errorf("package %s has no inventory reservations", packageID)
+	}
 	for _, item := range items {
 		if (item.status != "ACTIVE" && item.status != "COMMITTED") || item.fulfilled+item.packageQuantity > item.quantity {
 			return fmt.Errorf("cannot fulfill reservation %s", item.id)

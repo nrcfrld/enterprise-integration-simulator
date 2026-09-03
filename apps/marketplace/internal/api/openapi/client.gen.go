@@ -15,6 +15,34 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+)
+
+const (
+	ControlPlaneBearerScopes = "ControlPlaneBearer.Scopes"
+)
+
+// Defines values for ControlPlaneSessionUserRole.
+const (
+	OPERATOR ControlPlaneSessionUserRole = "OPERATOR"
+)
+
+// Defines values for ControlProductStatus.
+const (
+	ControlProductStatusACTIVE   ControlProductStatus = "ACTIVE"
+	ControlProductStatusINACTIVE ControlProductStatus = "INACTIVE"
+)
+
+// Defines values for ControlProductInputStatus.
+const (
+	ControlProductInputStatusACTIVE   ControlProductInputStatus = "ACTIVE"
+	ControlProductInputStatusINACTIVE ControlProductInputStatus = "INACTIVE"
+)
+
+// Defines values for ControlProductPatchStatus.
+const (
+	ControlProductPatchStatusACTIVE   ControlProductPatchStatus = "ACTIVE"
+	ControlProductPatchStatusINACTIVE ControlProductPatchStatus = "INACTIVE"
 )
 
 // Defines values for ShipmentInputPickupType.
@@ -53,8 +81,8 @@ const (
 
 // Defines values for ShopeeListProductsParamsItemStatus.
 const (
-	ShopeeListProductsParamsItemStatusACTIVE   ShopeeListProductsParamsItemStatus = "ACTIVE"
-	ShopeeListProductsParamsItemStatusINACTIVE ShopeeListProductsParamsItemStatus = "INACTIVE"
+	ACTIVE   ShopeeListProductsParamsItemStatus = "ACTIVE"
+	INACTIVE ShopeeListProductsParamsItemStatus = "INACTIVE"
 )
 
 // Defines values for ShopeeCreateWebhookJSONBodyEventTypes.
@@ -109,6 +137,66 @@ const (
 	CreateWebhookJSONBodySubscribedEventsProductUpdated      CreateWebhookJSONBodySubscribedEvents = "product.updated"
 )
 
+// ControlPlaneSession defines model for ControlPlaneSession.
+type ControlPlaneSession struct {
+	// Token Bearer session token for the Control Plane.
+	Token string `json:"token"`
+	User  struct {
+		Email openapi_types.Email         `json:"email"`
+		Id    string                      `json:"id"`
+		Role  ControlPlaneSessionUserRole `json:"role"`
+	} `json:"user"`
+}
+
+// ControlPlaneSessionUserRole defines model for ControlPlaneSession.User.Role.
+type ControlPlaneSessionUserRole string
+
+// ControlProduct defines model for ControlProduct.
+type ControlProduct struct {
+	Category    string               `json:"category"`
+	Description string               `json:"description"`
+	Id          string               `json:"id"`
+	Name        string               `json:"name"`
+	Price       int64                `json:"price"`
+	ShopId      string               `json:"shop_id"`
+	Sku         string               `json:"sku"`
+	Status      ControlProductStatus `json:"status"`
+
+	// Stock Aggregate available quantity across warehouses.
+	Stock int `json:"stock"`
+}
+
+// ControlProductStatus defines model for ControlProduct.Status.
+type ControlProductStatus string
+
+// ControlProductInput defines model for ControlProductInput.
+type ControlProductInput struct {
+	Category    *string `json:"category,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+
+	// Price Minor currency unit.
+	Price              int64                      `json:"price"`
+	Sku                string                     `json:"sku"`
+	Status             *ControlProductInputStatus `json:"status,omitempty"`
+	WarehouseInventory []WarehouseInventoryInput  `json:"warehouse_inventory"`
+}
+
+// ControlProductInputStatus defines model for ControlProductInput.Status.
+type ControlProductInputStatus string
+
+// ControlProductPatch Partial catalogue metadata update. Omitted fields remain unchanged; physical inventory is intentionally excluded.
+type ControlProductPatch struct {
+	Category    *string                    `json:"category,omitempty"`
+	Description *string                    `json:"description,omitempty"`
+	Name        *string                    `json:"name,omitempty"`
+	Price       *int64                     `json:"price,omitempty"`
+	Status      *ControlProductPatchStatus `json:"status,omitempty"`
+}
+
+// ControlProductPatchStatus defines model for ControlProductPatch.Status.
+type ControlProductPatchStatus string
+
 // Error defines model for Error.
 type Error struct {
 	Error *struct {
@@ -138,16 +226,25 @@ type ShipmentInputPickupType string
 
 // Warehouse defines model for Warehouse.
 type Warehouse struct {
-	Address   *map[string]interface{} `json:"address,omitempty"`
-	Code      string                  `json:"code"`
-	CreatedAt time.Time               `json:"created_at"`
-	Id        string                  `json:"id"`
-	Inventory *[]WarehouseInventory   `json:"inventory,omitempty"`
-	Name      string                  `json:"name"`
-	Priority  int                     `json:"priority"`
-	ShopId    string                  `json:"shop_id"`
-	Status    WarehouseStatus         `json:"status"`
-	UpdatedAt time.Time               `json:"updated_at"`
+	// Address Dispatch address configured for this fulfillment origin. The compatibility default warehouse may have an empty address until an operator sets it in the control plane.
+	Address   *Warehouse_Address    `json:"address,omitempty"`
+	Code      string                `json:"code"`
+	CreatedAt time.Time             `json:"created_at"`
+	Id        string                `json:"id"`
+	Inventory *[]WarehouseInventory `json:"inventory,omitempty"`
+	Name      string                `json:"name"`
+	Priority  int                   `json:"priority"`
+	ShopId    string                `json:"shop_id"`
+	Status    WarehouseStatus       `json:"status"`
+	UpdatedAt time.Time             `json:"updated_at"`
+}
+
+// Warehouse_Address Dispatch address configured for this fulfillment origin. The compatibility default warehouse may have an empty address until an operator sets it in the control plane.
+type Warehouse_Address struct {
+	AddressLine          *string                `json:"address_line,omitempty"`
+	City                 *string                `json:"city,omitempty"`
+	PostalCode           *string                `json:"postal_code,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // WarehouseStatus defines model for Warehouse.Status.
@@ -162,6 +259,12 @@ type WarehouseInventory struct {
 	ReservedQuantity  int        `json:"reserved_quantity"`
 	Sku               string     `json:"sku"`
 	UpdatedAt         *time.Time `json:"updated_at,omitempty"`
+}
+
+// WarehouseInventoryInput defines model for WarehouseInventoryInput.
+type WarehouseInventoryInput struct {
+	OnHandQuantity int    `json:"on_hand_quantity"`
+	WarehouseId    string `json:"warehouse_id"`
 }
 
 // WarehouseList defines model for WarehouseList.
@@ -308,6 +411,9 @@ type ShopeeCancelOrderParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeCancelOrderJSONBodyCancelReason defines parameters for ShopeeCancelOrder.
@@ -319,6 +425,9 @@ type ShopeeCreatePackageParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeReadyToShipOrderParams defines parameters for ShopeeReadyToShipOrder.
@@ -327,6 +436,9 @@ type ShopeeReadyToShipOrderParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeProcessOrderParams defines parameters for ShopeeProcessOrder.
@@ -335,6 +447,9 @@ type ShopeeProcessOrderParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeCreateShipmentParams defines parameters for ShopeeCreateShipment.
@@ -343,6 +458,9 @@ type ShopeeCreateShipmentParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeListProductsParams defines parameters for ShopeeListProducts.
@@ -390,6 +508,9 @@ type ShopeeCreateWebhookParams struct {
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
 	XShopeeTimestamp ShopeeTimestamp `json:"X-Shopee-Timestamp"`
 	XShopeeSignature ShopeeSignature `json:"X-Shopee-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ShopeeCreateWebhookJSONBodyEventTypes defines parameters for ShopeeCreateWebhook.
@@ -453,6 +574,9 @@ type TokopediaCancelOrderParams struct {
 
 	// XTtsAccessToken Access token returned only when the control-plane credential is created.
 	XTtsAccessToken TokopediaAccessToken `json:"x-tts-access-token"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // TokopediaCancelOrderJSONBodyReason defines parameters for TokopediaCancelOrder.
@@ -471,6 +595,9 @@ type TokopediaHandoverOrderParams struct {
 
 	// XTtsAccessToken Access token returned only when the control-plane credential is created.
 	XTtsAccessToken TokopediaAccessToken `json:"x-tts-access-token"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // TokopediaPackOrderParams defines parameters for TokopediaPackOrder.
@@ -486,6 +613,9 @@ type TokopediaPackOrderParams struct {
 
 	// XTtsAccessToken Access token returned only when the control-plane credential is created.
 	XTtsAccessToken TokopediaAccessToken `json:"x-tts-access-token"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // TokopediaCreateShipmentParams defines parameters for TokopediaCreateShipment.
@@ -501,6 +631,9 @@ type TokopediaCreateShipmentParams struct {
 
 	// XTtsAccessToken Access token returned only when the control-plane credential is created.
 	XTtsAccessToken TokopediaAccessToken `json:"x-tts-access-token"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // TokopediaSearchProductsJSONBody defines parameters for TokopediaSearchProducts.
@@ -562,6 +695,9 @@ type TokopediaConfigureWebhooksParams struct {
 
 	// XTtsAccessToken Access token returned only when the control-plane credential is created.
 	XTtsAccessToken TokopediaAccessToken `json:"x-tts-access-token"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // TokopediaConfigureWebhooksJSONBodyEventTypes defines parameters for TokopediaConfigureWebhooks.
@@ -597,9 +733,11 @@ type CreateWebhookJSONBody struct {
 
 // CreateWebhookParams defines parameters for CreateWebhook.
 type CreateWebhookParams struct {
-	XClientId      ClientID       `json:"X-Client-Id"`
-	XTimestamp     Timestamp      `json:"X-Timestamp"`
-	XSignature     Signature      `json:"X-Signature"`
+	XClientId  ClientID  `json:"X-Client-Id"`
+	XTimestamp Timestamp `json:"X-Timestamp"`
+	XSignature Signature `json:"X-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -608,10 +746,18 @@ type CreateWebhookJSONBodySubscribedEvents string
 
 // DeleteWebhookParams defines parameters for DeleteWebhook.
 type DeleteWebhookParams struct {
-	XClientId      ClientID       `json:"X-Client-Id"`
-	XTimestamp     Timestamp      `json:"X-Timestamp"`
-	XSignature     Signature      `json:"X-Signature"`
+	XClientId  ClientID  `json:"X-Client-Id"`
+	XTimestamp Timestamp `json:"X-Timestamp"`
+	XSignature Signature `json:"X-Signature"`
+
+	// IdempotencyKey Stable key for one logical mutation. Retrying the identical method
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RegisterControlPlaneOperatorJSONBody defines parameters for RegisterControlPlaneOperator.
+type RegisterControlPlaneOperatorJSONBody struct {
+	Email    openapi_types.Email `json:"email"`
+	Password string              `json:"password"`
 }
 
 // ShopeeCancelOrderJSONRequestBody defines body for ShopeeCancelOrder for application/json ContentType.
@@ -643,6 +789,113 @@ type TokopediaConfigureWebhooksJSONRequestBody TokopediaConfigureWebhooksJSONBod
 
 // CreateWebhookJSONRequestBody defines body for CreateWebhook for application/json ContentType.
 type CreateWebhookJSONRequestBody CreateWebhookJSONBody
+
+// RegisterControlPlaneOperatorJSONRequestBody defines body for RegisterControlPlaneOperator for application/json ContentType.
+type RegisterControlPlaneOperatorJSONRequestBody RegisterControlPlaneOperatorJSONBody
+
+// CreateControlProductJSONRequestBody defines body for CreateControlProduct for application/json ContentType.
+type CreateControlProductJSONRequestBody = ControlProductInput
+
+// UpdateControlProductJSONRequestBody defines body for UpdateControlProduct for application/json ContentType.
+type UpdateControlProductJSONRequestBody = ControlProductPatch
+
+// Getter for additional properties for Warehouse_Address. Returns the specified
+// element and whether it was found
+func (a Warehouse_Address) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for Warehouse_Address
+func (a *Warehouse_Address) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for Warehouse_Address to handle AdditionalProperties
+func (a *Warehouse_Address) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["address_line"]; found {
+		err = json.Unmarshal(raw, &a.AddressLine)
+		if err != nil {
+			return fmt.Errorf("error reading 'address_line': %w", err)
+		}
+		delete(object, "address_line")
+	}
+
+	if raw, found := object["city"]; found {
+		err = json.Unmarshal(raw, &a.City)
+		if err != nil {
+			return fmt.Errorf("error reading 'city': %w", err)
+		}
+		delete(object, "city")
+	}
+
+	if raw, found := object["postal_code"]; found {
+		err = json.Unmarshal(raw, &a.PostalCode)
+		if err != nil {
+			return fmt.Errorf("error reading 'postal_code': %w", err)
+		}
+		delete(object, "postal_code")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for Warehouse_Address to handle AdditionalProperties
+func (a Warehouse_Address) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.AddressLine != nil {
+		object["address_line"], err = json.Marshal(a.AddressLine)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'address_line': %w", err)
+		}
+	}
+
+	if a.City != nil {
+		object["city"], err = json.Marshal(a.City)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'city': %w", err)
+		}
+	}
+
+	if a.PostalCode != nil {
+		object["postal_code"], err = json.Marshal(a.PostalCode)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'postal_code': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -811,6 +1064,30 @@ type ClientInterface interface {
 
 	// DeleteWebhook request
 	DeleteWebhook(ctx context.Context, id string, params *DeleteWebhookParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RegisterControlPlaneOperatorWithBody request with any body
+	RegisterControlPlaneOperatorWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RegisterControlPlaneOperator(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListControlProducts request
+	ListControlProducts(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateControlProductWithBody request with any body
+	CreateControlProductWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateControlProduct(ctx context.Context, id string, body CreateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ArchiveControlProduct request
+	ArchiveControlProduct(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlProduct request
+	GetControlProduct(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateControlProductWithBody request with any body
+	UpdateControlProductWithBody(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateControlProduct(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Health request
 	Health(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1239,6 +1516,114 @@ func (c *Client) DeleteWebhook(ctx context.Context, id string, params *DeleteWeb
 	return c.Client.Do(req)
 }
 
+func (c *Client) RegisterControlPlaneOperatorWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterControlPlaneOperatorRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RegisterControlPlaneOperator(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterControlPlaneOperatorRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListControlProducts(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlProductsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateControlProductWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateControlProductRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateControlProduct(ctx context.Context, id string, body CreateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateControlProductRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ArchiveControlProduct(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewArchiveControlProductRequest(c.Server, id, productID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlProduct(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlProductRequest(c.Server, id, productID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateControlProductWithBody(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateControlProductRequestWithBody(c.Server, id, productID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateControlProduct(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateControlProductRequest(c.Server, id, productID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) Health(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewHealthRequest(c.Server)
 	if err != nil {
@@ -1545,6 +1930,15 @@ func NewShopeeCancelOrderRequestWithBody(server string, id string, params *Shope
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
 
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
+
 	}
 
 	return req, nil
@@ -1623,6 +2017,15 @@ func NewShopeeCreatePackageRequestWithBody(server string, id string, params *Sho
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
 
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
+
 	}
 
 	return req, nil
@@ -1688,6 +2091,15 @@ func NewShopeeReadyToShipOrderRequest(server string, id string, params *ShopeeRe
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
 
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
+
 	}
 
 	return req, nil
@@ -1752,6 +2164,15 @@ func NewShopeeProcessOrderRequest(server string, id string, params *ShopeeProces
 		}
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
+
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
 
 	}
 
@@ -1830,6 +2251,15 @@ func NewShopeeCreateShipmentRequestWithBody(server string, id string, params *Sh
 		}
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
+
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
 
 	}
 
@@ -2153,6 +2583,15 @@ func NewShopeeCreateWebhookRequestWithBody(server string, params *ShopeeCreateWe
 
 		req.Header.Set("X-Shopee-Signature", headerParam2)
 
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam3)
+
 	}
 
 	return req, nil
@@ -2439,6 +2878,15 @@ func NewTokopediaCancelOrderRequestWithBody(server string, id string, params *To
 
 		req.Header.Set("x-tts-access-token", headerParam0)
 
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
+
 	}
 
 	return req, nil
@@ -2528,6 +2976,15 @@ func NewTokopediaHandoverOrderRequest(server string, id string, params *Tokopedi
 
 		req.Header.Set("x-tts-access-token", headerParam0)
 
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
+
 	}
 
 	return req, nil
@@ -2616,6 +3073,15 @@ func NewTokopediaPackOrderRequest(server string, id string, params *TokopediaPac
 		}
 
 		req.Header.Set("x-tts-access-token", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
 
 	}
 
@@ -2718,6 +3184,15 @@ func NewTokopediaCreateShipmentRequestWithBody(server string, id string, params 
 		}
 
 		req.Header.Set("x-tts-access-token", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
 
 	}
 
@@ -2997,6 +3472,15 @@ func NewTokopediaConfigureWebhooksRequestWithBody(server string, params *Tokoped
 		}
 
 		req.Header.Set("x-tts-access-token", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, params.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
 
 	}
 
@@ -3338,6 +3822,263 @@ func NewDeleteWebhookRequest(server string, id string, params *DeleteWebhookPara
 	return req, nil
 }
 
+// NewRegisterControlPlaneOperatorRequest calls the generic RegisterControlPlaneOperator builder with application/json body
+func NewRegisterControlPlaneOperatorRequest(server string, body RegisterControlPlaneOperatorJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRegisterControlPlaneOperatorRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRegisterControlPlaneOperatorRequestWithBody generates requests for RegisterControlPlaneOperator with any type of body
+func NewRegisterControlPlaneOperatorRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/auth/register")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListControlProductsRequest generates requests for ListControlProducts
+func NewListControlProductsRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/products", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateControlProductRequest calls the generic CreateControlProduct builder with application/json body
+func NewCreateControlProductRequest(server string, id string, body CreateControlProductJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateControlProductRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewCreateControlProductRequestWithBody generates requests for CreateControlProduct with any type of body
+func NewCreateControlProductRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/products", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewArchiveControlProductRequest generates requests for ArchiveControlProduct
+func NewArchiveControlProductRequest(server string, id string, productID string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "productID", runtime.ParamLocationPath, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/products/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetControlProductRequest generates requests for GetControlProduct
+func NewGetControlProductRequest(server string, id string, productID string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "productID", runtime.ParamLocationPath, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/products/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateControlProductRequest calls the generic UpdateControlProduct builder with application/json body
+func NewUpdateControlProductRequest(server string, id string, productID string, body UpdateControlProductJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateControlProductRequestWithBody(server, id, productID, "application/json", bodyReader)
+}
+
+// NewUpdateControlProductRequestWithBody generates requests for UpdateControlProduct with any type of body
+func NewUpdateControlProductRequestWithBody(server string, id string, productID string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "productID", runtime.ParamLocationPath, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/products/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewHealthRequest generates requests for Health
 func NewHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -3530,6 +4271,30 @@ type ClientWithResponsesInterface interface {
 	// DeleteWebhookWithResponse request
 	DeleteWebhookWithResponse(ctx context.Context, id string, params *DeleteWebhookParams, reqEditors ...RequestEditorFn) (*DeleteWebhookResponse, error)
 
+	// RegisterControlPlaneOperatorWithBodyWithResponse request with any body
+	RegisterControlPlaneOperatorWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterControlPlaneOperatorResponse, error)
+
+	RegisterControlPlaneOperatorWithResponse(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterControlPlaneOperatorResponse, error)
+
+	// ListControlProductsWithResponse request
+	ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error)
+
+	// CreateControlProductWithBodyWithResponse request with any body
+	CreateControlProductWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateControlProductResponse, error)
+
+	CreateControlProductWithResponse(ctx context.Context, id string, body CreateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateControlProductResponse, error)
+
+	// ArchiveControlProductWithResponse request
+	ArchiveControlProductWithResponse(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*ArchiveControlProductResponse, error)
+
+	// GetControlProductWithResponse request
+	GetControlProductWithResponse(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*GetControlProductResponse, error)
+
+	// UpdateControlProductWithBodyWithResponse request with any body
+	UpdateControlProductWithBodyWithResponse(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error)
+
+	UpdateControlProductWithResponse(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error)
+
 	// HealthWithResponse request
 	HealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthResponse, error)
 
@@ -3593,6 +4358,8 @@ type ShopeeCancelOrderResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3617,6 +4384,8 @@ type ShopeeCreatePackageResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3641,6 +4410,8 @@ type ShopeeReadyToShipOrderResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3665,6 +4436,8 @@ type ShopeeProcessOrderResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3689,6 +4462,8 @@ type ShopeeCreateShipmentResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3785,6 +4560,8 @@ type ShopeeCreateWebhookResponse struct {
 	JSON200      *ShopeeResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
+	JSON409      *ShopeeError
+	JSON413      *ShopeeError
 }
 
 // Status returns HTTPResponse.Status
@@ -3856,6 +4633,9 @@ type TokopediaCancelOrderResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *TokopediaResponse
 	JSON400      *TokopediaError
+	JSON401      *TokopediaError
+	JSON409      *TokopediaError
+	JSON413      *TokopediaError
 	JSON429      *TokopediaError
 }
 
@@ -3880,6 +4660,9 @@ type TokopediaHandoverOrderResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *TokopediaResponse
 	JSON400      *TokopediaError
+	JSON401      *TokopediaError
+	JSON409      *TokopediaError
+	JSON413      *TokopediaError
 	JSON429      *TokopediaError
 }
 
@@ -3904,6 +4687,9 @@ type TokopediaPackOrderResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *TokopediaResponse
 	JSON400      *TokopediaError
+	JSON401      *TokopediaError
+	JSON409      *TokopediaError
+	JSON413      *TokopediaError
 	JSON429      *TokopediaError
 }
 
@@ -3928,6 +4714,9 @@ type TokopediaCreateShipmentResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *TokopediaResponse
 	JSON400      *TokopediaError
+	JSON401      *TokopediaError
+	JSON409      *TokopediaError
+	JSON413      *TokopediaError
 	JSON429      *TokopediaError
 }
 
@@ -4000,6 +4789,9 @@ type TokopediaConfigureWebhooksResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *TokopediaResponse
 	JSON400      *TokopediaError
+	JSON401      *TokopediaError
+	JSON409      *TokopediaError
+	JSON413      *TokopediaError
 	JSON429      *TokopediaError
 }
 
@@ -4101,6 +4893,8 @@ type CreateWebhookResponse struct {
 	JSON201      *RateLimitedWebhookRegistration
 	JSON400      *Error
 	JSON401      *Error
+	JSON409      *Error
+	JSON413      *Error
 	JSON429      *RateLimited
 	JSON503      *Maintenance
 }
@@ -4126,6 +4920,8 @@ type DeleteWebhookResponse struct {
 	HTTPResponse *http.Response
 	JSON401      *Error
 	JSON404      *Error
+	JSON409      *Error
+	JSON413      *Error
 	JSON429      *RateLimited
 	JSON503      *Maintenance
 }
@@ -4140,6 +4936,155 @@ func (r DeleteWebhookResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r DeleteWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RegisterControlPlaneOperatorResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ControlPlaneSession
+	JSON400      *Error
+	JSON409      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r RegisterControlPlaneOperatorResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RegisterControlPlaneOperatorResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListControlProductsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *Error
+	JSON403      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlProductsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlProductsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateControlProductResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ControlProduct
+	JSON400      *Error
+	JSON401      *Error
+	JSON403      *Error
+	JSON409      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateControlProductResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateControlProductResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ArchiveControlProductResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *Error
+	JSON403      *Error
+	JSON404      *Error
+	JSON409      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ArchiveControlProductResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ArchiveControlProductResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetControlProductResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlProduct
+	JSON401      *Error
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlProductResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlProductResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateControlProductResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlProduct
+	JSON400      *Error
+	JSON401      *Error
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateControlProductResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateControlProductResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -4494,6 +5439,84 @@ func (c *ClientWithResponses) DeleteWebhookWithResponse(ctx context.Context, id 
 	return ParseDeleteWebhookResponse(rsp)
 }
 
+// RegisterControlPlaneOperatorWithBodyWithResponse request with arbitrary body returning *RegisterControlPlaneOperatorResponse
+func (c *ClientWithResponses) RegisterControlPlaneOperatorWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterControlPlaneOperatorResponse, error) {
+	rsp, err := c.RegisterControlPlaneOperatorWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterControlPlaneOperatorResponse(rsp)
+}
+
+func (c *ClientWithResponses) RegisterControlPlaneOperatorWithResponse(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterControlPlaneOperatorResponse, error) {
+	rsp, err := c.RegisterControlPlaneOperator(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterControlPlaneOperatorResponse(rsp)
+}
+
+// ListControlProductsWithResponse request returning *ListControlProductsResponse
+func (c *ClientWithResponses) ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error) {
+	rsp, err := c.ListControlProducts(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlProductsResponse(rsp)
+}
+
+// CreateControlProductWithBodyWithResponse request with arbitrary body returning *CreateControlProductResponse
+func (c *ClientWithResponses) CreateControlProductWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateControlProductResponse, error) {
+	rsp, err := c.CreateControlProductWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateControlProductResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateControlProductWithResponse(ctx context.Context, id string, body CreateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateControlProductResponse, error) {
+	rsp, err := c.CreateControlProduct(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateControlProductResponse(rsp)
+}
+
+// ArchiveControlProductWithResponse request returning *ArchiveControlProductResponse
+func (c *ClientWithResponses) ArchiveControlProductWithResponse(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*ArchiveControlProductResponse, error) {
+	rsp, err := c.ArchiveControlProduct(ctx, id, productID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseArchiveControlProductResponse(rsp)
+}
+
+// GetControlProductWithResponse request returning *GetControlProductResponse
+func (c *ClientWithResponses) GetControlProductWithResponse(ctx context.Context, id string, productID string, reqEditors ...RequestEditorFn) (*GetControlProductResponse, error) {
+	rsp, err := c.GetControlProduct(ctx, id, productID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlProductResponse(rsp)
+}
+
+// UpdateControlProductWithBodyWithResponse request with arbitrary body returning *UpdateControlProductResponse
+func (c *ClientWithResponses) UpdateControlProductWithBodyWithResponse(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error) {
+	rsp, err := c.UpdateControlProductWithBody(ctx, id, productID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateControlProductResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateControlProductWithResponse(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error) {
+	rsp, err := c.UpdateControlProduct(ctx, id, productID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateControlProductResponse(rsp)
+}
+
 // HealthWithResponse request returning *HealthResponse
 func (c *ClientWithResponses) HealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthResponse, error) {
 	rsp, err := c.Health(ctx, reqEditors...)
@@ -4641,6 +5664,20 @@ func ParseShopeeCancelOrderResponse(rsp *http.Response) (*ShopeeCancelOrderRespo
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	}
 
 	return response, nil
@@ -4680,6 +5717,20 @@ func ParseShopeeCreatePackageResponse(rsp *http.Response) (*ShopeeCreatePackageR
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
 
 	}
 
@@ -4721,6 +5772,20 @@ func ParseShopeeReadyToShipOrderResponse(rsp *http.Response) (*ShopeeReadyToShip
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	}
 
 	return response, nil
@@ -4761,6 +5826,20 @@ func ParseShopeeProcessOrderResponse(rsp *http.Response) (*ShopeeProcessOrderRes
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	}
 
 	return response, nil
@@ -4800,6 +5879,20 @@ func ParseShopeeCreateShipmentResponse(rsp *http.Response) (*ShopeeCreateShipmen
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
 
 	}
 
@@ -4961,6 +6054,20 @@ func ParseShopeeCreateWebhookResponse(rsp *http.Response) (*ShopeeCreateWebhookR
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ShopeeError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	}
 
 	return response, nil
@@ -5074,6 +6181,27 @@ func ParseTokopediaCancelOrderResponse(rsp *http.Response) (*TokopediaCancelOrde
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest TokopediaError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5113,6 +6241,27 @@ func ParseTokopediaHandoverOrderResponse(rsp *http.Response) (*TokopediaHandover
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest TokopediaError
@@ -5154,6 +6303,27 @@ func ParseTokopediaPackOrderResponse(rsp *http.Response) (*TokopediaPackOrderRes
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest TokopediaError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5193,6 +6363,27 @@ func ParseTokopediaCreateShipmentResponse(rsp *http.Response) (*TokopediaCreateS
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest TokopediaError
@@ -5313,6 +6504,27 @@ func ParseTokopediaConfigureWebhooksResponse(rsp *http.Response) (*TokopediaConf
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest TokopediaError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest TokopediaError
@@ -5509,6 +6721,20 @@ func ParseCreateWebhookResponse(rsp *http.Response) (*CreateWebhookResponse, err
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5556,6 +6782,20 @@ func ParseDeleteWebhookResponse(rsp *http.Response) (*DeleteWebhookResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5569,6 +6809,281 @@ func ParseDeleteWebhookResponse(rsp *http.Response) (*DeleteWebhookResponse, err
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRegisterControlPlaneOperatorResponse parses an HTTP response from a RegisterControlPlaneOperatorWithResponse call
+func ParseRegisterControlPlaneOperatorResponse(rsp *http.Response) (*RegisterControlPlaneOperatorResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RegisterControlPlaneOperatorResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ControlPlaneSession
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListControlProductsResponse parses an HTTP response from a ListControlProductsWithResponse call
+func ParseListControlProductsResponse(rsp *http.Response) (*ListControlProductsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlProductsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateControlProductResponse parses an HTTP response from a CreateControlProductWithResponse call
+func ParseCreateControlProductResponse(rsp *http.Response) (*CreateControlProductResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateControlProductResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ControlProduct
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseArchiveControlProductResponse parses an HTTP response from a ArchiveControlProductWithResponse call
+func ParseArchiveControlProductResponse(rsp *http.Response) (*ArchiveControlProductResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ArchiveControlProductResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetControlProductResponse parses an HTTP response from a GetControlProductWithResponse call
+func ParseGetControlProductResponse(rsp *http.Response) (*GetControlProductResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlProductResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlProduct
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateControlProductResponse parses an HTTP response from a UpdateControlProductWithResponse call
+func ParseUpdateControlProductResponse(rsp *http.Response) (*UpdateControlProductResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateControlProductResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlProduct
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

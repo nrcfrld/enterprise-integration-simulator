@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -17,6 +18,10 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrInvalidSession is safe to return when a session cannot be trusted.
 	ErrInvalidSession = errors.New("invalid session")
+	// ErrInvalidRegistration identifies invalid self-registration data.
+	ErrInvalidRegistration = errors.New("invalid registration")
+	// ErrEmailAlreadyRegistered avoids leaking database errors to HTTP callers.
+	ErrEmailAlreadyRegistered = errors.New("email already registered")
 )
 
 // Identity is the persisted user state required by authentication decisions.
@@ -36,15 +41,64 @@ type IdentityRepository interface {
 	FindByID(ctx context.Context, id string) (Identity, error)
 }
 
+// IdentityRegistrar persists a new self-service operator account.
+type IdentityRegistrar interface {
+	Create(ctx context.Context, identity Identity) error
+}
+
+// Option configures an optional authentication use case.
+type Option func(*Service)
+
+// WithRegistration enables self-service operator registration.
+func WithRegistration(registrar IdentityRegistrar, newID func(prefix string) string) Option {
+	return func(service *Service) {
+		service.registrar = registrar
+		service.newID = newID
+	}
+}
+
 // Service owns authentication use cases and session validity rules.
 type Service struct {
 	identities    IdentityRepository
+	registrar     IdentityRegistrar
+	newID         func(prefix string) string
 	sessionSecret []byte
 }
 
 // NewService constructs the authentication application service.
-func NewService(identities IdentityRepository, sessionSecret []byte) *Service {
-	return &Service{identities: identities, sessionSecret: sessionSecret}
+func NewService(identities IdentityRepository, sessionSecret []byte, options ...Option) *Service {
+	service := &Service{identities: identities, sessionSecret: sessionSecret}
+	for _, option := range options {
+		option(service)
+	}
+	return service
+}
+
+// Register creates an OPERATOR account and issues its first control-plane
+// session. Administrator accounts can only be created by an existing admin.
+func (s *Service) Register(ctx context.Context, email, password string) (Claims, string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil || parsedEmail.Address != email || len(password) < 8 {
+		return Claims{}, "", ErrInvalidRegistration
+	}
+	if s.registrar == nil || s.newID == nil {
+		return Claims{}, "", fmt.Errorf("registration is not configured")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return Claims{}, "", fmt.Errorf("hash registration password: %w", err)
+	}
+	identity := Identity{ID: s.newID("usr"), Email: email, Role: "OPERATOR", SessionVersion: 1, PasswordHash: string(hash)}
+	if err := s.registrar.Create(ctx, identity); err != nil {
+		return Claims{}, "", fmt.Errorf("create registration identity: %w", err)
+	}
+	claims := Claims{ID: identity.ID, Email: identity.Email, Role: identity.Role, SessionVersion: identity.SessionVersion}
+	token, err := Issue(s.sessionSecret, claims)
+	if err != nil {
+		return Claims{}, "", fmt.Errorf("issue registration session: %w", err)
+	}
+	return claims, token, nil
 }
 
 // Login validates credentials and returns a signed session token plus claims

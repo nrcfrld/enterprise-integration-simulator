@@ -41,6 +41,10 @@ SELECT id, email, role, session_version
 FROM users
 WHERE id = $1;
 
+-- name: CreateRegisteredOperator :exec
+INSERT INTO users(id, email, password_hash, role)
+VALUES ($1, $2, $3, 'OPERATOR');
+
 -- name: GetCredentialByClientID :one
 SELECT id, shop_id, client_id, secret_ciphertext, status
 FROM credentials

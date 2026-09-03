@@ -15,6 +15,8 @@ The webhook signature is `hex(HMAC-SHA256(TIMESTAMP + "." + RAW_BODY, WEBHOOK_SE
 
 Webhook registration is configured in **Webhooks** in the Admin UI (or through signed `POST /api/v1/webhooks`). Registration is only a destination and event filter: creating it does not emit a webhook. Create or transition an order to generate the durable event. From **Order Detail**, Replay re-fans the stable event ID, Duplicate adds a fresh delivery for the same event, and Delay schedules a fresh delivery after the selected delay. These controls require an enabled registration that subscribes to the event type.
 
+For non-local operation, set `MARKETPLACE_ENV=production`. Registration then rejects private/local literal targets, and delivery rechecks DNS answers plus every redirect before connecting. This prevents a stored callback from reaching loopback, cloud metadata, or internal network services after DNS rebinding. The private-target override exists only for trusted local exercises.
+
 ## SHOPEE_LIKE webhook contract
 
 For a `SHOPEE_LIKE` shop, the worker transforms canonical domain events before delivery. Product events map to `item_update`; shipment movement maps to `logistics_status_update`; order/payment/cancellation/SLA events map to `order_status_update`. The body is an envelope with `code`, `message`, `request_id`, and `response.data`, rather than the Generic raw event payload.

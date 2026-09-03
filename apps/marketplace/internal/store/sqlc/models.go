@@ -33,42 +33,48 @@ type IdempotencyKey struct {
 	CredentialID   string
 	Operation      string
 	Key            string
-	ResponseStatus int32
+	ResponseStatus pgtype.Int4
 	ResponseBody   []byte
 	CreatedAt      pgtype.Timestamptz
+	RequestHash    string
+	State          string
+	LockedUntil    pgtype.Timestamptz
 }
 
 type InventoryReservation struct {
-	ID          string
-	OrderID     string
-	OrderItemID string
-	ProductID   string
-	Quantity    int32
-	Status      string
-	ReservedAt  pgtype.Timestamptz
-	CommittedAt pgtype.Timestamptz
-	ReleasedAt  pgtype.Timestamptz
+	ID                string
+	OrderID           string
+	OrderItemID       string
+	ProductID         string
+	Quantity          int32
+	Status            string
+	ReservedAt        pgtype.Timestamptz
+	CommittedAt       pgtype.Timestamptz
+	ReleasedAt        pgtype.Timestamptz
+	WarehouseID       pgtype.Text
+	FulfilledQuantity int32
 }
 
 type Order struct {
-	ID                   string
-	OrderNumber          string
-	ShopID               string
-	CustomerData         []byte
-	ShippingAddress      []byte
-	TotalAmount          int64
-	Status               string
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
-	PaymentReference     pgtype.Text
-	PaidAt               pgtype.Timestamptz
-	PaymentStatus        string
-	PaymentExpiresAt     pgtype.Timestamptz
-	PaymentFailedAt      pgtype.Timestamptz
-	PaymentFailureReason pgtype.Text
-	SellerDeadlineAt     pgtype.Timestamptz
-	CancellationActor    pgtype.Text
-	CancellationReason   pgtype.Text
+	ID                     string
+	OrderNumber            string
+	ShopID                 string
+	CustomerData           []byte
+	ShippingAddress        []byte
+	TotalAmount            int64
+	Status                 string
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	PaymentReference       pgtype.Text
+	PaidAt                 pgtype.Timestamptz
+	PaymentStatus          string
+	PaymentExpiresAt       pgtype.Timestamptz
+	PaymentFailedAt        pgtype.Timestamptz
+	PaymentFailureReason   pgtype.Text
+	SellerDeadlineAt       pgtype.Timestamptz
+	CancellationActor      pgtype.Text
+	CancellationReason     pgtype.Text
+	FulfillmentWarehouseID pgtype.Text
 }
 
 type OrderItem struct {
@@ -90,11 +96,12 @@ type Outbox struct {
 }
 
 type Package struct {
-	ID        string
-	OrderID   string
-	Status    string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID          string
+	OrderID     string
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	WarehouseID pgtype.Text
 }
 
 type PackageItem struct {
@@ -171,6 +178,27 @@ type User struct {
 	Role           string
 	CreatedAt      pgtype.Timestamptz
 	SessionVersion int32
+}
+
+type Warehouse struct {
+	ID        string
+	ShopID    string
+	Code      string
+	Name      string
+	Status    string
+	Address   []byte
+	Priority  int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type WarehouseInventory struct {
+	WarehouseID      string
+	ProductID        string
+	OnHandQuantity   int32
+	ReservedQuantity int32
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
 }
 
 type Webhook struct {

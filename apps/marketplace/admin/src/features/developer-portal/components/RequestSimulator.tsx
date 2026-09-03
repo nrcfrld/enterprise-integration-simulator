@@ -1,5 +1,4 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { MUTATION_METHODS } from "../data/endpoints";
 import {
   buildCanonicalRequest,
   buildShopeeCanonicalRequest,
@@ -27,7 +26,7 @@ const responseHeaders = (contract: PortalEndpoint["contract"], response: Respons
     ? ["x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"]
     : contract === "shopee"
       ? ["x-shopee-api-call-limit", "x-shopee-ratelimit-reset"]
-      : ["x-tts-ratelimit-limit", "x-tts-ratelimit-remaining", "x-tts-ratelimit-reset"];
+      : ["x-tts-api-call-limit", "x-tts-ratelimit-remaining", "x-tts-ratelimit-reset"];
   return names.filter((name) => response.headers.has(name)).map((name) => [name, response.headers.get(name)]);
 };
 
@@ -38,7 +37,7 @@ interface RequestSimulatorProps {
 }
 
 export function RequestSimulator({ endpoint, api, credentials }: RequestSimulatorProps) {
-  const mutation = endpoint.contract === "shared" && MUTATION_METHODS.has(endpoint.method);
+  const mutation = endpoint.idempotent === true;
   const hasBody = endpoint.body !== undefined;
   const [pathParams, setPathParams] = useState<Record<string, string>>(() => fieldsToValues(endpoint.pathParams, false));
   const [query, setQuery] = useState<Record<string, string>>(() => fieldsToValues(endpoint.query, true));
@@ -108,6 +107,7 @@ export function RequestSimulator({ endpoint, api, credentials }: RequestSimulato
         headers["X-Shopee-Partner-Id"] = credentials.clientID.trim();
         headers["X-Shopee-Timestamp"] = timestamp;
         headers["X-Shopee-Signature"] = await signCanonicalRequest(credentials.secret, canonical);
+        if (mutation) headers["Idempotency-Key"] = idempotencyKey;
       } else {
         url.searchParams.set("app_key", credentials.clientID.trim());
         url.searchParams.set("timestamp", timestamp);
@@ -115,6 +115,7 @@ export function RequestSimulator({ endpoint, api, credentials }: RequestSimulato
         canonical = signed.canonical;
         url.searchParams.set("sign", signed.signature);
         headers["x-tts-access-token"] = credentials.accessToken.trim();
+        if (mutation) headers["Idempotency-Key"] = idempotencyKey;
       }
       if (hasBody) headers["Content-Type"] = "application/json";
 

@@ -43,6 +43,22 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) er
 	return err
 }
 
+const createRegisteredOperator = `-- name: CreateRegisteredOperator :exec
+INSERT INTO users(id, email, password_hash, role)
+VALUES ($1, $2, $3, 'OPERATOR')
+`
+
+type CreateRegisteredOperatorParams struct {
+	ID           string
+	Email        string
+	PasswordHash string
+}
+
+func (q *Queries) CreateRegisteredOperator(ctx context.Context, arg CreateRegisteredOperatorParams) error {
+	_, err := q.db.Exec(ctx, createRegisteredOperator, arg.ID, arg.Email, arg.PasswordHash)
+	return err
+}
+
 const createShop = `-- name: CreateShop :exec
 INSERT INTO shops(id, owner_user_id, name) VALUES ($1, $2, $3)
 `

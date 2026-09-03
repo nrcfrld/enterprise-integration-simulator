@@ -6,6 +6,17 @@ export interface FieldDefinition {
   label: string;
   help: string;
   initial?: string;
+  type?: string;
+  required?: boolean;
+  values?: string[];
+}
+
+export interface SchemaFieldDefinition {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+  example?: string;
 }
 
 export interface PortalEndpoint {
@@ -20,6 +31,10 @@ export interface PortalEndpoint {
   pathParams?: FieldDefinition[];
   /** An omitted body means this endpoint sends no request body. */
   body?: string;
+  /** Field-level request body documentation displayed by the API reference. */
+  bodyFields?: SchemaFieldDefinition[];
+  /** True when retries must reuse an Idempotency-Key. */
+  idempotent?: boolean;
   outcome: string;
   response: string;
   errorResponse: string;

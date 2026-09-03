@@ -4,10 +4,13 @@ ROOT_DIR := $(abspath ../..)
 COMPOSE := docker compose -f $(ROOT_DIR)/docker-compose.yml
 GO_FILES = $$(find . -type f -name '*.go' -not -path './admin/*')
 GO_PACKAGES = $$(go list ./... | grep -v '/admin/node_modules/')
+CORE_PACKAGES = ./internal/auth ./internal/events ./internal/orders ./internal/products ./internal/ratelimit ./internal/scenarios ./internal/tokopedia ./internal/webhooks
+CORE_COVERAGE_MIN ?= 80
+CORE_COVERAGE_FILE ?= /tmp/marketplace-core-coverage.out
 ADMIN_DIR := admin
 
 .DEFAULT_GOAL := help
-.PHONY: help generate fmt fmt-check vet lint lint-full test test-fast test-unit test-race test-integration \
+.PHONY: help generate fmt fmt-check vet lint lint-full test test-fast test-unit test-race test-integration coverage-core \
 	admin-test admin-lint admin-build test-all lint-all check \
 	docker-build docker-build-api docker-build-worker docker-build-admin \
 	compose-build compose-up compose-down compose-logs compose-ps
@@ -41,6 +44,11 @@ lint-full: lint ## Run golangci-lint too (requires golangci-lint on PATH).
 test-unit: ## Run Go unit and package tests.
 	go test $(GO_PACKAGES)
 
+coverage-core: ## Enforce at least 80% statement coverage for core domain packages.
+	go test $(CORE_PACKAGES) -covermode=atomic -coverprofile=$(CORE_COVERAGE_FILE)
+	@coverage="$$(go tool cover -func=$(CORE_COVERAGE_FILE) | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
+	awk -v coverage="$$coverage" -v minimum="$(CORE_COVERAGE_MIN)" 'BEGIN { if (coverage + 0 < minimum + 0) { printf "Core coverage %.1f%% is below %.1f%%\n", coverage, minimum; exit 1 } printf "Core coverage %.1f%% meets %.1f%% minimum\n", coverage, minimum }'
+
 test-fast: test-unit admin-test ## Run fast backend and Admin UI tests (no containers).
 
 test: test-fast test-integration ## Run the complete test suite, including Testcontainers.
@@ -55,17 +63,17 @@ admin-test: ## Run Admin UI tests.
 	bun --cwd $(ADMIN_DIR) test
 
 admin-lint: ## Lint and type-check the Admin UI.
-	bun --cwd $(ADMIN_DIR) run lint
-	bun --cwd $(ADMIN_DIR) run typecheck
+	bun run --cwd $(ADMIN_DIR) lint
+	bun run --cwd $(ADMIN_DIR) typecheck
 
 admin-build: ## Build the Admin UI production bundle.
-	bun --cwd $(ADMIN_DIR) run build
+	bun run --cwd $(ADMIN_DIR) build
 
 test-all: test ## Alias for the complete test suite.
 
 lint-all: lint admin-lint ## Run backend and Admin UI checks.
 
-check: lint-all test ## Run the complete local quality gate.
+check: lint-full admin-lint test admin-build coverage-core ## Run the complete local quality gate.
 
 docker-build: docker-build-api docker-build-worker docker-build-admin ## Build all local Docker images.
 

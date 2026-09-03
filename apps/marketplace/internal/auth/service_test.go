@@ -14,6 +14,16 @@ type fakeIdentityRepository struct {
 	err     error
 }
 
+type fakeIdentityRegistrar struct {
+	identity Identity
+	err      error
+}
+
+func (r *fakeIdentityRegistrar) Create(_ context.Context, identity Identity) error {
+	r.identity = identity
+	return r.err
+}
+
 func (r fakeIdentityRepository) FindByEmail(_ context.Context, email string) (Identity, error) {
 	if r.err != nil {
 		return Identity{}, r.err
@@ -69,6 +79,43 @@ func TestServiceLogin(t *testing.T) {
 			}
 			if claims.ID != identity.ID || token == "" {
 				t.Fatalf("Login() = (%#v, %q), want identity and token", claims, token)
+			}
+		})
+	}
+}
+
+func TestServiceRegister(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		email        string
+		password     string
+		registrarErr error
+		wantErr      error
+	}{
+		{name: "creates normalized operator session", email: " NEW@EXAMPLE.TEST ", password: "register-password"},
+		{name: "rejects invalid email", email: "not-an-email", password: "register-password", wantErr: ErrInvalidRegistration},
+		{name: "rejects short password", email: "new@example.test", password: "short", wantErr: ErrInvalidRegistration},
+		{name: "preserves duplicate email", email: "new@example.test", password: "register-password", registrarErr: ErrEmailAlreadyRegistered, wantErr: ErrEmailAlreadyRegistered},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			registrar := &fakeIdentityRegistrar{err: test.registrarErr}
+			service := NewService(fakeIdentityRepository{}, []byte("test-session-secret"), WithRegistration(registrar, func(string) string { return "usr_registered" }))
+			claims, token, err := service.Register(context.Background(), test.email, test.password)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Register() error = %v, want %v", err, test.wantErr)
+			}
+			if test.wantErr != nil {
+				return
+			}
+			if claims.ID != "usr_registered" || claims.Email != "new@example.test" || claims.Role != "OPERATOR" || claims.SessionVersion != 1 || token == "" {
+				t.Fatalf("Register() = (%#v, %q)", claims, token)
+			}
+			if registrar.identity.PasswordHash == "" || registrar.identity.PasswordHash == test.password {
+				t.Fatalf("Register() persisted insecure identity: %#v", registrar.identity)
 			}
 		})
 	}

@@ -29,6 +29,33 @@ describe("developer portal endpoint contract metadata", () => {
         continue;
       }
       expect(endpoint.body).toBeTruthy();
+      expect(endpoint.bodyFields, endpoint.id).not.toHaveLength(0);
+    }
+  });
+
+  it("provides field-level metadata for every documented request payload", () => {
+    for (const endpoint of ENDPOINTS.filter((value) => value.body !== undefined)) {
+      expect(endpoint.bodyFields, endpoint.id).not.toHaveLength(0);
+      for (const field of endpoint.bodyFields ?? []) {
+        expect(field.name).not.toHaveLength(0);
+        expect(field.type).not.toHaveLength(0);
+        expect(field.description).not.toHaveLength(0);
+      }
+    }
+  });
+
+  it("marks every state-changing provider operation as idempotent", () => {
+    const readOnlyPosts = new Set([
+      "tokopedia-search-products",
+      "tokopedia-search-orders",
+    ]);
+    for (const endpoint of ENDPOINTS.filter((value) =>
+      MUTATION_METHODS.has(value.method) && !readOnlyPosts.has(value.id),
+    )) {
+      expect(endpoint.idempotent, endpoint.id).toBe(true);
+    }
+    for (const endpoint of ENDPOINTS.filter((value) => readOnlyPosts.has(value.id))) {
+      expect(endpoint.idempotent, endpoint.id).not.toBe(true);
     }
   });
 });

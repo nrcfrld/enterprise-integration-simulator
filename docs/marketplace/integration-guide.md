@@ -30,7 +30,7 @@ Use the credential shown once by the control plane. Sign the exact raw request b
 hex(HMAC-SHA256(METHOD + REQUEST_PATH + UNIX_TIMESTAMP + RAW_BODY, CLIENT_SECRET))
 ```
 
-Set `X-Client-Id`, `X-Timestamp`, and `X-Signature`. Timestamps older/newer than five minutes are rejected. Mutating endpoints also require a stable `Idempotency-Key`; retrying it returns the first successful response.
+Set `X-Client-Id`, `X-Timestamp`, and `X-Signature`. Timestamps older/newer than five minutes are rejected. Every state-changing public endpoint across the shared, Shopee-like, and Tokopedia-like contracts also requires a stable `Idempotency-Key`. An identical retry replays the first successful response and includes `Idempotent-Replayed: true`; reuse with different input returns `409`, while a concurrent request with the same key returns `409` plus `Retry-After`. Generate a new key for the next logical operation.
 
 The request path in the signature excludes query parameters. Always sign the exact bytes sent as the JSON body, and do not reserialize a retry differently.
 
@@ -132,7 +132,7 @@ Orders follow one enforced path:
 
 `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`.
 
-Only the simulator verifies payment (`UNPAID → PAID`) and completes delivery. There is no Generic public order API. A `SHOPEE_LIKE` credential uses `POST /api/shopee/v1/orders/:id/ship-order`, `ready-to-ship`, `cancel`, `packages`, and `shipments`; its package request supports partial item allocations. A `TOKOPEDIA_LIKE` credential uses `POST /api/tokopedia/v202309/orders/:id/pack`, `handover`, `cancel`, and `shipments` with its query-signing/access-token contract. Both shipment endpoints require `READY_TO_SHIP`, `shipping_provider`, and `pickup_type: "PICKUP"`, and create a `CREATED` shipment. Use the provider order-detail endpoint to inspect its packages and shipments. There is deliberately no public endpoint for arbitrary order-status changes.
+Only the simulator verifies payment (`UNPAID → PAID`) and completes delivery. There is no Generic public order API. A `SHOPEE_LIKE` credential uses `POST /api/shopee/v1/orders/:id/ship-order`, `ready-to-ship`, `cancel`, `packages`, and `shipments`; its package request supports partial item allocations. A `TOKOPEDIA_LIKE` credential uses `POST /api/tokopedia/v202309/orders/:id/pack`, `handover`, `cancel`, and `shipments` with its query-signing/access-token contract. Both shipment endpoints require `READY_TO_SHIP`, a non-empty `shipping_provider`, and exactly `pickup_type: "PICKUP"`. They create one `CREATED` shipment per eligible package; responses expose the full `shipments` collection and keep the first `shipment` field for compatibility. Use the provider order-detail endpoint to inspect all packages and shipments. There is deliberately no public endpoint for arbitrary order-status changes.
 
 ## Warehouses and inventory
 

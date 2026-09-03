@@ -1,0 +1,194 @@
+import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+
+const request = (...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<any>(...args);
+
+export function ResourcePage({
+  page,
+  data,
+  shopID,
+  token,
+  role,
+  onForm,
+  onDetail,
+  onRefresh,
+  onNotice,
+  onSeed,
+  isSeeding,
+  listPage,
+  onPageChange,
+}: any) {
+  const rows = Array.isArray(data?.data) ? data.data : [];
+  const action = ({
+    Products: ["product", "New product"],
+    Warehouses: ["warehouse", "New warehouse"],
+    Orders: ["order", "Simulate order"],
+    Packages: ["package", "Allocate package"],
+    Credentials: ["credential", "New credential"],
+    Users: role === "ADMIN" ? ["user", "New user"] : null,
+  } as Record<string, string[] | null>)[page];
+  const retry = async (id: string) => {
+    await request(`/control/v1/deliveries/${id}/retry`, token, {
+      method: "POST",
+    });
+    await onRefresh();
+    onNotice("Delivery queued for retry");
+  };
+  const archiveProduct = async (product: any) => {
+    if (!window.confirm(`Archive ${product.name}? Existing order history will be preserved.`)) return;
+    await request(`/control/v1/shops/${shopID}/products/${product.id}`, token, { method: "DELETE" });
+    await onRefresh();
+    onNotice("Product archived");
+  };
+  return (
+    <>
+      <div className="page-hint">
+        {page === "Orders"
+          ? "Orders trigger the event timeline. Inspect one to see every resulting webhook delivery."
+          : page === "Shipments"
+            ? "Shipments are created through the public API. Advance each fulfillment record one valid state at a time."
+            : page === "Warehouses"
+              ? "Warehouses are fulfillment origins. Their inventory is reserved when an order is created and consumed only when its shipment is marked shipped."
+          : page === "Credentials"
+            ? "Credentials are for the external integrator; the secret is visible only when it is created."
+            : "Manage records for the selected shop."}
+      </div>
+      <div className="table-toolbar">
+        {action && (
+          <button onClick={() => onForm({ kind: action[0] })}>
+            + {action[1]}
+          </button>
+        )}
+        {page === "Products" && shopID && (
+          <button className="danger" disabled={isSeeding} onClick={() => void onSeed()}>
+            {isSeeding ? "Resetting…" : "Reset to seed"}
+          </button>
+        )}
+        <span>
+          {rows.length} record{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="table-wrap">
+        {rows.length ? (
+          <table className="records-table">
+            <thead>
+              <tr>
+                {columns(rows[0], page).map((key) => (
+                  <th key={key}>{key.replaceAll("_", " ")}</th>
+                ))}
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row: any) => (
+                <tr key={row.id}>
+                  {columns(rows[0], page).map((key) => (
+                    <td key={key} data-label={key.replaceAll("_", " ")}>
+                      {String(row[key] ?? "—")}
+                    </td>
+                  ))}
+                  <td className="row-actions" data-label="Actions">
+                    {page === "Products" && (
+                      <>
+                        <button onClick={() => onForm({ kind: "product", initial: row })}>Edit product</button>
+                        <button className="danger" onClick={() => archiveProduct(row)}>Archive</button>
+                      </>
+                    )}
+                    {page === "Orders" && (
+                      <button
+                        onClick={() => onDetail({ type: "order", id: row.id })}
+                      >
+                        Event trail
+                      </button>
+                    )}
+                    {page === "Shipments" && (
+                      <button onClick={() => onDetail({ type: "shipment", id: row.id })}>
+                        View shipment
+                      </button>
+                    )}
+                    {page === "Packages" && (
+                      <button onClick={() => onDetail({ type: "package", id: row.id })}>
+                        View package
+                      </button>
+                    )}
+                    {page === "Warehouses" && (
+                      <>
+                        <button onClick={() => onDetail({ type: "warehouse", id: row.id })}>
+                          View inventory
+                        </button>
+                        <button className="quiet" onClick={() => onForm({ kind: "warehouse", initial: row })}>
+                          Edit warehouse
+                        </button>
+                      </>
+                    )}
+                    {page === "Deliveries" && (
+                      <>
+                        <button
+                          onClick={() =>
+                            onDetail({ type: "delivery", id: row.id })
+                          }
+                        >
+                          Attempts
+                        </button>
+                        <button onClick={() => retry(row.id)}>Retry</button>
+                      </>
+                    )}
+                    {page === "Credentials" && row.status === "ACTIVE" && (
+                      <button
+                        onClick={async () => {
+                          await request(
+                            `/control/v1/credentials/${row.id}/revoke`,
+                            token,
+                            { method: "POST" },
+                          );
+                          await onRefresh();
+                          onNotice("Credential revoked");
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="empty">Choose a shop or create a record to begin.</p>
+        )}
+      </div>
+      <Pagination pagination={data?.pagination} page={listPage} onChange={onPageChange} />
+    </>
+  );
+}
+
+export function Pagination({ pagination, page, onChange }: any) {
+  const current = pagination?.page || page;
+  const totalPages = pagination?.total_pages || 1;
+  const total = pagination?.total ?? 0;
+  if (totalPages <= 1) return null;
+  return (
+    <nav className="pagination" aria-label="Pagination">
+      <p>
+        Page {current} of {totalPages} <span>· {total} records</span>
+      </p>
+      <div>
+        <button className="quiet" disabled={current <= 1} onClick={() => onChange(current - 1)}>
+          Previous
+        </button>
+        <button disabled={current >= totalPages} onClick={() => onChange(current + 1)}>
+          Next
+        </button>
+      </div>
+    </nav>
+  );
+}
+function columns(row: Record<string, unknown>, page: string) {
+  if (page === "Warehouses") return ["code", "name", "status", "priority", "product_count", "available_quantity"];
+  if (page === "Deliveries") return ["event_type", "endpoint", "status", "attempt_count", "next_attempt_at", "failure_reason"];
+  if (page === "Shipments") return ["order_number", "tracking_number", "shipping_provider", "pickup_type", "status", "created_at", "shipped_at"];
+  if (page === "Packages") return ["order_number", "status", "item_count", "created_at"];
+  return Object.keys(row)
+    .filter((key) => typeof row[key] !== "object")
+    .slice(0, 7);
+}

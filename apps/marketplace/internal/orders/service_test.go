@@ -129,6 +129,46 @@ func TestServiceCancel(t *testing.T) {
 	}
 }
 
+func TestServiceCancelOverdueRevalidatesLockedState(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.September, 3, 1, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name          string
+		state         LifecycleState
+		reason        string
+		wantErr       error
+		paymentStatus string
+	}{
+		{name: "expired pending payment", state: LifecycleState{Status: Unpaid, PaymentStatus: "PENDING", PaymentExpires: timePointer(now.Add(-time.Second))}, reason: PaymentExpiredReason, paymentStatus: "EXPIRED"},
+		{name: "future payment remains active", state: LifecycleState{Status: Unpaid, PaymentStatus: "PENDING", PaymentExpires: timePointer(now.Add(time.Second))}, reason: PaymentExpiredReason, wantErr: ErrDeadlineNotEligible},
+		{name: "stale seller candidate already ready to ship", state: LifecycleState{Status: ReadyToShip, PaymentStatus: "PAID", SellerDeadline: timePointer(now.Add(-time.Second))}, reason: SellerSLAExpiredReason, wantErr: ErrDeadlineNotEligible},
+		{name: "overdue processing seller", state: LifecycleState{Status: Processing, PaymentStatus: "PAID", SellerDeadline: timePointer(now.Add(-time.Second))}, reason: SellerSLAExpiredReason},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			repository := &fakeLifecycleRepository{state: test.state}
+			service := NewService(repository, WithClock(func() time.Time { return now }))
+			err := service.CancelOverdue(context.Background(), "shop_1", "ord_1", test.reason)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("CancelOverdue() error = %v, want %v", err, test.wantErr)
+			}
+			if test.wantErr != nil {
+				if repository.update != nil || repository.release {
+					t.Fatalf("stale candidate mutated state: update=%#v release=%t", repository.update, repository.release)
+				}
+				return
+			}
+			if repository.update == nil || repository.update.Target != Cancelled || repository.update.PaymentStatus != test.paymentStatus || !repository.release {
+				t.Fatalf("deadline persistence = update:%#v release:%t", repository.update, repository.release)
+			}
+			if got := repository.events; len(got) != 2 || got[1] != "order.cancelled" {
+				t.Fatalf("deadline events = %#v", got)
+			}
+		})
+	}
+}
+
 func timePointer(value time.Time) *time.Time {
 	return &value
 }

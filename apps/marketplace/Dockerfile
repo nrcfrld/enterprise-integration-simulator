@@ -14,14 +14,18 @@ RUN CGO_ENABLED=0 go build -o /out/marketplace-worker ./cmd/worker
 
 FROM alpine:3.21 AS api
 WORKDIR /app
-COPY --from=build /out/marketplace-api ./marketplace-api
-COPY apps/marketplace/migrations ./migrations
-COPY apps/marketplace/openapi ./openapi
+RUN addgroup -S marketplace && adduser -S -G marketplace marketplace
+COPY --from=build --chown=marketplace:marketplace /out/marketplace-api ./marketplace-api
+COPY --chown=marketplace:marketplace apps/marketplace/migrations ./migrations
+COPY --chown=marketplace:marketplace apps/marketplace/openapi ./openapi
+USER marketplace
 EXPOSE 8080
 ENTRYPOINT ["./marketplace-api"]
 
 FROM alpine:3.21 AS worker
 WORKDIR /app
-COPY --from=build /out/marketplace-worker ./marketplace-worker
-COPY apps/marketplace/migrations ./migrations
+RUN addgroup -S marketplace && adduser -S -G marketplace marketplace
+COPY --from=build --chown=marketplace:marketplace /out/marketplace-worker ./marketplace-worker
+COPY --chown=marketplace:marketplace apps/marketplace/migrations ./migrations
+USER marketplace
 ENTRYPOINT ["./marketplace-worker"]

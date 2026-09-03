@@ -1,6 +1,6 @@
 # Implementation Report — Enterprise Integration Simulator
 
-Audit date: 2026-09-02  
+Audit date: 2026-09-03
 PRD: Enterprise Integration Simulator v0.2, updated by Order Lifecycle & API Brief  
 Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
@@ -11,6 +11,60 @@ Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 The original Marketplace and Order Lifecycle requirements remain complete. The update replaces the obsolete `CREATED → CONFIRMED → …` order flow with `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`, keeping cancellation only before shipment. The latest update also separates Admin **Shipments** from Orders: creation remains exclusively in the public API, while the control plane lists, inspects, and advances existing fulfillment records. Verification is behavior-driven, not inferred from routes or source-file presence.
 
 The Provider/Payment/Package P0 expansion is complete: provider-specific detail/UI, package workflow/Admin visibility, and worker integration coverage have been implemented and verified with Testcontainers. P1 is also complete: `SHOPEE_LIKE` changes the external integration boundary—not only stored state—through a separate API prefix, signing protocol, pagination/error/rate-limit contract, and webhook representation. P2 is complete: `TOKOPEDIA_LIKE` now models the combined Tokopedia & Shop / TikTok Shop contract with its own authenticated API, status vocabulary, webhook envelope, inventory safety, and return-to-sender behavior.
+
+### Latest update — Self-service seed reset
+
+- Fixed the Dashboard and Products seed action for Operator accounts. The UI was
+  offering the action, but the API rejected every non-Admin request with `403`,
+  and the unhandled frontend rejection made the confirmed action appear inert.
+- Operators may now reset only shops they own; Admins retain access to every
+  shop, while cross-owner reset attempts remain forbidden by the existing shop
+  ownership boundary.
+- Both seed entry points now show a disabled progress state and surface API
+  failures in the notification area instead of failing silently.
+- **Product & DX Review:** authorization, ownership isolation, Dashboard and
+  Products discoverability, progress/error feedback, operator guidance, and
+  regression coverage were updated together.
+
+### Latest update — P0–P2 audit remediation
+
+- Closed the CORS contract gap for all provider authentication, idempotency, rate-limit, and replay headers; preflight behavior is table-tested.
+- Replaced best-effort request replay with atomic, payload-bound idempotency claims for every state-changing public route. Concurrent callers, conflicting payloads, expired leases, and empty `204` replays are covered.
+- Hardened order/inventory/package concurrency: deadline jobs lock and revalidate state, duplicate product lines cannot oversell, package allocation uses deterministic locks, and deferred database constraints reject empty/over-allocated packages.
+- Serialized concurrent package constraint checks and product archive/allocation through row locks, closing write-skew windows even when two transactions commit simultaneously.
+- Corrected provider fulfillment behavior for exact pickup validation, partial/multiple packages and shipments, Tokopedia filtered pagination/status mapping, provider error/status headers, and product control-plane create/detail/update/archive.
+- Added production webhook SSRF defenses at registration, DNS dial, and redirect time; configurable request-body limits; non-root API, worker, and Admin containers; service health checks; and build-time Admin API configuration.
+- Split backend route composition by control/shared/Shopee/Tokopedia boundary and decomposed the 2,200-line Control Plane React component into focused page/form/detail/scenario/webhook components. The frontend no longer uses `@ts-nocheck` or an ESLint exclusion.
+- Added a core-domain coverage gate (80% minimum), OpenAPI idempotency contract tests, active PostgreSQL invariant/concurrency tests, and full frontend contract checks.
+- **Product & DX Review:** Domain, backend, migrations, OpenAPI/generated client, Developer Portal, Request Simulator, examples/guides, Admin product UI, Docker operations, and tests were updated together. Public mutations are discoverable and runnable without reading backend source.
+
+### Latest update — Detailed API reference navigation
+
+- Replaced the Products and Orders reference summaries with complete operation
+  documentation for Products, Warehouses, Orders, Fulfillment, and Webhooks.
+  Each endpoint now explains its signing inputs and headers, path/query
+  parameters, field-level JSON payload, idempotency behavior, return envelope,
+  quota headers, success example, and common error response before offering the
+  Request Simulator as an optional next action.
+- Added a provider-grouped, active endpoint index on the right side of wide
+  layouts. It becomes a horizontally scrollable index before the content at
+  narrower widths, preserving DOM, focus, and reading order.
+- Added missing Shopee order time-range filter documentation and field metadata
+  for all documented request bodies. The reference component and catalogue
+  contract are covered by 17 passing frontend tests in total.
+- **Product & DX Review:** public API behavior and OpenAPI are unchanged. The
+  Developer Portal reference, endpoint catalogue, responsive navigation,
+  Request Simulator handoff, accessibility semantics, tests, and production
+  Admin build were updated and verified together.
+
+Current verification: `make check` passes the complete lint, frontend, unit,
+race-enabled PostgreSQL/Redis Testcontainers, production frontend build, and
+81.1% core-domain coverage gate; the frontend suite contains 14 passing tests.
+`make test-race` and `make lint-full` also pass independently with zero
+`golangci-lint` issues. All three production images build, all five Compose
+services report healthy, Goose reports applied migration version 12, and API
+`/health` plus `/ready` return success while the API, worker, and Admin containers
+run as non-root users (UID 100, 100, and 101 respectively).
 
 ### Latest update — Developer Portal and API Request Simulator
 
@@ -26,6 +80,12 @@ The Provider/Payment/Package P0 expansion is complete: provider-specific detail/
 - Product creation now accepts one or more initial warehouse allocations. The backend derives aggregate sellable `products.stock` from their total and inserts every inventory row in the same transaction as the product and outbox event.
 - Warehouse detail now supports adding a catalogue product to that location and setting on-hand quantities with a clear reservation floor. The public signed warehouse responses, OpenAPI schema, and Developer Portal examples expose the dispatch-address shape.
 - **Developer Experience Review:** documentation and operations guidance explain the workflow; OpenAPI documents the response address; the Developer Portal and request simulator show it in executable warehouse responses; errors cover invalid allocation, unknown/cross-shop warehouses, and on-hand below reserved; warehouse selection remains provider-neutral because allocation is shared fulfillment behavior; the Warehouses page exposes create, edit, address, split inventory, and later adjustment actions without backend-source discovery.
+
+### Latest update — Self-service Operator registration
+
+- Added `POST /control/v1/auth/register` and an account-creation state on the Admin sign-in screen. A valid email and 8+ character password create an `OPERATOR` identity, issue its first bearer session, and sign the user in immediately.
+- Registration cannot choose a role. Administrators remain created through the secured **Users** control-plane workflow, preventing public privilege escalation.
+- **Developer Experience Review:** OpenAPI documents the request, session response, validation, duplicate-email error, and the distinction from integration credentials. Operations guidance adds the initial workflow; the Developer Portal authentication reference provides an executable registration request with generated request/response; provider behavior is unchanged because control-plane sessions never sign provider API requests.
 
 ### Current backend architecture refactor
 
@@ -117,6 +177,7 @@ Implemented in the current increment:
 | Production Admin UI crashed with `ReferenceError: Prism is not defined`. | Control plane rendered a blank page, blocking every admin workflow. | Removed Vite's forced Prism manual chunk, which violated Prism plug-in initialization order. | Rebuilt Docker image; authenticated browser session rendered every Admin page without console errors. |
 | Name-only `PATCH /api/v1/products/{id}` reset omitted `price` and `stock` to zero. | Public partial update corrupted product data. | Replaced value fields with pointer-based `productPatchInput`; OpenAPI now uses `ProductPatchInput`. | New Testcontainers regression test and extended Compose E2E test both pass. |
 | Existing Compose data could not migrate from the old order states because its old database constraint rejected `UNPAID`. | API and worker exited at startup on a persistent volume. | Migration `005` now removes the old constraint before mapping `CREATED → UNPAID` and `CONFIRMED → PAID`, then applies the new constraint and payment/shipment fields. | Rebuilt/recreated Compose; both API and worker report Goose version 5 and `/ready` returns ready. |
+| Seed confirmation appeared to do nothing for Operators. | The Dashboard exposed the action, but the API returned `403` and the UI did not catch the rejected request. | Allowed owner-scoped Operator resets, retained cross-shop isolation, and added progress/error feedback to both seed entry points. | Frontend regression tests and a race-enabled PostgreSQL/Redis Testcontainers permission/reset test pass. |
 
 ## Tests run
 
@@ -164,6 +225,11 @@ Implemented in the current increment:
 | `cd apps/marketplace/admin && bun run typecheck && bun run lint && bun test && bun run build` after Generic-order removal | PASS — 3 frontend tests, TypeScript, ESLint, production bundle. |
 | `cd apps/marketplace && go test -count=1 -race -tags=testcontainers ./integration ./cmd/worker` after Generic-order removal | PASS — full PostgreSQL/Redis provider, inventory, package, shipment, worker, and webhook regression matrix; Generic order route is asserted absent. |
 | `go test -tags=testcontainers ./integration -run TestContainerProviderProductContracts -v` | PASS — PostgreSQL/Redis verification of Shopee-like and Tokopedia-like product contracts, provider field/envelope distinction, and removal of `/api/v1/products`. |
+| `go test -race -count=1 -tags=testcontainers ./integration -run TestContainerSelfRegistrationCreatesOperatorSession -v` | PASS — registration issues an OPERATOR session, permits authenticated control-plane access, rejects duplicate email, and rejects invalid input. |
+| `go vet $(go list ./... \| grep -v '/admin/node_modules/') && golangci-lint run ./...` after seed reset fix | PASS — Go static analysis and lint report zero issues. |
+| `bun run typecheck && bun run lint && bun run test && bun run build` after seed reset fix | PASS — TypeScript, ESLint, 19 frontend tests across 8 files, and production bundle. |
+| `go test -count=1 -race -tags=testcontainers ./integration -run '^TestContainerResetPermissionAndTransactionalOutbox$' -v` | PASS — Operator can reset an owned shop to 100 products/50 orders, cannot reset another owner's shop, and transactional persistence is verified. |
+| Rebuild/recreate `marketplace-api` and `marketplace-admin`, then `/ready` and Compose health checks | PASS — both rebuilt containers are healthy and the API reports ready. |
 
 ## E2E flows verified
 
@@ -202,7 +268,7 @@ There are **no remaining gaps against the initial Marketplace Simulator PRD v0.2
 
 Operational notes, not PRD gaps:
 
-- Compose and browser E2E were intentionally not rerun for the warehouse increment, following the explicit test constraint. All changed behavior is covered by isolated PostgreSQL/Redis Testcontainers, backend unit/regression tests, and frontend typecheck/lint/unit/build verification.
+- The final audit reran the full Compose build/start and runtime smoke checks for Admin, API, worker, PostgreSQL, and Redis. Browser-driven E2E was not repeated because the affected UI behavior is covered by frontend typecheck/lint/unit/build checks and the backend behavior by isolated PostgreSQL/Redis Testcontainers.
 - This is intentionally a local sandbox. Before any non-local use, replace the documented development credentials and encryption/session secrets.
 - The Compose volume is persistent and now contains audit-created sample shops/orders. It was deliberately not deleted; a destructive volume reset was outside the audit scope.
 - SAP, Shipping, Payment, and Identity simulators are future work explicitly outside this initial Marketplace-only scope.

@@ -3,6 +3,7 @@ package tokopedia
 import (
 	"encoding/json"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +37,29 @@ func TestContractMappings(t *testing.T) {
 	}
 	if WebhookType("product.updated") != 15 || WebhookType("shipment.returned") != 4 || WebhookType("order.paid") != 1 {
 		t.Fatal("WebhookType() did not map provider event families")
+	}
+}
+
+func TestCanonicalOrderStatuses(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, external string
+		want           []string
+		valid          bool
+	}{
+		{name: "single state", external: "AWAITING_COLLECTION", want: []string{"READY_TO_SHIP"}, valid: true},
+		{name: "transit state", external: "IN_TRANSIT", want: []string{"SHIPPED", "IN_DELIVERY"}, valid: true},
+		{name: "cancel state", external: "cancel", want: []string{"CANCELLED", "RETURNED"}, valid: true},
+		{name: "unknown state", external: "MISSING", valid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got, valid := CanonicalOrderStatuses(test.external)
+			if valid != test.valid || strings.Join(got, ",") != strings.Join(test.want, ",") {
+				t.Fatalf("CanonicalOrderStatuses(%q) = %#v/%t, want %#v/%t", test.external, got, valid, test.want, test.valid)
+			}
+		})
 	}
 }
 

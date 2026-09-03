@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { ENDPOINT_BY_ID, ENDPOINTS } from "./data/endpoints";
 import { CodeExamples } from "./components/CodeExamples";
+import { ApiReference } from "./components/ApiReference";
 import { CredentialPanel } from "./components/CredentialPanel";
 import { HttpMethod } from "./components/HttpMethod";
 import { RequestSimulator } from "./components/RequestSimulator";
-import { Authentication, Errors, ProviderCatalog, ProviderOrders, QuickStart, Reference, Webhooks } from "./sections/Guides";
+import { Authentication, Errors, QuickStart } from "./sections/Guides";
 import type { IntegrationCredentials, PortalSection } from "./types";
 
 interface DeveloperPortalProps {
@@ -30,6 +31,36 @@ export function DeveloperPortal({ api, onNavigate }: DeveloperPortalProps) {
   const [activeEndpointID, setActiveEndpointID] = useState("list-warehouses");
   const [credentials, setCredentials] = useState<IntegrationCredentials>({ clientID: "", secret: "", accessToken: "" });
   const openTry = (endpointID: string) => { setActiveEndpointID(endpointID); setSection("try"); };
-  const content = section === "quickstart" ? <QuickStart onNavigate={onNavigate} onTry={openTry} /> : section === "try" ? <TryIt api={api} activeEndpointID={activeEndpointID} onSelect={setActiveEndpointID} credentials={credentials} onCredentialsChange={setCredentials} onNavigate={onNavigate} /> : section === "authentication" ? <Authentication /> : section === "webhooks" ? <Webhooks onTry={openTry} /> : section === "products" ? <ProviderCatalog onTry={openTry} /> : section === "warehouses" ? <Reference group="Warehouses" endpoints={ENDPOINTS} onTry={openTry} /> : section === "orders" ? <ProviderOrders onTry={openTry} /> : <Errors />;
-  return <div className="docs-portal"><header className="portal-topbar"><div className="portal-wordmark"><span>MARKETPLACE</span><b>Developer</b></div><div className="portal-links"><a href={`${api}/openapi.yaml`} target="_blank" rel="noreferrer">OpenAPI spec</a><a href={`${api}/swagger/index.html`} target="_blank" rel="noreferrer">API explorer</a><button type="button" className="quiet" onClick={() => onNavigate("Dashboard")}>Back to console</button></div></header><div className="portal-frame"><aside className="portal-rail" aria-label="Developer documentation"><button type="button" className={section === "quickstart" ? "selected" : ""} onClick={() => setSection("quickstart")}>Start here</button><button type="button" className={section === "try" ? "selected" : ""} onClick={() => setSection("try")}>Request simulator</button><p>CONCEPTS</p><button type="button" className={section === "authentication" ? "selected" : ""} onClick={() => setSection("authentication")}>Request signing</button><button type="button" className={section === "webhooks" ? "selected" : ""} onClick={() => setSection("webhooks")}>Webhooks</button><p>REFERENCE</p><button type="button" className={section === "products" ? "selected" : ""} onClick={() => setSection("products")}>Products</button><button type="button" className={section === "warehouses" ? "selected" : ""} onClick={() => setSection("warehouses")}>Warehouses</button><button type="button" className={section === "orders" ? "selected" : ""} onClick={() => setSection("orders")}>Orders & fulfilment</button><button type="button" className={section === "errors" ? "selected" : ""} onClick={() => setSection("errors")}>Errors & limits</button><p>SIMULATOR</p><button type="button" onClick={() => onNavigate("Shops")}>Manage shops</button><button type="button" onClick={() => onNavigate("Scenarios")}>Failure scenarios</button></aside><main className="portal-main">{content}</main></div></div>;
+
+  let content;
+  if (section === "quickstart") content = <QuickStart onNavigate={onNavigate} onTry={openTry} />;
+  else if (section === "try") content = <TryIt api={api} activeEndpointID={activeEndpointID} onSelect={setActiveEndpointID} credentials={credentials} onCredentialsChange={setCredentials} onNavigate={onNavigate} />;
+  else if (section === "authentication") content = <Authentication api={api} />;
+  else if (section === "products") content = <ApiReference title="Products API reference" description="Read the provider catalogue without translating its public field names yourself. Every operation below documents its signing inputs, filters, payload, response envelope, and failure shape." note="Product creation, stock changes, and archival stay in the Admin Control Plane. The public Shopee-like and Tokopedia-like catalogue APIs are intentionally read-only." groups={["Products"]} endpoints={ENDPOINTS} onTry={openTry} />;
+  else if (section === "warehouses") content = <ApiReference title="Warehouses API reference" description="Discover fulfillment origins and inspect their physical, reserved, and available inventory through the shared signed contract." note="Create warehouses and adjust stock in the Admin Control Plane. Public warehouse calls only expose data owned by the credential's shop." groups={["Warehouses"]} endpoints={ENDPOINTS} onTry={openTry} />;
+  else if (section === "orders") content = <ApiReference title="Orders and fulfilment API reference" description="Follow each provider's order lifecycle from discovery through package allocation and shipment creation, with state prerequisites and provider-shaped responses visible at every step." note="List or search first and reuse the returned ID. Payment verification and physical shipment progression are simulator control-plane actions; merchant processing, packing, handover, package allocation, shipment creation, and eligible cancellation use these public APIs." groups={["Orders", "Fulfillment"]} endpoints={ENDPOINTS} onTry={openTry} />;
+  else if (section === "webhooks") content = <ApiReference title="Webhook API reference" description="Register, list, or configure callback destinations using the event vocabulary and signing contract of each provider." note="Deliveries are asynchronous and at-least-once. Store the event or notification ID before processing, verify the signature against the exact raw body, and return a 2xx response only after successful processing." groups={["Webhooks"]} endpoints={ENDPOINTS} onTry={openTry} />;
+  else content = <Errors />;
+
+  return <div className="docs-portal">
+    <header className="portal-topbar"><div className="portal-wordmark"><span>MARKETPLACE</span><b>Developer</b></div><div className="portal-links"><a href={`${api}/openapi.yaml`} target="_blank" rel="noreferrer">OpenAPI spec</a><a href={`${api}/swagger/index.html`} target="_blank" rel="noreferrer">API explorer</a><button type="button" className="quiet" onClick={() => onNavigate("Dashboard")}>Back to console</button></div></header>
+    <div className="portal-frame">
+      <aside className="portal-rail" aria-label="Developer documentation">
+        <button type="button" className={section === "quickstart" ? "selected" : ""} onClick={() => setSection("quickstart")}>Start here</button>
+        <button type="button" className={section === "try" ? "selected" : ""} onClick={() => setSection("try")}>Request simulator</button>
+        <p>CONCEPTS</p>
+        <button type="button" className={section === "authentication" ? "selected" : ""} onClick={() => setSection("authentication")}>Request signing</button>
+        <p>REFERENCE</p>
+        <button type="button" className={section === "products" ? "selected" : ""} onClick={() => setSection("products")}>Products</button>
+        <button type="button" className={section === "warehouses" ? "selected" : ""} onClick={() => setSection("warehouses")}>Warehouses</button>
+        <button type="button" className={section === "orders" ? "selected" : ""} onClick={() => setSection("orders")}>Orders &amp; fulfilment</button>
+        <button type="button" className={section === "webhooks" ? "selected" : ""} onClick={() => setSection("webhooks")}>Webhooks</button>
+        <button type="button" className={section === "errors" ? "selected" : ""} onClick={() => setSection("errors")}>Errors &amp; limits</button>
+        <p>SIMULATOR</p>
+        <button type="button" onClick={() => onNavigate("Shops")}>Manage shops</button>
+        <button type="button" onClick={() => onNavigate("Scenarios")}>Failure scenarios</button>
+      </aside>
+      <main className="portal-main">{content}</main>
+    </div>
+  </div>;
 }

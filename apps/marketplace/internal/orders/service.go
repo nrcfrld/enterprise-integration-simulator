@@ -14,6 +14,14 @@ var (
 	// ErrInvalidTransition is returned when the current lifecycle state cannot
 	// move to the requested state.
 	ErrInvalidTransition = errors.New("invalid order transition")
+	// ErrDeadlineNotEligible is returned when a worker candidate no longer
+	// satisfies its deadline rule after the order row is locked.
+	ErrDeadlineNotEligible = errors.New("order is not eligible for deadline cancellation")
+)
+
+const (
+	PaymentExpiredReason   = "PAYMENT_EXPIRED"
+	SellerSLAExpiredReason = "SELLER_SLA_EXPIRED"
 )
 
 // LifecycleState is the locked persisted state needed for a lifecycle decision.
@@ -22,6 +30,7 @@ type LifecycleState struct {
 	Provider       string
 	PaymentStatus  string
 	PaymentExpires *time.Time
+	SellerDeadline *time.Time
 }
 
 // TransitionUpdate is the persistence change decided by Service.
@@ -31,6 +40,7 @@ type TransitionUpdate struct {
 	SellerSLA          time.Duration
 	CancellationActor  string
 	CancellationReason string
+	PaymentStatus      string
 }
 
 // LifecycleTransaction is the narrow persistence contract used by the order
@@ -172,6 +182,60 @@ func (s *Service) Cancel(ctx context.Context, shopID, orderID, actor, reason str
 		payload := map[string]any{"id": orderID, "status": Cancelled, "cancellation_actor": actor, "cancellation_reason": reason}
 		if err := tx.RecordEvent(ctx, shopID, "order.cancelled", orderID, payload); err != nil {
 			return fmt.Errorf("record cancellation event: %w", err)
+		}
+		return nil
+	})
+}
+
+// CancelOverdue revalidates a payment or seller deadline while holding the
+// order lock, then releases inventory and records both the deadline and
+// cancellation events atomically. Stale worker candidates are safe no-ops.
+func (s *Service) CancelOverdue(ctx context.Context, shopID, orderID, reason string) error {
+	eventType := ""
+	return s.repository.InTransaction(ctx, func(ctx context.Context, tx LifecycleTransaction) error {
+		state, err := tx.LockOrder(ctx, shopID, orderID)
+		if err != nil {
+			return err
+		}
+		now := s.clock()
+		switch reason {
+		case PaymentExpiredReason:
+			if state.Status != Unpaid || state.PaymentStatus != "PENDING" || state.PaymentExpires == nil || state.PaymentExpires.After(now) {
+				return ErrDeadlineNotEligible
+			}
+			eventType = "order.payment_expired"
+		case SellerSLAExpiredReason:
+			if state.Status != Paid && state.Status != Processing {
+				return ErrDeadlineNotEligible
+			}
+			if state.SellerDeadline == nil || state.SellerDeadline.After(now) {
+				return ErrDeadlineNotEligible
+			}
+			eventType = "order.sla_expired"
+		default:
+			return fmt.Errorf("%w: unknown deadline reason", ErrDeadlineNotEligible)
+		}
+
+		update := TransitionUpdate{
+			Target:             Cancelled,
+			CancellationActor:  System,
+			CancellationReason: reason,
+		}
+		if reason == PaymentExpiredReason {
+			update.PaymentStatus = "EXPIRED"
+		}
+		if err := tx.UpdateOrder(ctx, orderID, update); err != nil {
+			return fmt.Errorf("cancel overdue order: %w", err)
+		}
+		if err := tx.ReleaseInventory(ctx, orderID); err != nil {
+			return fmt.Errorf("release overdue inventory: %w", err)
+		}
+		payload := map[string]any{"id": orderID, "status": Cancelled, "cancellation_actor": System, "cancellation_reason": reason}
+		if err := tx.RecordEvent(ctx, shopID, eventType, orderID, payload); err != nil {
+			return fmt.Errorf("record deadline event: %w", err)
+		}
+		if err := tx.RecordEvent(ctx, shopID, "order.cancelled", orderID, payload); err != nil {
+			return fmt.Errorf("record deadline cancellation event: %w", err)
 		}
 		return nil
 	})

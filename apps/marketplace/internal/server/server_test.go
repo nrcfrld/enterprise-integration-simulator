@@ -13,6 +13,7 @@ import (
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/products"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/webhooks"
 	dummygenerator "github.com/enrico/enterprise-integration-simulator/packages/dummy-generator"
+	"github.com/gin-gonic/gin"
 )
 
 func TestAllowedTransition(t *testing.T) {
@@ -52,6 +53,98 @@ func TestSwaggerUIIsServedFromTheCommittedOpenAPISpec(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "Swagger UI") {
 		t.Fatal("Swagger UI response did not contain the interactive UI")
 	}
+}
+
+func TestCORSAllowsEveryPublicContractHeader(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name            string
+		origin          string
+		requestHeaders  string
+		wantAllowOrigin bool
+	}{
+		{
+			name:            "Shopee-like simulator preflight",
+			origin:          "http://localhost:5173",
+			requestHeaders:  "content-type,x-shopee-partner-id,x-shopee-timestamp,x-shopee-signature",
+			wantAllowOrigin: true,
+		},
+		{
+			name:            "Tokopedia-like simulator preflight",
+			origin:          "http://127.0.0.1:5173",
+			requestHeaders:  "content-type,x-tts-access-token",
+			wantAllowOrigin: true,
+		},
+		{
+			name:            "untrusted browser origin",
+			origin:          "https://untrusted.example",
+			requestHeaders:  "x-shopee-partner-id",
+			wantAllowOrigin: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			router := New(nil, nil, platform.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil))).Router()
+			request := httptest.NewRequest(http.MethodOptions, "/api/shopee/v1/products", nil)
+			request.Header.Set("Origin", test.origin)
+			request.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			request.Header.Set("Access-Control-Request-Headers", test.requestHeaders)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("preflight status = %d, want %d", response.Code, http.StatusNoContent)
+			}
+			if got := response.Header().Get("Access-Control-Allow-Origin"); (got != "") != test.wantAllowOrigin {
+				t.Fatalf("allow origin = %q, want present %v", got, test.wantAllowOrigin)
+			}
+			for _, header := range strings.Split(test.requestHeaders, ",") {
+				if !headerListContains(response.Header().Get("Access-Control-Allow-Headers"), header) {
+					t.Fatalf("allowed headers %q do not include %q", response.Header().Get("Access-Control-Allow-Headers"), header)
+				}
+			}
+			for _, header := range []string{"X-RateLimit-Limit", "X-Shopee-Api-Call-Limit", "X-TTS-RateLimit-Limit"} {
+				if !headerListContains(response.Header().Get("Access-Control-Expose-Headers"), header) {
+					t.Fatalf("exposed headers %q do not include %q", response.Header().Get("Access-Control-Expose-Headers"), header)
+				}
+			}
+		})
+	}
+}
+
+func TestReadRequestBodyEnforcesConfiguredLimit(t *testing.T) {
+	t.Parallel()
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader("12345"))
+
+	if _, err := readRequestBody(context, 4); !isRequestTooLarge(err) {
+		t.Fatalf("readRequestBody error = %v, want MaxBytesError", err)
+	}
+}
+
+func TestRequestFingerprintIgnoresVolatileTokopediaSigningParameters(t *testing.T) {
+	t.Parallel()
+	first := httptest.NewRequest(http.MethodPost, "/api/tokopedia/v202309/orders/ord_1/pack?app_key=a&timestamp=1&sign=first&stable=yes", nil)
+	second := httptest.NewRequest(http.MethodPost, "/api/tokopedia/v202309/orders/ord_1/pack?sign=second&timestamp=2&app_key=a&stable=yes", nil)
+	if got, want := requestFingerprint(first, []byte(`{}`)), requestFingerprint(second, []byte(`{}`)); got != want {
+		t.Fatalf("equivalent signed request fingerprints differ: %q != %q", got, want)
+	}
+	changed := httptest.NewRequest(http.MethodPost, "/api/tokopedia/v202309/orders/ord_1/pack?stable=no", nil)
+	if requestFingerprint(first, []byte(`{}`)) == requestFingerprint(changed, []byte(`{}`)) {
+		t.Fatal("logical query change did not change request fingerprint")
+	}
+}
+
+func headerListContains(values, want string) bool {
+	for _, value := range strings.Split(values, ",") {
+		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(want)) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCursorRoundTripAndSortBinding(t *testing.T) {

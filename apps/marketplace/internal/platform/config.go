@@ -13,18 +13,21 @@ import (
 
 // Config is the immutable runtime configuration of a marketplace process.
 type Config struct {
-	DatabaseURL        string
-	RedisURL           string
-	AdminEmail         string
-	AdminPassword      string
-	EncryptionKey      []byte
-	SessionSecret      []byte
-	HTTPAddress        string
-	RequestLifetime    time.Duration
-	RateLimitPerMinute int
-	SeedOnBoot         bool
-	PaymentExpiry      time.Duration
-	SellerSLA          time.Duration
+	DatabaseURL          string
+	RedisURL             string
+	AdminEmail           string
+	AdminPassword        string
+	EncryptionKey        []byte
+	SessionSecret        []byte
+	HTTPAddress          string
+	RequestLifetime      time.Duration
+	RequestBodyLimit     int64
+	RateLimitPerMinute   int
+	SeedOnBoot           bool
+	PaymentExpiry        time.Duration
+	SellerSLA            time.Duration
+	Environment          string
+	AllowPrivateWebhooks bool
 }
 
 // LoadConfig reads configuration from MARKETPLACE_* environment variables.
@@ -36,10 +39,13 @@ func LoadConfig() (Config, error) {
 		AdminPassword:      value("MARKETPLACE_ADMIN_PASSWORD", "change-me-now"),
 		HTTPAddress:        value("MARKETPLACE_HTTP_ADDRESS", ":8080"),
 		RequestLifetime:    30 * time.Second,
+		RequestBodyLimit:   1 << 20,
 		RateLimitPerMinute: 100,
 		PaymentExpiry:      30 * time.Minute,
 		SellerSLA:          48 * time.Hour,
+		Environment:        strings.ToLower(value("MARKETPLACE_ENV", "development")),
 	}
+	cfg.AllowPrivateWebhooks = cfg.Environment != "production"
 	if cfg.AdminPassword == "" {
 		return Config{}, fmt.Errorf("MARKETPLACE_ADMIN_PASSWORD cannot be empty")
 	}
@@ -49,6 +55,13 @@ func LoadConfig() (Config, error) {
 			return Config{}, fmt.Errorf("MARKETPLACE_REQUEST_TIMEOUT must be a positive duration")
 		}
 		cfg.RequestLifetime = parsed
+	}
+	if raw := os.Getenv("MARKETPLACE_REQUEST_BODY_LIMIT_BYTES"); raw != "" {
+		limit, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || limit <= 0 {
+			return Config{}, fmt.Errorf("MARKETPLACE_REQUEST_BODY_LIMIT_BYTES must be a positive integer")
+		}
+		cfg.RequestBodyLimit = limit
 	}
 	if raw := os.Getenv("MARKETPLACE_RATE_LIMIT_PER_MINUTE"); raw != "" {
 		limit, err := strconv.Atoi(raw)
@@ -78,6 +91,13 @@ func LoadConfig() (Config, error) {
 			return Config{}, fmt.Errorf("MARKETPLACE_SEED_ON_BOOT must be true or false")
 		}
 		cfg.SeedOnBoot = enabled
+	}
+	if raw := os.Getenv("MARKETPLACE_ALLOW_PRIVATE_WEBHOOK_TARGETS"); raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("MARKETPLACE_ALLOW_PRIVATE_WEBHOOK_TARGETS must be true or false")
+		}
+		cfg.AllowPrivateWebhooks = enabled
 	}
 	if raw := os.Getenv("MARKETPLACE_ENCRYPTION_KEY"); raw == "" {
 		return Config{}, fmt.Errorf("MARKETPLACE_ENCRYPTION_KEY is required")

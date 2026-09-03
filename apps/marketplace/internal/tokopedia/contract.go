@@ -73,6 +73,31 @@ func OrderStatus(status string) string {
 	}
 }
 
+// CanonicalOrderStatuses maps one external search status back to every
+// canonical status represented by that provider value.
+func CanonicalOrderStatuses(status string) ([]string, bool) {
+	switch strings.ToUpper(strings.TrimSpace(status)) {
+	case "UNPAID":
+		return []string{"UNPAID"}, true
+	case "ON_HOLD":
+		return []string{"PAID"}, true
+	case "AWAITING_SHIPMENT":
+		return []string{"PROCESSING"}, true
+	case "AWAITING_COLLECTION":
+		return []string{"READY_TO_SHIP"}, true
+	case "IN_TRANSIT":
+		return []string{"SHIPPED", "IN_DELIVERY"}, true
+	case "DELIVERED":
+		return []string{"DELIVERED"}, true
+	case "COMPLETED":
+		return []string{"COMPLETED"}, true
+	case "CANCEL":
+		return []string{"CANCELLED", "RETURNED"}, true
+	default:
+		return nil, false
+	}
+}
+
 // WebhookType maps canonical events to the numeric topics delivered by the
 // Tokopedia & Shop Partner Center contract.
 func WebhookType(event string) int {

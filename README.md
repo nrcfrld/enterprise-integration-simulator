@@ -23,6 +23,8 @@ Other common commands are `make docker-build` and `make compose-up`.
 
 The bootstrap account is `admin@example.test` / `change-me-now`. Override all `MARKETPLACE_*` variables before using a non-local environment.
 
+New participants can use **Create account** on the Admin sign-in screen. It creates an `OPERATOR` account and signs them in immediately; it cannot create an Admin account or act as an integration credential. The first workflow is: `Create account → create shop → configure catalogue → create credential → test the signed provider API`.
+
 On a fresh Compose volume, the API automatically creates **Marketplace Demo Store** with 100 realistic products, 50 completed historical orders, one active integration credential, and one disabled example webhook registration. Seed and reset never reveal a client or webhook secret. Create a credential from **Credentials** when you need a one-time client secret.
 
 Orders use the lifecycle `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`. The external order boundary is provider-specific: payment verification, shipment movement, and completion remain simulator control-plane operations.
@@ -35,9 +37,13 @@ Each shop has either a `SHOPEE_LIKE` or `TOKOPEDIA_LIKE` profile. `SHOPEE_LIKE` 
 
 For `SHOPEE_LIKE`, cancellation reasons are validated: customer (`CHANGE_OF_MIND`, `DUPLICATE_ORDER`, `ADDRESS_ISSUE`), seller (`OUT_OF_STOCK`, `SELLER_UNFULFILLABLE`), and system (`PAYMENT_EXPIRED`, `PAYMENT_FAILED`, `SELLER_SLA_EXPIRED`). Packages may allocate partial quantities of one order item; a package must not exceed the remaining unallocated quantity.
 
+Every state-changing public endpoint requires `Idempotency-Key`. The key is scoped by credential and operation: an identical successful retry replays the original status/body, a different request returns `409`, and concurrent duplicates receive a retryable in-progress conflict. Read and provider search operations do not require the header.
+
 In Admin UI, **Shipments** is a separate fulfillment workspace. It lists only the selected shop’s shipment records and can advance an existing shipment one valid state at a time. Tracking/provider/pickup details are set only when an external developer creates the shipment through that shop’s Shopee-like or Tokopedia-like order contract.
 
 Inventory is reserved atomically during order creation and released for permitted cancellation/payment failure or expiry. Marking a shipment `SHIPPED` atomically converts its package reservation into physical warehouse stock usage. The shared HMAC API exposes read-only `GET /api/v1/warehouses` and `GET /api/v1/warehouses/{id}`; warehouse setup and stock adjustment are control-plane operations. A shipment can also take the return-to-sender path `DELIVERY_FAILED → RETURNING → RETURNED`; the linked order becomes `RETURNED` once every shipment has returned.
+
+Products can be created, inspected, edited, and archived from the Control Plane. Archival is rejected while active inventory reservations exist, and database constraints independently prevent empty or over-allocated packages. In production mode, webhook destinations are protected against local/private IP targets, DNS rebinding, and unsafe redirects; see the operations guide for the development override.
 
 See the [integration guide](docs/marketplace/integration-guide.md), [webhook guide](docs/marketplace/webhook-guide.md), and [operations guide](docs/marketplace/operations-guide.md). For minimal signed clients, use `go run ./examples/go-client` or the [Node.js/TypeScript example](apps/marketplace/examples/node-client) after exporting its credential as environment variables.
 
@@ -58,11 +64,13 @@ Generic deterministic dummy data belongs in `packages/dummy-generator`; Marketpl
 Fast checks run without containers:
 
 ```bash
-make test
+make test-fast
 ```
 
-The isolated PostgreSQL/Redis suite uses Testcontainers and requires a running Docker daemon:
+The full quality gate includes lint, frontend checks, core-domain coverage (minimum 80%), and isolated PostgreSQL/Redis Testcontainers:
 
 ```bash
-make test-integration
+make check
 ```
+
+Use `make test-integration` for only the race-enabled integration/worker matrix, or `make docker-build` to verify all production images.

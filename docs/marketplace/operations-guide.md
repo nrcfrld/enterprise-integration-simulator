@@ -14,13 +14,21 @@ Every API response includes `X-Request-ID`. Send a safe ID containing only lette
 
 Run `docker compose up --build -d` from the repository root. The local endpoints are Admin UI on port `5173`, Marketplace API on `18080`, PostgreSQL on `5432`, and Redis on `6379`.
 
-The initial administrator is supplied only for local development. Set distinct `MARKETPLACE_ADMIN_PASSWORD`, `MARKETPLACE_ENCRYPTION_KEY`, and `MARKETPLACE_SESSION_SECRET` values before running outside a trusted local environment. `MARKETPLACE_REQUEST_TIMEOUT` accepts a positive Go duration such as `20s` and limits API reads and writes. `MARKETPLACE_RATE_LIMIT_PER_MINUTE` configures the public API quota (default `100`), and `MARKETPLACE_SEED_ON_BOOT=true` creates demo data only when the database has no shops.
+The initial administrator is supplied only for local development. Set distinct `MARKETPLACE_ADMIN_PASSWORD`, `MARKETPLACE_ENCRYPTION_KEY`, and `MARKETPLACE_SESSION_SECRET` values before running outside a trusted local environment. `MARKETPLACE_REQUEST_TIMEOUT` accepts a positive Go duration such as `20s` and limits API reads and writes. `MARKETPLACE_REQUEST_BODY_LIMIT_BYTES` caps signed request bodies (default 1 MiB). `MARKETPLACE_RATE_LIMIT_PER_MINUTE` configures the public API quota (default `100`), and `MARKETPLACE_SEED_ON_BOOT=true` creates demo data only when the database has no shops.
+
+Set `MARKETPLACE_ENV=production` outside local development. Production policy rejects webhook URLs containing credentials or resolving to loopback, private, link-local, multicast, or unspecified IP space; the delivery client repeats this check after DNS resolution and on redirects. Local mode permits private callback targets for exercises. `MARKETPLACE_ALLOW_PRIVATE_WEBHOOK_TARGETS` is an explicit override and should remain unset in production.
 
 On that first seeded boot, **Marketplace Demo Store** contains 100 active products with realistic names, 50 completed orders with item/customer snapshots, one active credential, and a disabled example webhook. Seed and reset never expose a credential or webhook secret in a response, toast, or log. Create a credential through the Admin UI when needed; its secret is returned once at creation and is never readable afterward.
 
+## Control Plane access
+
+New users can create their own **Operator** account from the Admin sign-in screen, or call `POST /control/v1/auth/register` with an email and an 8+ character password. Registration returns a bearer session and signs the user in immediately. An Operator can create, manage, and reset seed data for shops they own, but cannot access another user's shop, create administrators, assign another user as shop owner, or use the session as an integration API credential. Existing administrators create Admin users from **Users** in the Control Plane.
+
+Workflow: `Register Operator → create shop → configure warehouse/catalogue → create integration credential → use Developer Portal request simulator`.
+
 ## Data isolation and reset
 
-An operator can access only shops they own. An administrator can reset one selected shop; reset removes only that shop's products, orders, webhook history, credentials, and domain events, then creates 100 active products, 50 completed historical orders, an active credential, and a disabled example webhook. It preserves the shop's warehouse records and rebuilds the default warehouse inventory for the fresh catalog. It never resets another participant's shop. Create a new credential afterward if the integration needs a secret.
+An operator can access and reset only shops they own; an administrator can reset any selected shop. Reset removes only that shop's products, orders, webhook history, credentials, and domain events, then creates 100 active products, 50 completed historical orders, an active credential, and a disabled example webhook. It preserves the shop's warehouse records and rebuilds the default warehouse inventory for the fresh catalog. An operator can never reset another participant's shop. Create a new credential afterward if the integration needs a secret.
 
 ## Warehouse operations
 

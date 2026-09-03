@@ -50,8 +50,8 @@ var _ orders.LifecycleTransaction = lifecycleTransaction{}
 
 func (t lifecycleTransaction) LockOrder(ctx context.Context, shopID, orderID string) (orders.LifecycleState, error) {
 	var state orders.LifecycleState
-	query := "SELECT o.status,s.provider_profile,o.payment_status,o.payment_expires_at FROM orders o JOIN shops s ON s.id=o.shop_id WHERE o.id=$1 AND o.shop_id=$2 FOR UPDATE"
-	err := t.tx.QueryRow(ctx, query, orderID, shopID).Scan(&state.Status, &state.Provider, &state.PaymentStatus, &state.PaymentExpires)
+	query := "SELECT o.status,s.provider_profile,o.payment_status,o.payment_expires_at,o.seller_deadline_at FROM orders o JOIN shops s ON s.id=o.shop_id WHERE o.id=$1 AND o.shop_id=$2 FOR UPDATE"
+	err := t.tx.QueryRow(ctx, query, orderID, shopID).Scan(&state.Status, &state.Provider, &state.PaymentStatus, &state.PaymentExpires, &state.SellerDeadline)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return orders.LifecycleState{}, orders.ErrOrderNotFound
 	}
@@ -62,8 +62,8 @@ func (t lifecycleTransaction) LockOrder(ctx context.Context, shopID, orderID str
 }
 
 func (t lifecycleTransaction) UpdateOrder(ctx context.Context, orderID string, update orders.TransitionUpdate) error {
-	query := "UPDATE orders SET status=$1,payment_reference=CASE WHEN $1='PAID' THEN $2 ELSE payment_reference END,paid_at=CASE WHEN $1='PAID' THEN now() ELSE paid_at END,payment_status=CASE WHEN $1='PAID' THEN 'PAID' ELSE payment_status END,seller_deadline_at=CASE WHEN $1='PAID' AND $3='SHOPEE_LIKE' AND $4 > 0 THEN now()+($4 * interval '1 second') ELSE seller_deadline_at END,cancellation_actor=CASE WHEN $1='CANCELLED' THEN $5 ELSE cancellation_actor END,cancellation_reason=CASE WHEN $1='CANCELLED' THEN $6 ELSE cancellation_reason END,updated_at=now() WHERE id=$7"
-	_, err := t.tx.Exec(ctx, query, update.Target, update.PaymentReference, "SHOPEE_LIKE", int(update.SellerSLA.Seconds()), update.CancellationActor, update.CancellationReason, orderID)
+	query := "UPDATE orders SET status=$1,payment_reference=CASE WHEN $1='PAID' THEN $2 ELSE payment_reference END,paid_at=CASE WHEN $1='PAID' THEN now() ELSE paid_at END,payment_status=CASE WHEN $1='PAID' THEN 'PAID' WHEN $7<>'' THEN $7 ELSE payment_status END,seller_deadline_at=CASE WHEN $1='PAID' AND $3='SHOPEE_LIKE' AND $4 > 0 THEN now()+($4 * interval '1 second') ELSE seller_deadline_at END,cancellation_actor=CASE WHEN $1='CANCELLED' THEN $5 ELSE cancellation_actor END,cancellation_reason=CASE WHEN $1='CANCELLED' THEN $6 ELSE cancellation_reason END,updated_at=now() WHERE id=$8"
+	_, err := t.tx.Exec(ctx, query, update.Target, update.PaymentReference, "SHOPEE_LIKE", int(update.SellerSLA.Seconds()), update.CancellationActor, update.CancellationReason, update.PaymentStatus, orderID)
 	if err != nil {
 		return fmt.Errorf("update order: %w", err)
 	}

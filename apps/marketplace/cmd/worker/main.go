@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,12 +22,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/events"
-	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/inventory"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/orders"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
+	orderrepo "github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/repository/orders"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/tokopedia"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/webhooks"
+	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/webhooktarget"
 )
 
 const deliveryTask = "webhook:deliver"
@@ -37,6 +38,7 @@ type worker struct {
 	client *asynq.Client
 	logger *slog.Logger
 	http   *http.Client
+	orders *orders.Service
 }
 type deliveryPayload struct {
 	DeliveryID string `json:"delivery_id"`
@@ -66,7 +68,7 @@ func main() {
 		logger.Error("invalid Redis URL", "error", err)
 		os.Exit(1)
 	}
-	w := &worker{db: db, cfg: cfg, client: asynq.NewClient(redisOpt), logger: logger, http: &http.Client{Timeout: 10 * time.Second}}
+	w := &worker{db: db, cfg: cfg, client: asynq.NewClient(redisOpt), logger: logger, http: webhooktarget.Client(10*time.Second, cfg.AllowPrivateWebhooks), orders: orders.NewService(orderrepo.NewPostgreSQLLifecycleRepository(db))}
 	defer func() {
 		if err := w.client.Close(); err != nil {
 			logger.Warn("asynq client close failed", "error", err)
@@ -119,9 +121,9 @@ func (w *worker) scheduleLoop(ctx context.Context) {
 }
 
 func (w *worker) enforceOrderDeadlines(ctx context.Context) error {
-	for _, rule := range []struct{ query, actor, reason, event string }{
-		{`SELECT id,shop_id FROM orders WHERE status='UNPAID' AND payment_status='PENDING' AND payment_expires_at<=now() LIMIT 50`, "SYSTEM", "PAYMENT_EXPIRED", "order.payment_expired"},
-		{`SELECT id,shop_id FROM orders WHERE status IN ('PAID','PROCESSING') AND seller_deadline_at<=now() LIMIT 50`, "SYSTEM", "SELLER_SLA_EXPIRED", "order.sla_expired"},
+	for _, rule := range []struct{ query, reason string }{
+		{`SELECT id,shop_id FROM orders WHERE status='UNPAID' AND payment_status='PENDING' AND payment_expires_at<=now() ORDER BY payment_expires_at,id LIMIT 50`, orders.PaymentExpiredReason},
+		{`SELECT id,shop_id FROM orders WHERE status IN ('PAID','PROCESSING') AND seller_deadline_at<=now() ORDER BY seller_deadline_at,id LIMIT 50`, orders.SellerSLAExpiredReason},
 	} {
 		rows, err := w.db.Query(ctx, rule.query)
 		if err != nil {
@@ -133,7 +135,7 @@ func (w *worker) enforceOrderDeadlines(ctx context.Context) error {
 				rows.Close()
 				return err
 			}
-			if err := w.cancelOverdueOrder(ctx, id, shop, rule.actor, rule.reason, rule.event); err != nil {
+			if err := w.orderService().CancelOverdue(ctx, shop, id, rule.reason); err != nil && !errors.Is(err, orders.ErrDeadlineNotEligible) {
 				rows.Close()
 				return err
 			}
@@ -147,32 +149,11 @@ func (w *worker) enforceOrderDeadlines(ctx context.Context) error {
 	return nil
 }
 
-func (w *worker) cancelOverdueOrder(ctx context.Context, orderID, shop, actor, reason, eventType string) error {
-	tx, err := w.db.Begin(ctx)
-	if err != nil {
-		return err
+func (w *worker) orderService() *orders.Service {
+	if w.orders == nil {
+		w.orders = orders.NewService(orderrepo.NewPostgreSQLLifecycleRepository(w.db))
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	var status string
-	if err = tx.QueryRow(ctx, `SELECT status FROM orders WHERE id=$1 FOR UPDATE`, orderID).Scan(&status); err != nil {
-		return err
-	}
-	if status == "CANCELLED" {
-		return nil
-	}
-	if _, err = tx.Exec(ctx, `UPDATE orders SET status='CANCELLED',payment_status=CASE WHEN $2='PAYMENT_EXPIRED' THEN 'EXPIRED' ELSE payment_status END,cancellation_actor=$1,cancellation_reason=$2,updated_at=now() WHERE id=$3`, actor, reason, orderID); err != nil {
-		return err
-	}
-	if err = inventory.Release(ctx, tx, orderID); err != nil {
-		return fmt.Errorf("release reserved stock: %w", err)
-	}
-	if err = events.Record(ctx, tx, shop, eventType, orderID, map[string]any{"id": orderID, "status": "CANCELLED", "cancellation_actor": actor, "cancellation_reason": reason}); err != nil {
-		return err
-	}
-	if err = events.Record(ctx, tx, shop, "order.cancelled", orderID, map[string]any{"id": orderID, "status": "CANCELLED", "cancellation_actor": actor, "cancellation_reason": reason}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return w.orders
 }
 
 func (w *worker) publishOutbox(ctx context.Context) error {
@@ -304,7 +285,7 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 	var headers map[string]string
 	if orders.NormaliseProvider(providerProfile) == orders.TokopediaLike {
 		if appKey == "" || appSecretCipher == "" {
-			return fmt.Errorf("Tokopedia-like webhook requires an active app credential")
+			return fmt.Errorf("tokopedia-like webhook requires an active app credential")
 		}
 		appSecret, decryptErr := platform.Decrypt(w.cfg.EncryptionKey, appSecretCipher)
 		if decryptErr != nil {

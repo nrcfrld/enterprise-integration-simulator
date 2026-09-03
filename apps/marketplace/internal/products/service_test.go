@@ -16,6 +16,34 @@ func (c *fakeCreator) Create(_ context.Context, product Product) error {
 	return c.err
 }
 
+func (c *fakeCreator) Get(context.Context, string, string) (Product, error) {
+	return c.product, c.err
+}
+
+func (c *fakeCreator) Update(_ context.Context, _, _ string, patch Patch) (Product, error) {
+	if c.err != nil {
+		return Product{}, c.err
+	}
+	if patch.Name != nil {
+		c.product.Name = *patch.Name
+	}
+	if patch.Category != nil {
+		c.product.Category = *patch.Category
+	}
+	if patch.Description != nil {
+		c.product.Description = *patch.Description
+	}
+	if patch.Price != nil {
+		c.product.Price = *patch.Price
+	}
+	if patch.Status != nil {
+		c.product.Status = *patch.Status
+	}
+	return c.product, nil
+}
+
+func (c *fakeCreator) Archive(context.Context, string, string) error { return c.err }
+
 func TestServiceCreate(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -47,6 +75,35 @@ func TestServiceCreate(t *testing.T) {
 			}
 			if product.Category != "Uncategorized" || product.Status != "ACTIVE" || product.Stock != test.wantStock || creator.product.ID != "prd_1" {
 				t.Fatalf("Create() product = %#v", product)
+			}
+		})
+	}
+}
+
+func TestServiceUpdate(t *testing.T) {
+	t.Parallel()
+	name := " Updated product "
+	status := "inactive"
+	negativePrice := int64(-1)
+	tests := []struct {
+		name    string
+		patch   Patch
+		wantErr error
+	}{
+		{name: "normalizes mutable metadata", patch: Patch{Name: &name, Status: &status}},
+		{name: "rejects negative price", patch: Patch{Price: &negativePrice}, wantErr: ErrInvalidProductInput},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			repository := &fakeCreator{product: Product{ID: "prd_1", ShopID: "shop_1", Draft: Draft{Name: "Original", Status: "ACTIVE"}}}
+			service := NewService(repository, func(string) string { return "unused" })
+			product, err := service.Update(context.Background(), "shop_1", "prd_1", test.patch)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Update() error = %v, want %v", err, test.wantErr)
+			}
+			if test.wantErr == nil && (product.Name != "Updated product" || product.Status != "INACTIVE") {
+				t.Fatalf("Update() product = %#v", product)
 			}
 		})
 	}
