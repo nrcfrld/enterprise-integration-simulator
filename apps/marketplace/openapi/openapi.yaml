@@ -7,7 +7,7 @@ info:
     available through `SHOPEE_LIKE` and `TOKOPEDIA_LIKE`; Generic is not an
     order-provider profile.
 
-    Shared catalogue, warehouse, and webhook requests under `/api/v1` are HMAC-SHA256 signed using `METHOD + PATH + UNIX_TIMESTAMP + RAW_BODY`.
+    Shared warehouse and webhook requests under `/api/v1` are HMAC-SHA256 signed using `METHOD + PATH + UNIX_TIMESTAMP + RAW_BODY`.
     Every mutating public operation across the shared, Shopee-like, and
     Tokopedia-like contracts require an `Idempotency-Key`. Concurrent use is
     claimed atomically, completed responses are replayed, and reusing a key for

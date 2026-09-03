@@ -6,11 +6,58 @@ Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
 ## Result
 
-**83 of 83 applicable requirements are COMPLETE.**
+**85 of 85 applicable requirements are COMPLETE.**
 
 The original Marketplace and Order Lifecycle requirements remain complete. The update replaces the obsolete `CREATED → CONFIRMED → …` order flow with `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`, keeping cancellation only before shipment. The latest update also separates Admin **Shipments** from Orders: creation remains exclusively in the public API, while the control plane lists, inspects, and advances existing fulfillment records. Verification is behavior-driven, not inferred from routes or source-file presence.
 
 The Provider/Payment/Package P0 expansion is complete: provider-specific detail/UI, package workflow/Admin visibility, and worker integration coverage have been implemented and verified with Testcontainers. P1 is also complete: `SHOPEE_LIKE` changes the external integration boundary—not only stored state—through a separate API prefix, signing protocol, pagination/error/rate-limit contract, and webhook representation. P2 is complete: `TOKOPEDIA_LIKE` now models the combined Tokopedia & Shop / TikTok Shop contract with its own authenticated API, status vocabulary, webhook envelope, inventory safety, and return-to-sender behavior.
+
+### Latest update — Audit priority P0 security closure
+
+- Upgraded the reachable vulnerable production dependencies from `pgx v5.7.6`
+  to `v5.9.2` and from `quic-go v0.54.0` to `v0.59.1`.
+- Upgraded `x/crypto` to the latest Go-1.25-compatible `v0.55.0`. Two
+  non-imported SSH advisories require Go 1.26 through `x/crypto v0.56.0`, while
+  the deprecated `openpgp` advisory has no fixed release; none of those
+  packages are imported or linked into either production binary.
+- Pinned Go `1.25.14` consistently in the workspace, both modules, CI jobs, and
+  Docker build stage so local, CI, and production binaries use the same patched
+  toolchain instead of a floating minor image.
+- Added a repository-level `make vuln` command backed by pinned
+  `govulncheck v1.7.0`; it is part of `make check` and a mandatory CI quality
+  step.
+- **Product & DX Review:** dependency provenance, compiler patch level,
+  production Docker builds, local verification commands, CI enforcement,
+  README, checklist, and audit evidence were updated together. Public API,
+  database, and frontend behavior are unchanged.
+
+### Latest update — Audit priority P2 closure
+
+- Pinned `golangci-lint` to `v2.11.4` in CI instead of resolving a mutable
+  `latest` release.
+- Added `make generate-check` at Marketplace and repository level. It reruns
+  OpenAPI and sqlc generation, then rejects both modified and newly generated
+  bindings; CI now enforces the same target.
+- Corrected stale pagination guidance: shared lists are currently unpaginated,
+  Shopee-like lists use page numbers but expose `has_next_page` for products
+  and `more` for orders, and Tokopedia-like searches use opaque page tokens
+  with `next_page_token`/`has_more`.
+- Added a Developer Portal contract regression that locks those provider
+  vocabularies to the documented response examples.
+- Added direct OpenAPI-to-portal parity checks for every public method/path,
+  path/query parameter, request-body presence and example field, and
+  idempotency requirement. A route or schema change can no longer silently
+  leave the Reference catalogue behind.
+- Removed the stale OpenAPI claim that `/api/v1` still exposes a shared
+  catalogue after Generic catalogue removal.
+- Replaced broad Control Plane `any` usage with explicit session, shop,
+  resource, form, scenario, detail, and response types. ESLint now rejects
+  future explicit `any` usage instead of exempting it.
+- **Product & DX Review:** CI reproducibility, local developer commands,
+  generated artifacts, OpenAPI/Developer Portal contract parity, response
+  examples, Control Plane type boundaries, README, integration guidance,
+  tests, checklist, and report were updated. Domain behavior, backend routes,
+  simulator inputs, and Admin workflows are unaffected.
 
 ### Latest update — P1 audit closure
 
@@ -79,12 +126,21 @@ The Provider/Payment/Package P0 expansion is complete: provider-specific detail/
 
 Current verification: `make check` passes the complete lint, frontend, unit,
 race-enabled PostgreSQL/Redis Testcontainers, production frontend build, and
-81.1% core-domain coverage gate; the frontend suite contains 22 passing tests.
+81.1% core-domain coverage gate, including `govulncheck`; the frontend suite
+contains 25 passing tests.
 `make test-race` and `make lint-full` also pass independently with zero
 `golangci-lint` issues. All three production images build, all five Compose
 services report healthy, Goose reports applied migration version 12, and API
 `/health` plus `/ready` return success while the API, worker, and Admin containers
 run as non-root users (UID 100, 100, and 101 respectively).
+
+P0 security verification scans the complete source call graph plus the final
+API and worker executables: all report **0 reachable vulnerabilities**. The
+running API and worker binaries are built with Go `1.25.14`; the API embeds
+`pgx v5.9.2` and `quic-go v0.59.1`, and the worker embeds `pgx v5.9.2`. The
+source scanner still reports three module-only `x/crypto` advisories in packages
+the application does not import or call; two require a Go 1.26 toolchain and one
+has no upstream fixed version.
 
 ### Latest update — Developer Portal and API Request Simulator
 
@@ -253,6 +309,10 @@ Implemented in the current increment:
 | `cd apps/marketplace && make check` after P1 audit closure | PASS — zero Go lint issues; 22 frontend tests plus lint/typecheck/build; race-enabled Testcontainers integration 64.045s and worker 17.423s; core coverage 81.1%. |
 | `cd apps/marketplace && make test-race` after idempotency buffering | PASS — all Go packages, including the finalization-failure regression, pass the race detector. |
 | Rebuild/recreate P1 `marketplace-api` and `marketplace-admin`, then runtime checks | PASS — both containers healthy; `/ready` returns ready, `/docs` returns 200, and containers remain non-root (UID 100/101). |
+| `cd apps/marketplace && make check` after audit-priority P2 closure | PASS — generated bindings clean; zero lint issues; 25 frontend tests plus typecheck/build; race-enabled Testcontainers integration 81.905s and worker 23.631s; core coverage 81.1%. |
+| Rebuild/recreate Admin after audit-priority P2 closure | PASS — all five Compose services healthy; `/ready` is ready, `/docs` returns 200, and the served production bundle contains all three provider pagination markers. |
+| `make check` after audit-priority P0 security closure | PASS — generated bindings clean; zero lint issues; `govulncheck` reports 0 reachable vulnerabilities; 25 frontend tests plus typecheck/build; race-enabled Testcontainers integration 106.414s and worker 38.073s; core coverage 81.1%. |
+| Final API/worker Docker build, binary metadata, and binary-mode vulnerability scan | PASS — both binaries use Go 1.25.14 and patched dependency versions; both scans report 0 reachable vulnerabilities; recreated services are healthy and `/health` plus `/ready` succeed. |
 
 ## E2E flows verified
 

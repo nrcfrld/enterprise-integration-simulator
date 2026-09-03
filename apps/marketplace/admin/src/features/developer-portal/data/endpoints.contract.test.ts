@@ -1,5 +1,60 @@
 import { describe, expect, it } from "vitest";
+import openapi from "../../../../../openapi/openapi.yaml?raw";
 import { ENDPOINTS, MUTATION_METHODS } from "./endpoints";
+
+const HTTP_METHOD = /^(get|post|put|patch|delete)$/;
+
+function publicOperations(document: string) {
+  const operations = new Map<string, string>();
+  let path: string | null = null;
+  let operationKey: string | null = null;
+
+  for (const line of document.split("\n")) {
+    if (/^[^\s]/.test(line) && line !== "paths:") {
+      path = null;
+      operationKey = null;
+    }
+    const pathMatch = line.match(/^ {2}(\/[^:]+):\s*$/);
+    if (pathMatch) {
+      path = /^\/api\/(?:v1|shopee\/v1|tokopedia\/v202309)(?:\/|$)/.test(pathMatch[1])
+        ? pathMatch[1]
+        : null;
+      operationKey = null;
+      continue;
+    }
+
+    const methodMatch = line.match(/^ {4}([a-z]+):\s*$/);
+    if (path && methodMatch && HTTP_METHOD.test(methodMatch[1])) {
+      operationKey = `${methodMatch[1].toUpperCase()} ${path}`;
+      operations.set(operationKey, `${line}\n`);
+      continue;
+    }
+
+    if (operationKey) {
+      operations.set(operationKey, `${operations.get(operationKey)}${line}\n`);
+    }
+  }
+
+  return operations;
+}
+
+function componentSchema(document: string, name: string) {
+  const lines = document.split("\n");
+  const start = lines.findIndex((line) => line === `    ${name}:`);
+  if (start < 0) return "";
+  const end = lines.findIndex((line, index) => index > start && /^ {4}[A-Za-z][A-Za-z0-9]*:\s*$/.test(line));
+  return lines.slice(start, end < 0 ? undefined : end).join("\n");
+}
+
+function operationSchema(document: string, operation: string) {
+  const references = [...operation.matchAll(/#\/components\/schemas\/([A-Za-z0-9]+)/g)]
+    .map((match) => componentSchema(document, match[1]));
+  return [operation, ...references].join("\n");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 describe("developer portal endpoint contract metadata", () => {
   it("gives every operation a unique id, an absolute API path, and junior-friendly guidance", () => {
@@ -69,6 +124,55 @@ describe("developer portal endpoint contract metadata", () => {
         expect(endpoint.errorResponse.toLowerCase(), endpoint.id).toContain("transition");
       } else {
         expect(endpoint.errorResponse.toLowerCase(), endpoint.id).toMatch(/signature|credential/);
+      }
+    }
+  });
+
+  it("documents each provider's actual pagination vocabulary", () => {
+    const responseFor = (id: string) => ENDPOINTS.find((endpoint) => endpoint.id === id)?.response ?? "";
+
+    expect(responseFor("shopee-list-products")).toContain('"has_next_page"');
+    expect(responseFor("shopee-list-orders")).toContain('"more"');
+    expect(responseFor("shopee-list-orders")).not.toContain('"has_next_page"');
+    expect(responseFor("tokopedia-search-products")).toContain('"next_page_token"');
+    expect(responseFor("tokopedia-search-orders")).toContain('"has_more"');
+  });
+
+  it("matches every public OpenAPI method and path exactly", () => {
+    const documented = [...publicOperations(openapi).keys()].sort();
+    const portal = ENDPOINTS.map((endpoint) => `${endpoint.method} ${endpoint.path}`).sort();
+
+    expect(portal).toEqual(documented);
+  });
+
+  it("keeps request parameters, payload shape, and idempotency metadata aligned with OpenAPI", () => {
+    const operations = publicOperations(openapi);
+
+    for (const endpoint of ENDPOINTS) {
+      const key = `${endpoint.method} ${endpoint.path}`;
+      const operation = operations.get(key);
+      expect(operation, key).toBeDefined();
+      expect(operation, `${key} operationId`).toMatch(/\boperationId:/);
+      expect(operation?.includes("#/components/parameters/IdempotencyKey"), `${key} idempotency`).toBe(Boolean(endpoint.idempotent));
+      expect(operation?.includes("requestBody:"), `${key} request body`).toBe(endpoint.body !== undefined);
+
+      const placeholders = [...endpoint.path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort();
+      expect(endpoint.pathParams?.map((parameter) => parameter.name).sort() ?? [], `${key} path parameters`).toEqual(placeholders);
+
+      for (const parameter of endpoint.query ?? []) {
+        expect(operation, `${key} query parameter ${parameter.name}`).toMatch(
+          new RegExp(`\\bname:\\s*${escapeRegExp(parameter.name)}(?:[,}\\s])`),
+        );
+      }
+
+      if (endpoint.body) {
+        const schema = operationSchema(openapi, operation ?? "");
+        const body = JSON.parse(endpoint.body) as Record<string, unknown>;
+        for (const field of Object.keys(body)) {
+          expect(schema, `${key} body field ${field}`).toMatch(
+            new RegExp(`\\b${escapeRegExp(field)}:`),
+          );
+        }
       }
     }
   });

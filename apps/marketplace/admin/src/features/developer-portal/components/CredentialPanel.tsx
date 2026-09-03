@@ -1,10 +1,11 @@
 import type { IntegrationCredentials, ProviderContract } from "../types";
+import type { ControlPage } from "@/app/navigation";
 
 interface CredentialPanelProps {
   credentials: IntegrationCredentials;
   onChange: (credentials: IntegrationCredentials) => void;
   onClear: () => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: ControlPage) => void;
   contract: ProviderContract;
 }
 

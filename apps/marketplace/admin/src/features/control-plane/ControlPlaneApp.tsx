@@ -17,6 +17,17 @@ import { Scenario } from "./components/Scenario";
 import { WebhookSettings } from "./components/WebhookSettings";
 import { API_BASE_URL, controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import { CONTROL_NAVIGATION, CONTROL_PATHS, PAGEABLE_CONTROL_PAGES, PAGE_BY_PATH, type ControlPage } from "@/app/navigation";
+import type {
+  ControlPlaneData,
+  ControlPlaneSession,
+  ControlRole,
+  DetailRequest,
+  FormRequest,
+  ListResponse,
+  NoticeMessage,
+  SeedResult,
+  Shop,
+} from "@/shared/types/controlPlane";
 import "../../styles.css";
 
 const API = API_BASE_URL;
@@ -30,8 +41,19 @@ const providerFilters = [
   ["TOKOPEDIA_LIKE", "Tokopedia & TikTok Shop"],
 ];
 
-const request = (...args: Parameters<typeof controlPlaneRequest>) =>
-  controlPlaneRequest<any>(...args);
+const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<T>(...args);
+
+function restoreSession(): ControlPlaneSession | null {
+  const stored = localStorage.getItem("marketplace-session");
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as ControlPlaneSession;
+  } catch {
+    localStorage.removeItem("marketplace-session");
+    return null;
+  }
+}
 
 function providerLabel(profile: string) {
   return (
@@ -43,16 +65,14 @@ function providerLabel(profile: string) {
 }
 
 export function ControlPlaneApp() {
-  const [session, setSession] = useState<any>(() =>
-    JSON.parse(localStorage.getItem("marketplace-session") || "null"),
-  );
-  const [shops, setShops] = useState<any[]>([]);
+  const [session, setSession] = useState<ControlPlaneSession | null>(restoreSession);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [shopID, setShopID] = useState("");
   const [providerFilter, setProviderFilter] = useState("ALL");
-  const [data, setData] = useState<any>(null);
-  const [detail, setDetail] = useState<any>(null);
-  const [form, setForm] = useState<any>(null);
-  const [message, setMessage] = useState<any>(null);
+  const [data, setData] = useState<ControlPlaneData | null>(null);
+  const [detail, setDetail] = useState<DetailRequest | null>(null);
+  const [form, setForm] = useState<FormRequest | null>(null);
+  const [message, setMessage] = useState<NoticeMessage | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
   const [listPage, setListPage] = useState(1);
   const token = session?.token;
@@ -93,7 +113,7 @@ export function ControlPlaneApp() {
       ? `${endpoint}?page=${listPage}&limit=20`
       : endpoint;
   const refreshShops = useCallback(async () => {
-    const result = await request("/control/v1/shops", token);
+    const result = await request<ListResponse<Shop>>("/control/v1/shops", token);
     setShops(result.data);
     setShopID((current) => current || result.data[0]?.id || "");
   }, [token]);
@@ -102,7 +122,7 @@ export function ControlPlaneApp() {
       setData(null);
       return;
     }
-    setData(await request(route, token));
+    setData(await request<ControlPlaneData>(route, token));
   }, [route, token]);
   useEffect(() => {
     if (token)
@@ -158,7 +178,7 @@ export function ControlPlaneApp() {
     setIsSeeding(true);
     setMessage(null);
     try {
-      const result = await request(`/control/v1/shops/${shopID}/reset`, token, {
+      const result = await request<SeedResult>(`/control/v1/shops/${shopID}/reset`, token, {
         method: "POST",
       });
       await refresh();
@@ -335,7 +355,7 @@ function AppRoutes({
   onSelectShop,
   listPage,
   onPageChange,
-}: any) {
+}: AppRoutesProps) {
   const resourceProps = {
     data,
     shopID,
@@ -401,7 +421,7 @@ function AppRoutes({
           />
         }
       />
-      {["Products", "Warehouses", "Credentials", "Orders", "Packages", "Shipments", "Deliveries", "Users"].map(
+      {(["Products", "Warehouses", "Credentials", "Orders", "Packages", "Shipments", "Deliveries", "Users"] as const).map(
         (resource) => (
           <Route
             key={resource}
@@ -415,6 +435,23 @@ function AppRoutes({
   );
 }
 
-function Documentation({ onNavigate }: any) {
+function Documentation({ onNavigate }: { onNavigate: (page: ControlPage) => void }) {
   return <DeveloperPortal api={API} onNavigate={onNavigate} />;
+}
+
+interface AppRoutesProps {
+  data: ControlPlaneData | null;
+  shopID: string;
+  token: string | null | undefined;
+  role: ControlRole;
+  onNavigate: (page: ControlPage) => void;
+  onForm: (form: FormRequest) => void;
+  onSeed: () => Promise<void>;
+  isSeeding: boolean;
+  onDetail: (detail: DetailRequest) => void;
+  onRefresh: () => Promise<void>;
+  onNotice: (text: string) => void;
+  onSelectShop: (id: string) => void;
+  listPage: number;
+  onPageChange: (page: number) => void;
 }

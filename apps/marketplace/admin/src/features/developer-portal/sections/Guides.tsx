@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
+import type { ControlPage } from "@/app/navigation";
 
 interface NavigationProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: ControlPage) => void;
   onTry: (endpointID: string) => void;
 }
 

@@ -1,23 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+import type { ControlPlaneData } from "@/shared/types/controlPlane";
 
 const request = controlPlaneRequest;
 
-export function Scenario({ token, shopID, data, onSaved }: any) {
-  const [form, setForm] = useState(data || {});
+type NumericScenarioKey =
+  | "api_slow_ms"
+  | "api_slow_probability"
+  | "api_random_500_probability"
+  | "api_timeout_probability"
+  | "webhook_delay_seconds";
+type BooleanScenarioKey =
+  | "force_rate_limit"
+  | "webhook_duplicate"
+  | "webhook_out_of_order"
+  | "webhook_force_failure";
+type ScenarioConfig = Pick<ControlPlaneData, NumericScenarioKey | BooleanScenarioKey>;
+
+interface ScenarioProps {
+  token: string | null | undefined;
+  shopID: string;
+  data: ControlPlaneData | null;
+  onSaved: () => void;
+}
+
+export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
+  const [form, setForm] = useState<ScenarioConfig>(data || {});
   useEffect(() => setForm(data || {}), [data]);
   if (!shopID)
     return (
       <p className="empty">Choose a shop before configuring fault injection.</p>
     );
   const save = async () => {
-    await request(`/control/v1/shops/${shopID}/scenario`, token, {
+    await request<unknown>(`/control/v1/shops/${shopID}/scenario`, token, {
       method: "PUT",
       body: JSON.stringify(form),
     });
     onSaved();
   };
-  const fields = [
+  const fields: Array<{ key: NumericScenarioKey; label: string; help: string }> = [
     {
       key: "api_slow_ms",
       label: "API slow response (ms)",
@@ -44,7 +65,7 @@ export function Scenario({ token, shopID, data, onSaved }: any) {
       help: "Menunda job webhook sebelum dikirim. Nilai ini juga digunakan untuk membuat event order.paid terlambat saat out-of-order aktif.",
     },
   ];
-  const flags = [
+  const flags: Array<{ key: BooleanScenarioKey; label: string; help: string }> = [
     {
       key: "force_rate_limit",
       label: "Force rate limit",
@@ -117,7 +138,13 @@ export function Scenario({ token, shopID, data, onSaved }: any) {
     </article>
   );
 }
-function ScenarioHelp({ id, label, children }: any) {
+interface ScenarioHelpProps {
+  id: string;
+  label: string;
+  children: ReactNode;
+}
+
+function ScenarioHelp({ id, label, children }: ScenarioHelpProps) {
   return (
     <details className="scenario-help">
       <summary aria-label={`Penjelasan: ${label}`} title={`Penjelasan ${label}`}>

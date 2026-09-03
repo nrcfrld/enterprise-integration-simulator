@@ -1,51 +1,77 @@
 import { useEffect, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+import type { ControlPage } from "@/app/navigation";
+import type {
+  ControlPlaneData,
+  ControlRole,
+  FormRequest,
+  Shop,
+} from "@/shared/types/controlPlane";
 import { Pagination } from "./ResourcePage";
 
-const request = (...args: Parameters<typeof controlPlaneRequest>) =>
-  controlPlaneRequest<any>(...args);
+const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<T>(...args);
 
 function providerLabel(profile: string) {
   return ({ SHOPEE_LIKE: "Shopee-like", TOKOPEDIA_LIKE: "Tokopedia & TikTok Shop" } as Record<string, string>)[profile] || "Shopee-like";
 }
 
-export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSeed, isSeeding }: any) {
-  const steps = [
-    [
-      "1",
-      "Create or choose a shop",
-      "A shop scopes catalog data, credentials, scenarios, and webhook deliveries. Create one first when your console is empty.",
-      Boolean(shopID),
-      () => (shopID ? onNavigate("Shops") : onForm({ kind: "shop" })),
-    ],
-    [
-      "2",
-      "Prepare catalog",
-      "Seed 100 products and 50 historical orders, or add products yourself.",
-      false,
-      onSeed,
-    ],
-    [
-      "3",
-      "Create API credential",
-      "Save the client secret once; it signs requests from your integration.",
-      false,
-      () => onForm({ kind: "credential" }),
-    ],
-    [
-      "4",
-      "Register webhook",
-      "Choose the order events your endpoint should receive.",
-      false,
-      () => onNavigate("Webhooks"),
-    ],
-    [
-      "5",
-      "Trigger an order event",
-      "Simulate an order, then inspect its event and delivery trail.",
-      false,
-      () => onForm({ kind: "order" }),
-    ],
+interface DashboardProps {
+  data: ControlPlaneData | null;
+  shopID: string;
+  token: string | null | undefined;
+  role: ControlRole;
+  onNavigate: (page: ControlPage) => void;
+  onForm: (form: FormRequest) => void;
+  onSeed: () => Promise<void>;
+  isSeeding: boolean;
+}
+
+interface RunbookStep {
+  number: string;
+  title: string;
+  description: string;
+  complete: boolean;
+  action: () => void | Promise<void>;
+}
+
+export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSeed, isSeeding }: DashboardProps) {
+  const steps: RunbookStep[] = [
+    {
+      number: "1",
+      title: "Create or choose a shop",
+      description: "A shop scopes catalog data, credentials, scenarios, and webhook deliveries. Create one first when your console is empty.",
+      complete: Boolean(shopID),
+      action: () => (shopID ? onNavigate("Shops") : onForm({ kind: "shop" })),
+    },
+    {
+      number: "2",
+      title: "Prepare catalog",
+      description: "Seed 100 products and 50 historical orders, or add products yourself.",
+      complete: false,
+      action: onSeed,
+    },
+    {
+      number: "3",
+      title: "Create API credential",
+      description: "Save the client secret once; it signs requests from your integration.",
+      complete: false,
+      action: () => onForm({ kind: "credential" }),
+    },
+    {
+      number: "4",
+      title: "Register webhook",
+      description: "Choose the order events your endpoint should receive.",
+      complete: false,
+      action: () => onNavigate("Webhooks"),
+    },
+    {
+      number: "5",
+      title: "Trigger an order event",
+      description: "Simulate an order, then inspect its event and delivery trail.",
+      complete: false,
+      action: () => onForm({ kind: "order" }),
+    },
   ];
   return (
     <>
@@ -78,7 +104,7 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
           </p>
         </div>
         <ol>
-          {steps.map(([number, title, description, complete, action]) => (
+          {steps.map(({ number, title, description, complete, action }) => (
             <li key={number} className={complete ? "complete" : ""}>
               <span className="step-number">{complete ? "✓" : number}</span>
               <div>
@@ -112,11 +138,11 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
         </div>
         <div className="setup-checks">
           {[
-            ["Seed data", data?.setup?.seeded, `${data?.setup?.products || 0} products`],
-            ["Credential", data?.setup?.credential_active, "active integration credential"],
-            ["Webhook", data?.setup?.webhook_configured, "registration saved"],
-            ["Delivery enabled", data?.setup?.webhook_enabled, "endpoint can receive events"],
-          ].map(([label, complete, detail]) => <div key={label} className={complete ? "complete" : ""}><b>{complete ? "Ready" : "Pending"}</b><span>{label}</span><small>{detail}</small></div>)}
+            { label: "Seed data", complete: data?.setup?.seeded, detail: `${data?.setup?.products || 0} products` },
+            { label: "Credential", complete: data?.setup?.credential_active, detail: "active integration credential" },
+            { label: "Webhook", complete: data?.setup?.webhook_configured, detail: "registration saved" },
+            { label: "Delivery enabled", complete: data?.setup?.webhook_enabled, detail: "endpoint can receive events" },
+          ].map(({ label, complete, detail }) => <div key={label} className={complete ? "complete" : ""}><b>{complete ? "Ready" : "Pending"}</b><span>{label}</span><small>{detail}</small></div>)}
         </div>
       </section>
       <section className="flow-explainer">
@@ -139,13 +165,13 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
   );
 }
 
-function MaintenanceControl({ token }: any) {
+function MaintenanceControl({ token }: { token: string | null | undefined }) {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    request("/control/v1/maintenance", token)
+    request<{ enabled: boolean }>("/control/v1/maintenance", token)
       .then((result) => setEnabled(Boolean(result.enabled)))
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -154,13 +180,13 @@ function MaintenanceControl({ token }: any) {
     setSaving(true);
     setError("");
     try {
-      const result = await request("/control/v1/maintenance", token, {
+      const result = await request<{ enabled: boolean }>("/control/v1/maintenance", token, {
         method: "PUT",
         body: JSON.stringify({ enabled: next }),
       });
       setEnabled(Boolean(result.enabled));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setSaving(false);
     }
@@ -189,8 +215,16 @@ function MaintenanceControl({ token }: any) {
   );
 }
 
-export function Shops({ data, onSelect, onForm, listPage, onPageChange }: any) {
-  const shops = data?.data || [];
+interface ShopsProps {
+  data: ControlPlaneData | null;
+  onSelect: (id: string) => void;
+  onForm: (form: FormRequest) => void;
+  listPage: number;
+  onPageChange: (page: number) => void;
+}
+
+export function Shops({ data, onSelect, onForm, listPage, onPageChange }: ShopsProps) {
+  const shops = (data?.data ?? []) as Shop[];
   return (
     <>
       <div className="page-hint">
@@ -205,7 +239,7 @@ export function Shops({ data, onSelect, onForm, listPage, onPageChange }: any) {
       </div>
       <div className="records">
         {shops.length ? (
-          shops.map((shop: any) => (
+          shops.map((shop) => (
             <button
               className="record shop"
               key={shop.id}

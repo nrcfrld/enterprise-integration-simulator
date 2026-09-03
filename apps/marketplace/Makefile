@@ -7,10 +7,11 @@ GO_PACKAGES = $$(go list ./... | grep -v '/admin/node_modules/')
 CORE_PACKAGES = ./internal/auth ./internal/events ./internal/orders ./internal/products ./internal/ratelimit ./internal/scenarios ./internal/tokopedia ./internal/webhooks
 CORE_COVERAGE_MIN ?= 80
 CORE_COVERAGE_FILE ?= /tmp/marketplace-core-coverage.out
+GOVULNCHECK_VERSION ?= v1.7.0
 ADMIN_DIR := admin
 
 .DEFAULT_GOAL := help
-.PHONY: help generate fmt fmt-check vet lint lint-full test test-fast test-unit test-race test-integration coverage-core \
+.PHONY: help generate generate-check fmt fmt-check vet vuln lint lint-full test test-fast test-unit test-race test-integration coverage-core \
 	admin-test admin-lint admin-build test-all lint-all check \
 	docker-build docker-build-api docker-build-worker docker-build-admin \
 	compose-build compose-up compose-down compose-logs compose-ps
@@ -20,6 +21,12 @@ help: ## Show every available command.
 
 generate: ## Regenerate OpenAPI and sqlc code.
 	go generate ./internal/api/openapi ./internal/store
+
+generate-check: generate ## Fail when committed OpenAPI or sqlc bindings are stale.
+	@drift="$$(git status --porcelain -- internal/api/openapi internal/store/sqlc)"; \
+	if [ -n "$$drift" ]; then \
+		echo "Generated bindings are stale:"; echo "$$drift"; git diff -- internal/api/openapi internal/store/sqlc; exit 1; \
+	fi
 
 fmt: ## Format all Go source files.
 	gofmt -w $(GO_FILES)
@@ -32,6 +39,9 @@ fmt-check: ## Fail when Go source files are not gofmt-formatted.
 
 vet: ## Run Go's static analyzer.
 	go vet $(GO_PACKAGES)
+
+vuln: ## Scan reachable Go vulnerabilities with a pinned scanner.
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) $(GO_PACKAGES)
 
 lint: fmt-check vet ## Run formatting and Go static checks.
 
@@ -73,7 +83,7 @@ test-all: test ## Alias for the complete test suite.
 
 lint-all: lint admin-lint ## Run backend and Admin UI checks.
 
-check: lint-full admin-lint test admin-build coverage-core ## Run the complete local quality gate.
+check: generate-check lint-full vuln admin-lint test admin-build coverage-core ## Run the complete local quality gate.
 
 docker-build: docker-build-api docker-build-worker docker-build-admin ## Build all local Docker images.
 

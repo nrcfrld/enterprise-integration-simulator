@@ -1,10 +1,24 @@
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+import type {
+  ControlPlaneData,
+  FormRequest,
+  WebhookRegistration,
+} from "@/shared/types/controlPlane";
 
-const request = (...args: Parameters<typeof controlPlaneRequest>) =>
-  controlPlaneRequest<any>(...args);
+const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<T>(...args);
 
-export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNotice }: any) {
-  const hooks = data?.data || [];
+interface WebhookSettingsProps {
+  data: ControlPlaneData | null;
+  shopID: string;
+  token: string | null | undefined;
+  onForm: (form: FormRequest) => void;
+  onRefresh: () => Promise<void>;
+  onNotice: (text: string) => void;
+}
+
+export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNotice }: WebhookSettingsProps) {
+  const hooks = (data?.data ?? []) as WebhookRegistration[];
   const remove = async (id: string) => {
     if (
       !window.confirm(
@@ -12,14 +26,14 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
       )
     )
       return;
-    await request(`/control/v1/shops/${shopID}/webhooks/${id}`, token, {
+    await request<unknown>(`/control/v1/shops/${shopID}/webhooks/${id}`, token, {
       method: "DELETE",
     });
     await onRefresh();
     onNotice("Webhook registration deleted");
   };
-  const toggle = async (hook: any) => {
-    await request(`/control/v1/shops/${shopID}/webhooks/${hook.id}`, token, {
+  const toggle = async (hook: WebhookRegistration) => {
+    await request<unknown>(`/control/v1/shops/${shopID}/webhooks/${hook.id}`, token, {
       method: "PATCH",
       body: JSON.stringify({
         url: hook.url,
@@ -53,7 +67,7 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
       </section>
       <div className="webhook-list">
         {hooks.length ? (
-          hooks.map((hook: any) => (
+          hooks.map((hook) => (
             <article key={hook.id} className={!hook.enabled ? "disabled" : ""}>
               <div className="webhook-head">
                 <div>

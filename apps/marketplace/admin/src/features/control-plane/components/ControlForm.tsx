@@ -1,20 +1,66 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+import type {
+  FormInitial,
+  FormKind,
+  ListResponse,
+  ProductSummary,
+  WarehouseSummary,
+} from "@/shared/types/controlPlane";
 
-const request = (...args: Parameters<typeof controlPlaneRequest>) =>
-  controlPlaneRequest<any>(...args);
+const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<T>(...args);
 const webhookEvents = [
   "order.created", "order.paid", "order.processing", "order.ready_to_ship",
   "order.shipped", "order.in_delivery", "order.delivered", "order.completed",
   "order.cancelled", "product.created", "product.updated", "product.deleted",
 ];
 
-interface FormValues extends Record<string, any> {
-  items: Array<Record<string, any>>;
-  warehouse_inventory: Array<Record<string, any>>;
+interface OrderItemInput {
+  product_id: string;
+  quantity: number | string;
 }
 
-export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: any) {
+interface WarehouseInventoryInput {
+  warehouse_id: string;
+  on_hand_quantity: number | string;
+}
+
+interface FormValues extends Record<string, unknown> {
+  status: string;
+  provider_profile: string;
+  role: string;
+  enabled: boolean;
+  subscribed_events: string[];
+  customer_name: string;
+  customer_phone: string;
+  address_line: string;
+  city: string;
+  postal_code: string;
+  items: OrderItemInput[];
+  warehouse_inventory: WarehouseInventoryInput[];
+}
+
+interface ControlFormProps {
+  kind: FormKind;
+  initial?: FormInitial;
+  shopID: string;
+  token: string | null | undefined;
+  onClose: () => void;
+  onSaved: (message: string) => void | Promise<void>;
+}
+
+interface SecretResponse {
+  client_secret?: string;
+  secret?: string;
+}
+
+function inputValue(value: unknown): string | number {
+  return typeof value === "string" || typeof value === "number" ? value : "";
+}
+
+export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: ControlFormProps) {
+  const supplied = (initial ?? {}) as Partial<FormValues>;
   const [values, setValues] = useState<FormValues>({
     status: "ACTIVE",
     provider_profile: "SHOPEE_LIKE",
@@ -25,17 +71,17 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
     ),
     customer_name: "",
     customer_phone: "",
-    items: [{ product_id: "", quantity: 1 }],
-    warehouse_inventory: [{ warehouse_id: "", on_hand_quantity: 0 }],
-    address_line: initial?.address?.address_line || "",
-    city: initial?.address?.city || "Jakarta",
-    postal_code: initial?.address?.postal_code || "",
-    ...initial,
+    ...supplied,
+    items: supplied.items ?? [{ product_id: "", quantity: 1 }],
+    warehouse_inventory: supplied.warehouse_inventory ?? [{ warehouse_id: "", on_hand_quantity: 0 }],
+    address_line: initial?.address?.address_line || supplied.address_line || "",
+    city: initial?.address?.city || supplied.city || "Jakarta",
+    postal_code: initial?.address?.postal_code || supplied.postal_code || "",
   });
   const [orderMode, setOrderMode] = useState("random");
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductSummary[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseSummary[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [error, setError] = useState("");
   const fields =
@@ -82,7 +128,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
   useEffect(() => {
     if (kind !== "order" || orderMode !== "custom" || !shopID) return;
     setProductsLoading(true);
-    request(`/control/v1/shops/${shopID}/products?limit=100`, token)
+    request<ListResponse<ProductSummary>>(`/control/v1/shops/${shopID}/products?limit=100`, token)
       .then((result) => setProducts(result.data || []))
       .catch((err: Error) => setError(err.message))
       .finally(() => setProductsLoading(false));
@@ -90,14 +136,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
   useEffect(() => {
     if (kind !== "product" || !shopID || initial) return;
     setWarehousesLoading(true);
-    request(`/control/v1/shops/${shopID}/warehouses?limit=100`, token)
+    request<ListResponse<WarehouseSummary>>(`/control/v1/shops/${shopID}/warehouses?limit=100`, token)
       .then((result) => {
         const records = result.data || [];
         setWarehouses(records);
         setValues((current) => {
           const configured = current.warehouse_inventory?.some((item) => item.warehouse_id);
           if (configured || !records.length) return current;
-          const defaultWarehouse = records.find((warehouse: any) => warehouse.code === "WH-DEFAULT") || records[0];
+          const defaultWarehouse = records.find((warehouse) => warehouse.code === "WH-DEFAULT") || records[0];
           return { ...current, warehouse_inventory: [{ warehouse_id: defaultWarehouse.id, on_hand_quantity: 0 }] };
         });
       })
@@ -109,26 +155,26 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
     try {
       let path = "";
       let method = "POST";
-      let body: Record<string, any> = { ...values };
+      let body: Record<string, unknown> = { ...values };
       if (kind === "shop") path = "/control/v1/shops";
       if (kind === "product") {
         if (initial) {
           path = `/control/v1/shops/${shopID}/products/${initial.id}`;
           method = "PATCH";
-          body = { name: body.name, category: body.category, description: body.description, price: Number(body.price), status: body.status };
+          body = { name: values.name, category: values.category, description: values.description, price: Number(values.price), status: values.status };
         } else {
-          const warehouseInventory = (body.warehouse_inventory || []).map((allocation: any) => ({
+          const warehouseInventory = values.warehouse_inventory.map((allocation) => ({
             warehouse_id: allocation.warehouse_id,
             on_hand_quantity: Number(allocation.on_hand_quantity),
           }));
-          if (!warehouseInventory.length || warehouseInventory.some((allocation: any) => !allocation.warehouse_id || allocation.on_hand_quantity < 0)) {
+          if (!warehouseInventory.length || warehouseInventory.some((allocation) => !allocation.warehouse_id || allocation.on_hand_quantity < 0)) {
             throw new Error("Choose at least one warehouse and enter a non-negative quantity.");
           }
           path = `/control/v1/shops/${shopID}/products`;
           body = {
             ...body,
-            price: Number(body.price),
-            stock: warehouseInventory.reduce((total: number, allocation: any) => total + allocation.on_hand_quantity, 0),
+            price: Number(values.price),
+            stock: warehouseInventory.reduce((total, allocation) => total + allocation.on_hand_quantity, 0),
             warehouse_inventory: warehouseInventory,
           };
         }
@@ -137,14 +183,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         path = initial ? `/control/v1/warehouses/${initial.id}` : `/control/v1/shops/${shopID}/warehouses`;
         method = initial ? "PATCH" : "POST";
         body = {
-          code: body.code,
-          name: body.name,
-          status: body.status || "ACTIVE",
-          priority: Number(body.priority || 0),
+          code: values.code,
+          name: values.name,
+          status: values.status || "ACTIVE",
+          priority: Number(values.priority || 0),
           address: {
-            address_line: body.address_line.trim(),
-            city: body.city.trim(),
-            postal_code: body.postal_code.trim(),
+            address_line: values.address_line.trim(),
+            city: values.city.trim(),
+            postal_code: values.postal_code.trim(),
           },
         };
       }
@@ -197,7 +243,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         };
       }
       if (kind === "user") path = "/control/v1/users";
-      const result = await request(path, token, {
+      const result = await request<SecretResponse>(path, token, {
         method,
         body: JSON.stringify(body),
       });
@@ -211,8 +257,8 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               ? "Webhook registration updated"
               : `${kind} created`,
       );
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Request failed");
     }
   };
   const title =
@@ -449,7 +495,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               <input
                 required
                 type="url"
-                value={values.url || ""}
+                value={inputValue(values.url)}
                 placeholder="https://example.test/webhooks/marketplace"
                 onChange={(event) => update("url", event.target.value)}
               />
@@ -457,7 +503,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             <label>
               Replace secret (optional)
               <input
-                value={values.secret || ""}
+                value={inputValue(values.secret)}
                 placeholder={
                   initial
                     ? "Leave blank to keep the current secret"
@@ -505,7 +551,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             {label}
             {key === "role" ? (
               <select
-                value={values[key] || "OPERATOR"}
+                value={inputValue(values[key]) || "OPERATOR"}
                 onChange={(event) => update(key, event.target.value)}
               >
                 <option>OPERATOR</option>
@@ -513,7 +559,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               </select>
             ) : key === "status" ? (
               <select
-                value={values[key] || "ACTIVE"}
+                value={inputValue(values[key]) || "ACTIVE"}
                 onChange={(event) => update(key, event.target.value)}
               >
                 <option value="ACTIVE">ACTIVE — eligible for new orders</option>
@@ -521,7 +567,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               </select>
             ) : key === "provider_profile" ? (
               <select
-                value={values[key] || "SHOPEE_LIKE"}
+                value={inputValue(values[key]) || "SHOPEE_LIKE"}
                 onChange={(event) => update(key, event.target.value)}
               >
                 <option value="SHOPEE_LIKE">SHOPEE_LIKE — payment, SLA, cancellation policy</option>
@@ -532,7 +578,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                 type={type}
                 required={key !== "description"}
                 disabled={kind === "product" && initial && key === "sku"}
-                value={values[key] || ""}
+                value={inputValue(values[key])}
                 onChange={(event) => update(key, event.target.value)}
               />
             )}

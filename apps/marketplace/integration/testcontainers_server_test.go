@@ -254,7 +254,15 @@ func TestContainerExpiredIdempotencyLeaseCannotBeCompletedByStaleOwner(t *testin
 	if acquired, err := manager.Acquire(context.Background(), first); err != nil || acquired.Outcome != idempotency.OutcomeExecute {
 		t.Fatalf("first acquire = %#v err=%v", acquired, err)
 	}
-	time.Sleep(5 * time.Millisecond)
+	// Expire the lease using the database clock. Sleeping a few milliseconds
+	// makes this ownership-safety test depend on host scheduling and timestamp
+	// round-tripping instead of the state transition it is meant to verify.
+	if _, err := test.env.DB.Exec(context.Background(), `
+		UPDATE idempotency_keys SET locked_until=now()-interval '1 second' WHERE id=$1`,
+		first.ID,
+	); err != nil {
+		t.Fatalf("expire first lease: %v", err)
+	}
 	second := first
 	second.ID = "idem_second_owner"
 	if acquired, err := manager.Acquire(context.Background(), second); err != nil || acquired.Outcome != idempotency.OutcomeExecute {

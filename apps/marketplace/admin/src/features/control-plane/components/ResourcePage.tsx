@@ -1,7 +1,42 @@
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
+import type {
+  ControlPlaneData,
+  ControlRole,
+  DetailRequest,
+  FormKind,
+  FormRequest,
+  PaginationMetadata,
+  ResourceRecord,
+} from "@/shared/types/controlPlane";
 
-const request = (...args: Parameters<typeof controlPlaneRequest>) =>
-  controlPlaneRequest<any>(...args);
+const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
+  controlPlaneRequest<T>(...args);
+
+type ResourcePageName =
+  | "Products"
+  | "Warehouses"
+  | "Credentials"
+  | "Orders"
+  | "Packages"
+  | "Shipments"
+  | "Deliveries"
+  | "Users";
+
+interface ResourcePageProps {
+  page: ResourcePageName;
+  data: ControlPlaneData | null;
+  shopID: string;
+  token: string | null | undefined;
+  role: ControlRole;
+  onForm: (form: FormRequest) => void;
+  onDetail: (detail: DetailRequest) => void;
+  onRefresh: () => void | Promise<void>;
+  onNotice: (text: string) => void;
+  onSeed: () => void | Promise<void>;
+  isSeeding: boolean;
+  listPage: number;
+  onPageChange: (page: number) => void;
+}
 
 export function ResourcePage({
   page,
@@ -17,26 +52,27 @@ export function ResourcePage({
   isSeeding,
   listPage,
   onPageChange,
-}: any) {
+}: ResourcePageProps) {
   const rows = Array.isArray(data?.data) ? data.data : [];
-  const action = ({
+  const actions: Partial<Record<ResourcePageName, readonly [FormKind, string] | null>> = {
     Products: ["product", "New product"],
     Warehouses: ["warehouse", "New warehouse"],
     Orders: ["order", "Simulate order"],
     Packages: ["package", "Allocate package"],
     Credentials: ["credential", "New credential"],
     Users: role === "ADMIN" ? ["user", "New user"] : null,
-  } as Record<string, string[] | null>)[page];
+  };
+  const action = actions[page];
   const retry = async (id: string) => {
-    await request(`/control/v1/deliveries/${id}/retry`, token, {
+    await request<unknown>(`/control/v1/deliveries/${id}/retry`, token, {
       method: "POST",
     });
     await onRefresh();
     onNotice("Delivery queued for retry");
   };
-  const archiveProduct = async (product: any) => {
+  const archiveProduct = async (product: ResourceRecord) => {
     if (!window.confirm(`Archive ${product.name}? Existing order history will be preserved.`)) return;
-    await request(`/control/v1/shops/${shopID}/products/${product.id}`, token, { method: "DELETE" });
+    await request<unknown>(`/control/v1/shops/${shopID}/products/${product.id}`, token, { method: "DELETE" });
     await onRefresh();
     onNotice("Product archived");
   };
@@ -80,7 +116,7 @@ export function ResourcePage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row: any) => (
+              {rows.map((row) => (
                 <tr key={row.id}>
                   {columns(rows[0], page).map((key) => (
                     <td key={key} data-label={key.replaceAll("_", " ")}>
@@ -136,7 +172,7 @@ export function ResourcePage({
                     {page === "Credentials" && row.status === "ACTIVE" && (
                       <button
                         onClick={async () => {
-                          await request(
+                          await request<unknown>(
                             `/control/v1/credentials/${row.id}/revoke`,
                             token,
                             { method: "POST" },
@@ -162,7 +198,13 @@ export function ResourcePage({
   );
 }
 
-export function Pagination({ pagination, page, onChange }: any) {
+interface PaginationProps {
+  pagination?: PaginationMetadata;
+  page: number;
+  onChange: (page: number) => void;
+}
+
+export function Pagination({ pagination, page, onChange }: PaginationProps) {
   const current = pagination?.page || page;
   const totalPages = pagination?.total_pages || 1;
   const total = pagination?.total ?? 0;

@@ -60,11 +60,14 @@ Rate-limited responses use HTTP `429` and expose `X-RateLimit-Limit`, `X-RateLim
 3. Consume webhook events idempotently using `X-Marketplace-Event-Id`.
 4. Inspect delivery attempts in the control plane, then enable scenarios to test your recovery path.
 
-List endpoints return cursor pagination under `pagination.next_cursor` and `pagination.has_more`.
-
 Products are provider-specific at the public boundary. Shopee-like uses `GET /api/shopee/v1/products?page_no=&page_size=` with `item_*` fields and partner signing; Tokopedia-like uses `POST /api/tokopedia/v202309/products/search` with `data.products`, opaque page tokens, app-key signing, and an access token. Use each provider’s product detail endpoint for one product. Catalogue creation, updates, stock, and archive remain Admin Control Plane operations so warehouse inventory and product events stay atomic.
 
-Use `pagination.next_cursor` exactly as returned and keep `sort` and `direction` unchanged on the following request. The cursor is opaque and rejects incompatible sorting.
+Pagination is provider-specific. Shared warehouse and webhook lists currently
+return the complete shop-scoped collection. Shopee-like product and order lists
+use `page_no` plus `page_size`: product responses expose `has_next_page`, while
+order responses expose `more`. Tokopedia-like searches use an opaque
+`page_token`; send the returned `next_page_token` unchanged while `has_more` is
+true.
 
 ## SHOPEE_LIKE provider contract
 

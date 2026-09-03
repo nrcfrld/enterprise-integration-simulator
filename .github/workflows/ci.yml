@@ -13,15 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.25.5' }
+        with: { go-version: '1.25.14' }
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
+      - name: Reject generated-code drift
+        run: make generate-check
+      - name: Reject reachable Go vulnerabilities
+        run: make vuln
       - run: go test ./...
       - run: go test -race ./...
       - run: go vet ./...
       - run: make coverage-core
       - uses: golangci/golangci-lint-action@v6
-        with: { working-directory: apps/marketplace, version: latest }
+        with: { working-directory: apps/marketplace, version: v2.11.4 }
       - run: bun install --frozen-lockfile
         working-directory: apps/marketplace/admin
       - run: bun run lint
@@ -42,5 +46,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.25.5' }
+        with: { go-version: '1.25.14' }
       - run: go test -race -tags=testcontainers ./integration ./cmd/worker

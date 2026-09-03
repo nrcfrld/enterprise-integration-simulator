@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ControlPage } from "@/app/navigation";
 import { ENDPOINT_BY_ID, ENDPOINTS } from "./data/endpoints";
 import { CodeExamples } from "./components/CodeExamples";
 import { ApiReference } from "./components/ApiReference";
@@ -10,7 +11,7 @@ import type { IntegrationCredentials, PortalSection } from "./types";
 
 interface DeveloperPortalProps {
   api: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: ControlPage) => void;
 }
 
 function TryIt({ api, activeEndpointID, onSelect, credentials, onCredentialsChange, onNavigate }: {
@@ -19,7 +20,7 @@ function TryIt({ api, activeEndpointID, onSelect, credentials, onCredentialsChan
   onSelect: (endpointID: string) => void;
   credentials: IntegrationCredentials;
   onCredentialsChange: (credentials: IntegrationCredentials) => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: ControlPage) => void;
 }) {
   const endpoint = ENDPOINT_BY_ID[activeEndpointID] ?? ENDPOINTS[0];
   const contracts = ["shared", "shopee", "tokopedia"] as const;

@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { ResourcePage } from "./ResourcePage";
 
 const props = {
-  page: "Products",
+  page: "Products" as const,
   data: { data: [] },
   shopID: "shop_operator",
   token: "session-token",
-  role: "OPERATOR",
+  role: "OPERATOR" as const,
   onForm: () => undefined,
   onDetail: () => undefined,
   onRefresh: () => undefined,

@@ -110,7 +110,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
     id: "shopee-list-orders", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders", title: "List Shopee-like orders",
     query: [...pageNo, { name: "order_status", label: "Order status", help: "Filter by one Shopee-like order status, such as READY_TO_SHIP.", type: "string" }, { name: "time_from", label: "Updated from", help: "Include orders updated at or after this Unix timestamp.", type: "integer<int64>" }, { name: "time_to", label: "Updated to", help: "Include orders updated at or before this Unix timestamp.", type: "integer<int64>" }],
     summary: "Start here before an order action: copy an order_sn returned for this shop.", outcome: "200 OK with Shopee-like orders.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_list": [{ "order_sn": "ord_…", "order_status": "PAID", "total_amount": 125000 }], "has_next_page": false }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_list": [{ "order_sn": "ord_…", "order_status": "PAID", "total_amount": 125000 }], "page_no": 1, "page_size": 20, "total_count": 1, "more": false }\n}',
   }),
   endpoint({
     id: "shopee-get-order", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders/{id}", title: "Get a Shopee-like order", pathParams: [orderID],

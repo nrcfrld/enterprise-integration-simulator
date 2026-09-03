@@ -1,9 +1,9 @@
 # Implementation Checklist — Enterprise Integration Simulator
 
-Audit date: 2026-09-02  
+Audit date: 2026-09-03
 Scope: Marketplace Simulator, PRD v0.2 as superseded for orders by **Order Lifecycle & API Brief**
 
-Status summary: **83 COMPLETE · 0 PARTIAL · 0 NOT_IMPLEMENTED**
+Status summary: **85 COMPLETE · 0 PARTIAL · 0 NOT_IMPLEMENTED**
 
 The status below is based on executable evidence, not merely the presence of a route or source file. `Testcontainers` means isolated PostgreSQL and Redis containers; `Compose E2E` means the independently running Docker stack.
 
@@ -92,7 +92,9 @@ The status below is based on executable evidence, not merely the presence of a r
 | 80 | Warehouse migration and all existing backend/frontend/provider workflows have regression coverage without Compose/browser E2E. | COMPLETE | `integration/testcontainers_server_test.go`, `cmd/worker/testcontainers_test.go` | `go test ./...`, dummy-generator tests, frontend checks, and `go test -count=1 -race -tags=testcontainers ./integration ./cmd/worker` all pass; Compose/browser E2E was intentionally excluded by user constraint. |
 | 81 | Generic order-provider schema and behavior are removed; the only supported order profiles are Shopee-like and Tokopedia-like. | COMPLETE | migrations `009`, `orders/provider.go`, `server.Router`, OpenAPI, Developer Portal, docs | Migration v9 converts existing Generic shops to Shopee-like before tightening the constraint. Full Testcontainers race matrix, Go suite, and Admin typecheck/lint/unit/build pass. |
 | 82 | Public product catalogue contracts are provider-specific; no Generic public product API remains. | COMPLETE | Shopee/Tokopedia product handlers, `Router`, OpenAPI, Developer Portal, provider client examples, README/integration guide | `TestContainerProviderProductContracts` verifies provider-specific fields/envelopes/signing and asserts `/api/v1/products` returns 404. |
-| 83 | Developer Portal and API Request Simulator cover every current public shared, Shopee-like, and Tokopedia-like operation with contract-aware signing, executable defaults, success/error examples, and workflow guidance. | COMPLETE | `admin/src/features/developer-portal/*`, `docs/marketplace/integration-guide.md` | Frontend unit tests assert all 25 public operations are catalogued, every mutation snippet carries the correct idempotency header, and operation errors are contextual; typecheck, lint, 22 tests, and production build pass. |
+| 83 | Developer Portal and API Request Simulator cover every current public shared, Shopee-like, and Tokopedia-like operation with contract-aware signing, executable defaults, success/error examples, and workflow guidance. | COMPLETE | `admin/src/features/developer-portal/*`, `docs/marketplace/integration-guide.md` | Frontend contract tests compare all 25 portal operations directly with OpenAPI method/path, query/path parameters, payload presence/fields, and idempotency metadata; provider pagination vocabulary also matches runtime. Typecheck, lint, 25 tests, and production build pass. |
+| 84 | Control Plane frontend keeps strict TypeScript protection active across API responses, resource state, forms, detail views, and callback props. | COMPLETE | `admin/src/shared/types/controlPlane.ts`, `admin/src/features/control-plane/*`, `admin/eslint.config.js` | Explicit domain/UI types replace the Control Plane's `any` usage and `@typescript-eslint/no-explicit-any` is enforced as an error; typecheck and lint pass. |
+| 85 | Production Go binaries use a patched toolchain and dependency graph, and CI rejects newly reachable known vulnerabilities. | COMPLETE | `go.work`, module files, `apps/marketplace/Dockerfile`, Makefiles, CI | Go is pinned to `1.25.14`; `pgx` is `v5.9.2`, `quic-go` is `v0.59.1`, `x/crypto` is the latest Go-1.25-compatible `v0.55.0`, and pinned `govulncheck v1.7.0` scans all Marketplace packages locally and in CI. |
 
 ## Fixes made during this audit
 
@@ -102,3 +104,10 @@ The status below is based on executable evidence, not merely the presence of a r
 4. **Misleading API reference errors** — every Shopee-like and Tokopedia-like endpoint showed an invalid lifecycle transition regardless of operation. Reference data now selects authentication, not-found, validation, or transition envelopes per endpoint category.
 5. **Idempotency response-before-finalization gap** — handlers wrote success responses before their replay record was durable. Idempotent responses are now buffered, finalized first, and only then published; a regression test proves finalization failure returns `5xx` without leaking success.
 6. **Incomplete CI enforcement** — frontend CI built without lint, typecheck, or tests, and did not enforce core coverage. CI now runs all four frontend gates with pinned Bun plus `coverage-core`.
+7. **Mutable lint tool in CI** — `golangci-lint` used `latest`, allowing unrelated releases to change build outcomes. CI now pins the verified `v2.11.4` release.
+8. **No generated-binding drift gate** — OpenAPI/sqlc source changes could be merged without their generated Go output. `make generate-check` now detects modified and untracked outputs locally and in CI.
+9. **Stale pagination guidance** — the integration guide described a removed Generic cursor contract, while the Shopee order example used the product pagination field. Documentation and portal examples now match each provider's actual vocabulary, protected by a regression test.
+10. **Manually drifting API catalogue** — portal count assertions could not detect a changed method, path, parameter, request-body field, or idempotency requirement. Tests now compare the portal catalogue directly with the OpenAPI source.
+11. **Stale shared-catalogue claim** — the OpenAPI overview still advertised a removed Generic shared catalogue. It now describes only the remaining shared warehouse and webhook resources.
+12. **Weak Control Plane type safety** — broad component props, API responses, form state, and detail data used explicit `any`, while lint allowed it. Those boundaries now have explicit types and future `any` usage fails lint.
+13. **Reachable vulnerabilities in production Go binaries** — the API and worker embedded vulnerable `pgx v5.7.6` and `quic-go v0.54.0`, while patch-level Go was not consistently pinned. The workspace, CI, and Docker builder now use Go `1.25.14`; dependencies are upgraded to `pgx v5.9.2`, `quic-go v0.59.1`, and the latest Go-1.25-compatible `x/crypto v0.55.0`; and a pinned reachable-vulnerability gate prevents regression.

@@ -57,6 +57,10 @@ make generate
 
 Database changes are versioned Goose migrations under `apps/marketplace/migrations`. Application startup applies pending migrations. Domain SQL used by control-plane catalogue, shop, and order reads/writes is declared in `internal/store/queries.sql` and generated with sqlc; keep handler code free of new static domain SQL where a sqlc query applies.
 
+CI reruns both OpenAPI and sqlc generators and rejects any resulting tracked or
+untracked drift. Commit generated bindings together with their source contract
+or query changes. Run `make generate-check` locally for the same verification.
+
 Generic deterministic dummy data belongs in `packages/dummy-generator`; Marketplace-specific SKU, price, and stock rules belong in `apps/marketplace/internal/products`.
 
 ## Verification
@@ -67,10 +71,15 @@ Fast checks run without containers:
 make test-fast
 ```
 
-The full quality gate includes lint, frontend checks, core-domain coverage (minimum 80%), and isolated PostgreSQL/Redis Testcontainers:
+The full quality gate includes lint, a pinned reachable-vulnerability scan,
+frontend checks, core-domain coverage (minimum 80%), and isolated
+PostgreSQL/Redis Testcontainers:
 
 ```bash
 make check
 ```
 
-Use `make test-integration` for only the race-enabled integration/worker matrix, or `make docker-build` to verify all production images.
+Use `make vuln` for only the Go vulnerability gate,
+`make test-integration` for the race-enabled integration/worker matrix, or
+`make docker-build` to verify all production images. The Go patch release is
+pinned consistently across the workspace, CI, and production build image.
