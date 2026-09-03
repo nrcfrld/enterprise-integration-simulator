@@ -58,4 +58,18 @@ describe("developer portal endpoint contract metadata", () => {
       expect(endpoint.idempotent, endpoint.id).not.toBe(true);
     }
   });
+
+  it("shows errors that match each endpoint instead of one generic provider error", () => {
+    for (const endpoint of ENDPOINTS) {
+      if (endpoint.id === "delete-webhook" || endpoint.id.startsWith("get-") || endpoint.id.includes("-get-")) {
+        expect(endpoint.errorResponse.toLowerCase(), endpoint.id).toContain("not found");
+      } else if (endpoint.group === "Webhooks" && endpoint.idempotent) {
+        expect(endpoint.errorResponse, endpoint.id).toContain("event");
+      } else if (endpoint.idempotent) {
+        expect(endpoint.errorResponse.toLowerCase(), endpoint.id).toContain("transition");
+      } else {
+        expect(endpoint.errorResponse.toLowerCase(), endpoint.id).toMatch(/signature|credential/);
+      }
+    }
+  });
 });

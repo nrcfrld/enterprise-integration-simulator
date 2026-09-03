@@ -16,17 +16,60 @@ const requestBodyContextKey = "marketplace.request_body"
 
 type responseRecorder struct {
 	gin.ResponseWriter
-	body bytes.Buffer
+	body   bytes.Buffer
+	status int
 }
 
 func (r *responseRecorder) Write(data []byte) (int, error) {
-	_, _ = r.body.Write(data)
-	return r.ResponseWriter.Write(data)
+	r.WriteHeaderNow()
+	return r.body.Write(data)
 }
 
 func (r *responseRecorder) WriteString(value string) (int, error) {
-	_, _ = r.body.WriteString(value)
-	return r.ResponseWriter.WriteString(value)
+	r.WriteHeaderNow()
+	return r.body.WriteString(value)
+}
+
+func (r *responseRecorder) WriteHeader(status int) {
+	if r.status == 0 {
+		r.status = status
+	}
+}
+
+func (r *responseRecorder) WriteHeaderNow() {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+}
+
+func (r *responseRecorder) Status() int {
+	if r.status == 0 {
+		return http.StatusOK
+	}
+	return r.status
+}
+
+func (r *responseRecorder) Size() int {
+	return r.body.Len()
+}
+
+func (r *responseRecorder) Written() bool {
+	return r.status != 0
+}
+
+// Flush deliberately buffers idempotent responses until the database claim is
+// complete. Public mutations do not support streaming responses.
+func (r *responseRecorder) Flush() {
+	r.WriteHeaderNow()
+}
+
+func (r *responseRecorder) commit() error {
+	r.ResponseWriter.WriteHeader(r.Status())
+	if r.body.Len() == 0 {
+		return nil
+	}
+	_, err := r.ResponseWriter.Write(r.body.Bytes())
+	return err
 }
 
 const (

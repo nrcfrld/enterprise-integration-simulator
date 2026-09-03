@@ -12,6 +12,26 @@ The original Marketplace and Order Lifecycle requirements remain complete. The u
 
 The Provider/Payment/Package P0 expansion is complete: provider-specific detail/UI, package workflow/Admin visibility, and worker integration coverage have been implemented and verified with Testcontainers. P1 is also complete: `SHOPEE_LIKE` changes the external integration boundary—not only stored state—through a separate API prefix, signing protocol, pagination/error/rate-limit contract, and webhook representation. P2 is complete: `TOKOPEDIA_LIKE` now models the combined Tokopedia & Shop / TikTok Shop contract with its own authenticated API, status vocabulary, webhook envelope, inventory safety, and return-to-sender behavior.
 
+### Latest update — P1 audit closure
+
+- Made every Developer Portal Node.js/Bun mutation example executable across
+  shared, Shopee-like, and Tokopedia-like contracts by deriving
+  `Idempotency-Key` from operation metadata. Read-only Tokopedia POST searches
+  correctly remain without the header.
+- Replaced one generic error example per provider with operation-relevant
+  authentication, not-found, callback-validation, or lifecycle-transition
+  envelopes while preserving each provider's actual response shape and codes.
+- Buffered idempotent handler output and now publish a success only after its
+  response has been persisted for replay. If finalization fails, the API emits
+  an indeterminate `5xx` and suppresses the unrepeatable success body.
+- CI now pins Bun and enforces frontend lint, typecheck, all 22 unit tests,
+  production build, and the 80% core-domain coverage threshold in addition to
+  existing Go/race/Testcontainers checks.
+- **Product & DX Review:** runtime behavior, provider reference examples,
+  runnable snippets, retry guidance, focused backend/frontend regressions, CI,
+  README, and integration guidance were updated together. Public routes and
+  OpenAPI request/response contracts did not change.
+
 ### Latest update — Self-service seed reset
 
 - Fixed the Dashboard and Products seed action for Operator accounts. The UI was
@@ -59,7 +79,7 @@ The Provider/Payment/Package P0 expansion is complete: provider-specific detail/
 
 Current verification: `make check` passes the complete lint, frontend, unit,
 race-enabled PostgreSQL/Redis Testcontainers, production frontend build, and
-81.1% core-domain coverage gate; the frontend suite contains 14 passing tests.
+81.1% core-domain coverage gate; the frontend suite contains 22 passing tests.
 `make test-race` and `make lint-full` also pass independently with zero
 `golangci-lint` issues. All three production images build, all five Compose
 services report healthy, Goose reports applied migration version 12, and API
@@ -230,6 +250,9 @@ Implemented in the current increment:
 | `bun run typecheck && bun run lint && bun run test && bun run build` after seed reset fix | PASS — TypeScript, ESLint, 19 frontend tests across 8 files, and production bundle. |
 | `go test -count=1 -race -tags=testcontainers ./integration -run '^TestContainerResetPermissionAndTransactionalOutbox$' -v` | PASS — Operator can reset an owned shop to 100 products/50 orders, cannot reset another owner's shop, and transactional persistence is verified. |
 | Rebuild/recreate `marketplace-api` and `marketplace-admin`, then `/ready` and Compose health checks | PASS — both rebuilt containers are healthy and the API reports ready. |
+| `cd apps/marketplace && make check` after P1 audit closure | PASS — zero Go lint issues; 22 frontend tests plus lint/typecheck/build; race-enabled Testcontainers integration 64.045s and worker 17.423s; core coverage 81.1%. |
+| `cd apps/marketplace && make test-race` after idempotency buffering | PASS — all Go packages, including the finalization-failure regression, pass the race detector. |
+| Rebuild/recreate P1 `marketplace-api` and `marketplace-admin`, then runtime checks | PASS — both containers healthy; `/ready` returns ready, `/docs` returns 200, and containers remain non-root (UID 100/101). |
 
 ## E2E flows verified
 

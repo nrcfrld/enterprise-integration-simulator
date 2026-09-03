@@ -12,6 +12,13 @@ resources**, **Shopee-like**, or **Tokopedia-like**; the simulator switches its
 headers, query parameters, signing input, request example, response examples,
 and rate-limit headers to the selected contract.
 
+The **Reference** page also provides a runnable Node.js/Bun request for every
+operation. Its generated headers include `Idempotency-Key` for shared,
+Shopee-like, and Tokopedia-like mutations, while read-only POST searches omit
+it. Common errors are selected by operation: authentication for list/search,
+not-found for detail reads, validation for callback configuration, and invalid
+state for lifecycle actions.
+
 Start with a provider list/search request, then copy a returned product or
 order id into the next operation. This makes the fulfillment workflow
 discoverable without inspecting source code:
@@ -30,7 +37,7 @@ Use the credential shown once by the control plane. Sign the exact raw request b
 hex(HMAC-SHA256(METHOD + REQUEST_PATH + UNIX_TIMESTAMP + RAW_BODY, CLIENT_SECRET))
 ```
 
-Set `X-Client-Id`, `X-Timestamp`, and `X-Signature`. Timestamps older/newer than five minutes are rejected. Every state-changing public endpoint across the shared, Shopee-like, and Tokopedia-like contracts also requires a stable `Idempotency-Key`. An identical retry replays the first successful response and includes `Idempotent-Replayed: true`; reuse with different input returns `409`, while a concurrent request with the same key returns `409` plus `Retry-After`. Generate a new key for the next logical operation.
+Set `X-Client-Id`, `X-Timestamp`, and `X-Signature`. Timestamps older/newer than five minutes are rejected. Every state-changing public endpoint across the shared, Shopee-like, and Tokopedia-like contracts also requires a stable `Idempotency-Key`. An identical retry replays the first successful response and includes `Idempotent-Replayed: true`; reuse with different input returns `409`, while a concurrent request with the same key returns `409` plus `Retry-After`. The API buffers a successful response until the replay record is durable. If that finalization fails, the API returns an indeterminate `5xx` response and never publishes the buffered success body; investigate the operation state before deciding whether to retry. Generate a new key for the next logical operation.
 
 The request path in the signature excludes query parameters. Always sign the exact bytes sent as the JSON body, and do not reserialize a retry differently.
 

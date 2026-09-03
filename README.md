@@ -37,7 +37,7 @@ Each shop has either a `SHOPEE_LIKE` or `TOKOPEDIA_LIKE` profile. `SHOPEE_LIKE` 
 
 For `SHOPEE_LIKE`, cancellation reasons are validated: customer (`CHANGE_OF_MIND`, `DUPLICATE_ORDER`, `ADDRESS_ISSUE`), seller (`OUT_OF_STOCK`, `SELLER_UNFULFILLABLE`), and system (`PAYMENT_EXPIRED`, `PAYMENT_FAILED`, `SELLER_SLA_EXPIRED`). Packages may allocate partial quantities of one order item; a package must not exceed the remaining unallocated quantity.
 
-Every state-changing public endpoint requires `Idempotency-Key`. The key is scoped by credential and operation: an identical successful retry replays the original status/body, a different request returns `409`, and concurrent duplicates receive a retryable in-progress conflict. Read and provider search operations do not require the header.
+Every state-changing public endpoint requires `Idempotency-Key`. The key is scoped by credential and operation: an identical successful retry replays the original status/body, a different request returns `409`, and concurrent duplicates receive a retryable in-progress conflict. A success response is published only after its replay record is durable; a finalization failure returns an indeterminate server error without leaking the buffered success response. Read and provider search operations do not require the header.
 
 In Admin UI, **Shipments** is a separate fulfillment workspace. It lists only the selected shop’s shipment records and can advance an existing shipment one valid state at a time. Tracking/provider/pickup details are set only when an external developer creates the shipment through that shop’s Shopee-like or Tokopedia-like order contract.
 

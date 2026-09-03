@@ -26,14 +26,44 @@ const callbackBodyFields = (provider: "shared" | "shopee" | "tokopedia") => [
   { name: "secret", type: "string", required: false, description: "Optional verification secret. If omitted, the simulator generates one and returns it only once.", example: "whsec_your_secret" },
 ];
 
-const errors: Record<ProviderContract, string> = {
-  shared: '{\n  "error": { "code": "INVALID_SIGNATURE", "message": "signature did not match" }\n}',
-  shopee: '{\n  "error": "error_invalid_state",\n  "message": "the order cannot make this transition",\n  "request_id": "req_…"\n}',
-  tokopedia: '{\n  "code": 36000003,\n  "message": "the order cannot make this transition",\n  "request_id": "req_…",\n  "data": {}\n}',
+type ErrorKind = "authentication" | "not-found" | "validation" | "transition";
+
+const errors: Record<ProviderContract, Record<ErrorKind, string>> = {
+  shared: {
+    authentication: '{\n  "error": { "code": "INVALID_SIGNATURE", "message": "signature did not match" }\n}',
+    "not-found": '{\n  "error": { "code": "NOT_FOUND", "message": "resource not found" }\n}',
+    validation: '{\n  "error": { "code": "INVALID_REQUEST", "message": "url and subscribed_events are required" }\n}',
+    transition: '{\n  "error": { "code": "INVALID_TRANSITION", "message": "the resource cannot make this transition" }\n}',
+  },
+  shopee: {
+    authentication: '{\n  "error": "error_auth",\n  "message": "signature did not match",\n  "request_id": "req_…"\n}',
+    "not-found": '{\n  "error": "error_not_found",\n  "message": "resource not found",\n  "request_id": "req_…"\n}',
+    validation: '{\n  "error": "error_param",\n  "message": "callback_url and event_types are required",\n  "request_id": "req_…"\n}',
+    transition: '{\n  "error": "error_invalid_state",\n  "message": "the order cannot make this transition",\n  "request_id": "req_…"\n}',
+  },
+  tokopedia: {
+    authentication: '{\n  "code": 36000001,\n  "message": "invalid app credential",\n  "request_id": "req_…",\n  "data": {}\n}',
+    "not-found": '{\n  "code": 400,\n  "message": "resource not found",\n  "request_id": "req_…",\n  "data": {}\n}',
+    validation: '{\n  "code": 400,\n  "message": "callback_url and event_types are required",\n  "request_id": "req_…",\n  "data": {}\n}',
+    transition: '{\n  "code": 36000003,\n  "message": "the order cannot make this transition",\n  "request_id": "req_…",\n  "data": {}\n}',
+  },
 };
 
-function endpoint(endpoint: Omit<PortalEndpoint, "errorResponse">): PortalEndpoint {
-  return { ...endpoint, errorResponse: errors[endpoint.contract] };
+function errorKind(endpoint: Omit<PortalEndpoint, "errorResponse">): ErrorKind {
+  if (endpoint.id === "delete-webhook" || endpoint.id.startsWith("get-") || endpoint.id.includes("-get-")) {
+    return "not-found";
+  }
+  if (endpoint.group === "Webhooks" && endpoint.idempotent) {
+    return "validation";
+  }
+  if (endpoint.idempotent) {
+    return "transition";
+  }
+  return "authentication";
+}
+
+function endpoint(value: Omit<PortalEndpoint, "errorResponse">): PortalEndpoint {
+  return { ...value, errorResponse: errors[value.contract][errorKind(value)] };
 }
 
 export const ENDPOINTS: PortalEndpoint[] = [

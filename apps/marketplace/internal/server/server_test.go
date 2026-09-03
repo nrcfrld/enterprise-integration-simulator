@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -8,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/idempotency"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/orders"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/products"
@@ -15,6 +18,30 @@ import (
 	dummygenerator "github.com/enrico/enterprise-integration-simulator/packages/dummy-generator"
 	"github.com/gin-gonic/gin"
 )
+
+type fakeIdempotencyBackend struct {
+	completeErr    error
+	completed      bool
+	completedBody  string
+	completedState int
+	released       bool
+}
+
+func (f *fakeIdempotencyBackend) Acquire(context.Context, idempotency.Claim) (idempotency.Result, error) {
+	return idempotency.Result{Outcome: idempotency.OutcomeExecute}, nil
+}
+
+func (f *fakeIdempotencyBackend) Complete(_ context.Context, _ idempotency.Claim, status int, body []byte) error {
+	f.completed = true
+	f.completedState = status
+	f.completedBody = string(body)
+	return f.completeErr
+}
+
+func (f *fakeIdempotencyBackend) Release(context.Context, idempotency.Claim) error {
+	f.released = true
+	return nil
+}
 
 func TestAllowedTransition(t *testing.T) {
 	t.Parallel()
@@ -135,6 +162,75 @@ func TestRequestFingerprintIgnoresVolatileTokopediaSigningParameters(t *testing.
 	changed := httptest.NewRequest(http.MethodPost, "/api/tokopedia/v202309/orders/ord_1/pack?stable=no", nil)
 	if requestFingerprint(first, []byte(`{}`)) == requestFingerprint(changed, []byte(`{}`)) {
 		t.Fatal("logical query change did not change request fingerprint")
+	}
+}
+
+func TestIdempotentResponseIsPublishedOnlyAfterClaimCompletion(t *testing.T) {
+	tests := []struct {
+		name             string
+		completeErr      error
+		wantStatus       int
+		wantBody         string
+		unwantedBody     string
+		wantStoredStatus int
+	}{
+		{
+			name:             "completed claim publishes the stable success response",
+			wantStatus:       http.StatusCreated,
+			wantBody:         `"result":"created"`,
+			wantStoredStatus: http.StatusCreated,
+		},
+		{
+			name:             "failed claim finalization hides the unrepeatable success response",
+			completeErr:      errors.New("database unavailable"),
+			wantStatus:       http.StatusInternalServerError,
+			wantBody:         "IDEMPOTENCY_FINALIZATION_FAILED",
+			unwantedBody:     `"result":"created"`,
+			wantStoredStatus: http.StatusCreated,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			backend := &fakeIdempotencyBackend{completeErr: test.completeErr}
+			server := &Server{
+				idem:   backend,
+				logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			}
+			gin.SetMode(gin.TestMode)
+			router := gin.New()
+			router.POST("/mutation",
+				func(c *gin.Context) {
+					c.Set("client", integrationClient{CredentialID: "cred_1"})
+					setRequestBody(c, []byte(`{"name":"example"}`))
+				},
+				server.idempotent("test.create"),
+				func(c *gin.Context) {
+					c.JSON(http.StatusCreated, gin.H{"result": "created"})
+				},
+			)
+
+			request := httptest.NewRequest(http.MethodPost, "/mutation", strings.NewReader(`{"name":"example"}`))
+			request.Header.Set("Idempotency-Key", "retry-key")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			if response.Code != test.wantStatus {
+				t.Fatalf("response status = %d, want %d; body=%s", response.Code, test.wantStatus, response.Body.String())
+			}
+			if !strings.Contains(response.Body.String(), test.wantBody) {
+				t.Fatalf("response body = %q, want substring %q", response.Body.String(), test.wantBody)
+			}
+			if test.unwantedBody != "" && strings.Contains(response.Body.String(), test.unwantedBody) {
+				t.Fatalf("response body leaked buffered success: %q", response.Body.String())
+			}
+			if !backend.completed || backend.completedState != test.wantStoredStatus || backend.completedBody != `{"result":"created"}` {
+				t.Fatalf("completion call = completed:%v status:%d body:%q", backend.completed, backend.completedState, backend.completedBody)
+			}
+			if backend.released {
+				t.Fatal("successful handler response must not release its idempotency claim")
+			}
+		})
 	}
 }
 

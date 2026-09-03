@@ -51,6 +51,12 @@ type seedResult struct {
 	ExampleWebhookID string
 }
 
+type idempotencyBackend interface {
+	Acquire(context.Context, idempotency.Claim) (idempotency.Result, error)
+	Complete(context.Context, idempotency.Claim, int, []byte) error
+	Release(context.Context, idempotency.Claim) error
+}
+
 // Server owns the HTTP dependencies used by all request handlers.
 type Server struct {
 	db      *pgxpool.Pool
@@ -62,7 +68,7 @@ type Server struct {
 	orders  *orders.Service
 	catalog *products.Service
 	metrics *observability.HTTPMetrics
-	idem    *idempotency.Manager
+	idem    idempotencyBackend
 }
 
 // New constructs the HTTP application service.

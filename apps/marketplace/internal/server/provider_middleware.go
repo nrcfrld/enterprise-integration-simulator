@@ -67,22 +67,39 @@ func (s *Server) idempotent(operation string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		recorder := &responseRecorder{ResponseWriter: c.Writer}
+		underlyingWriter := c.Writer
+		recorder := &responseRecorder{ResponseWriter: underlyingWriter}
 		c.Writer = recorder
 		c.Next()
-		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
+		status := recorder.Status()
+		if status >= 200 && status < 300 {
 			responseBody := recorder.body.Bytes()
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			if err := s.idem.Complete(ctx, claim, c.Writer.Status(), responseBody); err != nil {
+			err := s.idem.Complete(ctx, claim, status, responseBody)
+			cancel()
+			if err != nil {
 				s.logger.Error("idempotency completion failed", "operation", operation, "credential", platform.Redact(client.CredentialID), "error", err)
+				c.Writer = underlyingWriter
+				c.Writer.Header().Del("Content-Length")
+				s.idempotencyError(c, http.StatusInternalServerError, "IDEMPOTENCY_FINALIZATION_FAILED", "the operation completed but its retry-safe response could not be finalized")
+				c.Abort()
+				return
+			}
+			c.Writer = underlyingWriter
+			if err := recorder.commit(); err != nil {
+				s.logger.Error("idempotent response write failed", "operation", operation, "credential", platform.Redact(client.CredentialID), "error", err)
 			}
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if err := s.idem.Release(ctx, claim); err != nil {
+		err = s.idem.Release(ctx, claim)
+		cancel()
+		if err != nil {
 			s.logger.Error("idempotency release failed", "operation", operation, "credential", platform.Redact(client.CredentialID), "error", err)
+		}
+		c.Writer = underlyingWriter
+		if err := recorder.commit(); err != nil {
+			s.logger.Error("idempotent response write failed", "operation", operation, "credential", platform.Redact(client.CredentialID), "error", err)
 		}
 	}
 }
