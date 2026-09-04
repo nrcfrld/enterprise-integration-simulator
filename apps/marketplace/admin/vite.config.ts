@@ -3,7 +3,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-export default defineConfig({
+const adminCoverageMinimum = Number.parseFloat(
+  process.env.ADMIN_COVERAGE_MIN ?? "60",
+);
+
+const config = {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -15,7 +19,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           // Prism language plug-ins mutate the Prism singleton at module-load
           // time. Splitting every Prism module into a forced vendor chunk lets
           // Rollup evaluate a plug-in before the singleton is initialized in
@@ -30,4 +34,27 @@ export default defineConfig({
       },
     },
   },
-});
+  test: {
+    coverage: {
+      provider: "istanbul" as const,
+      reporter: ["text", "html", "lcov"],
+      reportsDirectory: "coverage",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.d.ts",
+        "src/test/**",
+        "src/shared/types/**",
+        "src/features/developer-portal/types.ts",
+      ],
+      thresholds: {
+        statements: adminCoverageMinimum,
+        branches: adminCoverageMinimum,
+        functions: adminCoverageMinimum,
+        lines: adminCoverageMinimum,
+      },
+    },
+  },
+};
+
+export default defineConfig(config);

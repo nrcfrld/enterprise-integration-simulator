@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@/test/setup";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ControlForm } from "./ControlForm";
@@ -249,6 +249,8 @@ describe("ControlForm critical mutations", () => {
       />,
     );
 
+    await user.click(screen.getByLabelText("order.created"));
+    await user.click(screen.getByLabelText("product.updated"));
     await user.click(screen.getByLabelText("Deliver events to this endpoint"));
     await user.click(screen.getByRole("button", { name: "Save settings →" }));
 
@@ -262,7 +264,61 @@ describe("ControlForm critical mutations", () => {
       "session-token",
       expect.objectContaining({ method: "PATCH" }),
     );
-    expect(requestBody()).toMatchObject({ enabled: false, secret: "" });
+    expect(requestBody()).toMatchObject({
+      enabled: false,
+      secret: "",
+      subscribed_events: ["product.updated"],
+    });
+  });
+
+  it("shows an empty inventory state when a shop has no warehouse", async () => {
+    requestMock.mockResolvedValue({ data: [] });
+    render(<ControlForm {...baseProps} kind="product" />);
+
+    expect(
+      await screen.findByText("Create a warehouse before adding a product."),
+    ).toBeVisible();
+    expect(requestMock).toHaveBeenCalledWith(
+      "/control/v1/shops/shop_1/warehouses?limit=100",
+      "session-token",
+    );
+  });
+
+  it("validates custom orders before sending a mutation", async () => {
+    requestMock.mockResolvedValue({ data: [] });
+    const user = userEvent.setup();
+    render(<ControlForm {...baseProps} kind="order" />);
+
+    await user.click(screen.getByRole("button", { name: "Custom order" }));
+    await screen.findByRole("option", { name: "Choose product" });
+    const form = screen.getByRole("button", { name: "Create →" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Add at least one product.",
+    );
+    expect(requestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables submit while a request is in flight", async () => {
+    let resolveRequest: ((value: object) => void) | undefined;
+    requestMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ControlForm {...baseProps} kind="credential" />);
+
+    await user.click(screen.getByRole("button", { name: "Create →" }));
+
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    resolveRequest?.({});
+    await waitFor(() =>
+      expect(baseProps.onSaved).toHaveBeenCalledWith("credential created"),
+    );
   });
 
   it("keeps the form open and displays an API failure", async () => {

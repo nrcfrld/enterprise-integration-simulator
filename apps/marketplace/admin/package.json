@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "prismjs": "^1.30.0",
@@ -28,6 +29,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "latest",
+    "@vitest/coverage-istanbul": "3.2.7",
     "daisyui": "^5.7.28",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.0.0",

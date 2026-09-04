@@ -34,6 +34,7 @@ function mockControlPlaneRequests() {
       return Promise.resolve({ products_seeded: 12, orders_seeded: 4 });
     }
     if (path.includes("/products")) return Promise.resolve({ data: [] });
+    if (path.includes("/orders")) return Promise.resolve({ data: [] });
     if (path.startsWith("/control/v1/dashboard")) {
       return Promise.resolve({ shops: 1, orders: 0, failed_deliveries: 0 });
     }
@@ -91,5 +92,28 @@ describe("ControlPlaneApp critical session and seed flows", () => {
       await screen.findByRole("heading", { name: "Enter the simulator" }),
     ).toBeVisible();
     expect(localStorage.getItem("marketplace-session")).toBeNull();
+  });
+
+  it("keeps route navigation and active menu state synchronized", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/products"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    const productsLink = screen.getByRole("link", { name: "Products" });
+    expect(productsLink).toHaveClass("menu-active");
+    await user.click(screen.getByRole("link", { name: "Orders" }));
+
+    expect(await screen.findByRole("heading", { name: "Orders" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Orders" })).toHaveClass("menu-active");
+    expect(productsLink).not.toHaveClass("menu-active");
+    await waitFor(() =>
+      expect(requestMock).toHaveBeenCalledWith(
+        "/control/v1/shops/shop_1/orders?page=1&limit=20",
+        "session-token",
+      ),
+    );
   });
 });

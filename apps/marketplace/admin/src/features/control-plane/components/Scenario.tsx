@@ -26,17 +26,28 @@ interface ScenarioProps {
 
 export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
   const [form, setForm] = useState<ScenarioConfig>(data || {});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => setForm(data || {}), [data]);
   if (!shopID)
     return (
       <p className="empty">Choose a shop before configuring fault injection.</p>
     );
   const save = async () => {
-    await request<unknown>(`/control/v1/shops/${shopID}/scenario`, token, {
-      method: "PUT",
-      body: JSON.stringify(form),
-    });
-    onSaved();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await request<unknown>(`/control/v1/shops/${shopID}/scenario`, token, {
+        method: "PUT",
+        body: JSON.stringify(form),
+      });
+      onSaved();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Request failed");
+    } finally {
+      setSaving(false);
+    }
   };
   const fields: Array<{ key: NumericScenarioKey; label: string; help: string }> = [
     {
@@ -134,8 +145,9 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
           </div>;
         })}
       </div>
-      <button className="btn btn-primary" onClick={save}>
-        Apply scenario <span>→</span>
+      {error && <p className="error alert alert-error" role="alert">{error}</p>}
+      <button className="btn btn-primary" disabled={saving} onClick={() => void save()}>
+        {saving ? "Applying…" : "Apply scenario"} {!saving && <span>→</span>}
       </button>
     </article>
   );

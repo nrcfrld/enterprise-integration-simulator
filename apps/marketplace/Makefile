@@ -7,12 +7,13 @@ GO_PACKAGES = $$(go list ./... | grep -v '/admin/node_modules/')
 CORE_PACKAGES = ./internal/auth ./internal/events ./internal/orders ./internal/products ./internal/ratelimit ./internal/scenarios ./internal/tokopedia ./internal/webhooks
 CORE_COVERAGE_MIN ?= 80
 CORE_COVERAGE_FILE ?= /tmp/marketplace-core-coverage.out
+ADMIN_COVERAGE_MIN ?= 60
 GOVULNCHECK_VERSION ?= v1.7.0
 ADMIN_DIR := admin
 
 .DEFAULT_GOAL := help
 .PHONY: help generate generate-check fmt fmt-check vet vuln lint lint-full test test-fast test-unit test-race test-integration coverage-core \
-	admin-test admin-lint admin-build test-all lint-all check \
+	admin-test admin-coverage admin-lint admin-build test-all lint-all check \
 	docker-build docker-build-api docker-build-worker docker-build-admin \
 	compose-build compose-up compose-down compose-logs compose-ps
 
@@ -72,6 +73,9 @@ test-integration: ## Run PostgreSQL/Redis integration tests using Testcontainers
 admin-test: ## Run Admin UI tests.
 	bun run --cwd $(ADMIN_DIR) test
 
+admin-coverage: ## Run Admin UI tests and enforce the configured coverage minimum.
+	ADMIN_COVERAGE_MIN=$(ADMIN_COVERAGE_MIN) bun run --cwd $(ADMIN_DIR) test:coverage
+
 admin-lint: ## Lint and type-check the Admin UI.
 	bun run --cwd $(ADMIN_DIR) lint
 	bun run --cwd $(ADMIN_DIR) typecheck
@@ -83,7 +87,7 @@ test-all: test ## Alias for the complete test suite.
 
 lint-all: lint admin-lint ## Run backend and Admin UI checks.
 
-check: generate-check lint-full vuln admin-lint test admin-build coverage-core ## Run the complete local quality gate.
+check: generate-check lint-full vuln admin-lint test admin-coverage admin-build coverage-core ## Run the complete local quality gate.
 
 docker-build: docker-build-api docker-build-worker docker-build-admin ## Build all local Docker images.
 

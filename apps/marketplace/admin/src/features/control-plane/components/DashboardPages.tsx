@@ -200,7 +200,7 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
           Return a documented 503 from the public API across every shop. Use it
           to validate maintenance handling, then turn it off again.
         </p>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error alert alert-error" role="alert">{error}</p>}
       </div>
       <label className="switch">
         <input

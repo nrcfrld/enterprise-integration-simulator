@@ -32,7 +32,7 @@ jobs:
         working-directory: apps/marketplace/admin
       - run: bun run typecheck
         working-directory: apps/marketplace/admin
-      - run: bun run test
+      - run: bun run test:coverage
         working-directory: apps/marketplace/admin
       - run: bun run build
         working-directory: apps/marketplace/admin

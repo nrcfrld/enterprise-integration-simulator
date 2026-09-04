@@ -72,8 +72,9 @@ make test-fast
 ```
 
 The full quality gate includes lint, a pinned reachable-vulnerability scan,
-frontend checks, core-domain coverage (minimum 80%), and isolated
-PostgreSQL/Redis Testcontainers:
+frontend checks and coverage (minimum 60% for statements, branches, functions,
+and lines), core-domain coverage (minimum 80%), and isolated PostgreSQL/Redis
+Testcontainers:
 
 ```bash
 make check
@@ -81,5 +82,6 @@ make check
 
 Use `make vuln` for only the Go vulnerability gate,
 `make test-integration` for the race-enabled integration/worker matrix, or
-`make docker-build` to verify all production images. The Go patch release is
-pinned consistently across the workspace, CI, and production build image.
+`make admin-coverage` to generate the Admin UI text, HTML, and LCOV reports.
+Use `make docker-build` to verify all production images. The Go patch release
+is pinned consistently across the workspace, CI, and production build image.

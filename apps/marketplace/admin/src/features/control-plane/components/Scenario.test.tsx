@@ -46,4 +46,35 @@ describe("Scenario critical save flow", () => {
       },
     );
   });
+
+  it("disables save while applying a scenario", async () => {
+    let resolveRequest: ((value: object) => void) | undefined;
+    requestMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+    const onSaved = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Scenario
+        token="session-token"
+        shopID="shop_1"
+        data={{}}
+        onSaved={onSaved}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Apply scenario →" }));
+    expect(screen.getByRole("button", { name: "Applying…" })).toBeDisabled();
+    resolveRequest?.({});
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+
+  it("renders an empty state until a shop is selected", () => {
+    render(<Scenario token="session-token" shopID="" data={null} onSaved={vi.fn()} />);
+
+    expect(screen.getByText(/Choose a shop before configuring fault injection/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Apply scenario/ })).not.toBeInTheDocument();
+  });
 });

@@ -94,6 +94,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
   const [warehouses, setWarehouses] = useState<WarehouseSummary[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const fields =
     ({
       shop: [["name", "Shop name"], ["provider_profile", "Marketplace behavior"]],
@@ -162,6 +163,9 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
   }, [initial, kind, shopID, token]);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting) return;
+    setError("");
+    setSubmitting(true);
     try {
       let path = "";
       let method = "POST";
@@ -269,6 +273,8 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setSubmitting(false);
     }
   };
   const title =
@@ -620,8 +626,17 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
           <button type="button" className="quiet btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary">
-            {initial ? (kind === "warehouse" ? "Save warehouse" : kind === "product" ? "Save product" : "Save settings") : "Create"} <span>→</span>
+          <button className="btn btn-primary" disabled={submitting}>
+            {submitting
+              ? "Saving…"
+              : initial
+                ? kind === "warehouse"
+                  ? "Save warehouse"
+                  : kind === "product"
+                    ? "Save product"
+                    : "Save settings"
+                : "Create"}{" "}
+            {!submitting && <span>→</span>}
           </button>
         </div>
       </form>

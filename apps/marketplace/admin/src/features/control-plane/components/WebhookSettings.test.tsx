@@ -47,6 +47,15 @@ describe("WebhookSettings critical actions", () => {
     expect(props.onForm).toHaveBeenCalledWith({ kind: "webhook", initial: hook });
   });
 
+  it("explains the required shop and empty registration states", () => {
+    const { rerender } = render(<WebhookSettings {...props} shopID="" />);
+    expect(screen.getByText(/Choose a shop first/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Register webhook/ })).not.toBeInTheDocument();
+
+    rerender(<WebhookSettings {...props} data={{ data: [] }} />);
+    expect(screen.getByText(/No webhook is registered yet/)).toBeVisible();
+  });
+
   it("enables a disabled webhook and preserves its subscription", async () => {
     requestMock.mockResolvedValue({});
     const user = userEvent.setup();
