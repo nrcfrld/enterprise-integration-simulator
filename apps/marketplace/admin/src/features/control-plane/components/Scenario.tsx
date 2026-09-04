@@ -88,7 +88,7 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
     },
   ];
   return (
-    <article className="scenario">
+    <article className="scenario card bg-base-100">
       <p className="eyebrow">Fault injection</p>
       <h2>Turn the happy path off.</h2>
       <div className="field-grid">
@@ -100,6 +100,7 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
               <ScenarioHelp id={helpID} label={label}>{help}</ScenarioHelp>
             </div>
             <input
+              className="input input-bordered"
               id={`scenario-${key}`}
               type="number"
               min="0"
@@ -118,6 +119,7 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
           return <div className="scenario-toggle" key={key}>
             <label htmlFor={`scenario-${key}`}>
               <input
+                className="toggle toggle-primary"
                 id={`scenario-${key}`}
                 type="checkbox"
                 checked={Boolean(form[key])}
@@ -132,7 +134,7 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
           </div>;
         })}
       </div>
-      <button onClick={save}>
+      <button className="btn btn-primary" onClick={save}>
         Apply scenario <span>→</span>
       </button>
     </article>

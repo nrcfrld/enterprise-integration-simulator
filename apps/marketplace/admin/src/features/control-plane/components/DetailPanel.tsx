@@ -220,8 +220,8 @@ export function DetailPanel({ detail, token, onClose, onRefresh, onNotice }: Det
   const shipmentStatus = detail.type === "shipment" ? data?.status : data?.shipment?.status;
   const nextShipmentAction = shipmentStatus ? shipmentActions[shipmentStatus] : undefined;
   return (
-    <div className="modal-backdrop">
-      <section className="modal-card detail-card">
+    <div className="modal-backdrop modal modal-open">
+      <section className="modal-card modal-box detail-card">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">
@@ -237,7 +237,7 @@ export function DetailPanel({ detail, token, onClose, onRefresh, onNotice }: Det
             </p>
             <h2>{data?.tracking_number || data?.order_number || data?.id || "Loading…"}</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button className="icon-button btn btn-circle btn-ghost btn-sm" onClick={onClose}>
             ×
           </button>
         </div>

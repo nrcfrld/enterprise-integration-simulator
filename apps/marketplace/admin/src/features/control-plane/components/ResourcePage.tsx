@@ -78,7 +78,7 @@ export function ResourcePage({
   };
   return (
     <>
-      <div className="page-hint">
+      <div className="page-hint alert alert-info">
         {page === "Orders"
           ? "Orders trigger the event timeline. Inspect one to see every resulting webhook delivery."
           : page === "Shipments"
@@ -91,12 +91,12 @@ export function ResourcePage({
       </div>
       <div className="table-toolbar">
         {action && (
-          <button onClick={() => onForm({ kind: action[0] })}>
+          <button className="btn btn-primary" onClick={() => onForm({ kind: action[0] })}>
             + {action[1]}
           </button>
         )}
         {page === "Products" && shopID && (
-          <button className="danger" disabled={isSeeding} onClick={() => void onSeed()}>
+          <button className="danger btn btn-error btn-soft" disabled={isSeeding} onClick={() => void onSeed()}>
             {isSeeding ? "Resetting…" : "Reset to seed"}
           </button>
         )}
@@ -104,9 +104,9 @@ export function ResourcePage({
           {rows.length} record{rows.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="table-wrap">
+      <div className="table-wrap card bg-base-100">
         {rows.length ? (
-          <table className="records-table">
+          <table className="records-table table table-zebra">
             <thead>
               <tr>
                 {columns(rows[0], page).map((key) => (
@@ -126,8 +126,8 @@ export function ResourcePage({
                   <td className="row-actions" data-label="Actions">
                     {page === "Products" && (
                       <>
-                        <button onClick={() => onForm({ kind: "product", initial: row })}>Edit product</button>
-                        <button className="danger" onClick={() => archiveProduct(row)}>Archive</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => onForm({ kind: "product", initial: row })}>Edit product</button>
+                        <button className="danger btn btn-error btn-soft btn-sm" onClick={() => archiveProduct(row)}>Archive</button>
                       </>
                     )}
                     {page === "Orders" && (
@@ -215,10 +215,10 @@ export function Pagination({ pagination, page, onChange }: PaginationProps) {
         Page {current} of {totalPages} <span>· {total} records</span>
       </p>
       <div>
-        <button className="quiet" disabled={current <= 1} onClick={() => onChange(current - 1)}>
+        <button className="quiet btn btn-ghost btn-sm" disabled={current <= 1} onClick={() => onChange(current - 1)}>
           Previous
         </button>
-        <button disabled={current >= totalPages} onClick={() => onChange(current + 1)}>
+        <button className="btn btn-primary btn-sm" disabled={current >= totalPages} onClick={() => onChange(current + 1)}>
           Next
         </button>
       </div>

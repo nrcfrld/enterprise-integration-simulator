@@ -131,7 +131,7 @@ function EndpointArticle({ endpoint, onTry }: { endpoint: PortalEndpoint; onTry:
   const envelope = responseRows(endpoint.contract, emptyResponse);
   const payloadRequired = requestFields.some((field) => field.required);
 
-  return <article className="endpoint-reference" id={`endpoint-${endpoint.id}`} tabIndex={-1}>
+  return <article className="endpoint-reference card bg-base-100" id={`endpoint-${endpoint.id}`} tabIndex={-1}>
     <header className="endpoint-header">
       <div className="endpoint-title"><HttpMethod method={endpoint.method} /><code>{endpoint.path}</code></div>
       <span className={`provider-label ${endpoint.contract}`}>{contractLabels[endpoint.contract]}</span>
@@ -176,7 +176,7 @@ function EndpointArticle({ endpoint, onTry }: { endpoint: PortalEndpoint; onTry:
       <CodeSnippet value={endpoint.errorResponse} language="json" />
     </section>
 
-    <div className="endpoint-action"><span>Ready to send it?</span><button type="button" className="quiet" onClick={() => onTry(endpoint.id)}>Open in request simulator</button></div>
+    <div className="endpoint-action"><span>Ready to send it?</span><button type="button" className="quiet btn btn-primary btn-sm" onClick={() => onTry(endpoint.id)}>Open in request simulator</button></div>
   </article>;
 }
 
@@ -199,9 +199,9 @@ export function ApiReference({ title, description, note, groups, endpoints, onTr
 
   return <>
     <section className="reference-heading"><h2>{title}</h2><p>{description}</p></section>
-    <div className="reference-note"><b>Before you call</b><p>{note}</p></div>
+    <div className="reference-note alert alert-info"><b>Before you call</b><p>{note}</p></div>
     <div className="api-reference-layout">
-      <aside className="reference-endpoint-nav" aria-label={`${title} endpoint navigation`}>
+      <aside className="reference-endpoint-nav menu" aria-label={`${title} endpoint navigation`}>
         <div className="endpoint-nav-heading"><b>On this page</b><span>{items.length} endpoints</span></div>
         {contractOrder.map((contract) => {
           const contractItems = items.filter((endpoint) => endpoint.contract === contract);

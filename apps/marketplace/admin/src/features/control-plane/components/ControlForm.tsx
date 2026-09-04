@@ -15,6 +15,16 @@ const webhookEvents = [
   "order.shipped", "order.in_delivery", "order.delivered", "order.completed",
   "order.cancelled", "product.created", "product.updated", "product.deleted",
 ];
+const webhookEventGroups = [
+  {
+    label: "Order lifecycle",
+    events: webhookEvents.filter((eventName) => eventName.startsWith("order.")),
+  },
+  {
+    label: "Product updates",
+    events: webhookEvents.filter((eventName) => eventName.startsWith("product.")),
+  },
+];
 
 interface OrderItemInput {
   product_id: string;
@@ -276,14 +286,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             : "Register webhook destination"
           : `Create ${kind}`;
   return (
-    <div className="modal-backdrop" role="presentation">
-      <form className="modal-card" onSubmit={submit}>
+    <div className="modal-backdrop modal modal-open" role="presentation">
+      <form className="modal-card modal-box" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Control plane action</p>
             <h2>{title}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button type="button" className="icon-button btn btn-circle btn-ghost btn-sm" onClick={onClose}>
             ×
           </button>
         </div>
@@ -300,14 +310,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             >
               <button
                 type="button"
-                className={orderMode === "random" ? "selected" : "quiet"}
+                className={`btn btn-sm ${orderMode === "random" ? "selected btn-primary" : "quiet btn-ghost"}`}
                 onClick={() => setOrderMode("random")}
               >
                 Random order
               </button>
               <button
                 type="button"
-                className={orderMode === "custom" ? "selected" : "quiet"}
+                className={`btn btn-sm ${orderMode === "custom" ? "selected btn-primary" : "quiet btn-ghost"}`}
                 onClick={() => setOrderMode("custom")}
               >
                 Custom order
@@ -324,7 +334,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                   <b>Items</b>
                   <button
                     type="button"
-                    className="quiet"
+                    className="quiet btn btn-ghost btn-sm"
                     onClick={() =>
                       setValues((current) => ({
                         ...current,
@@ -344,6 +354,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                     key={`${index}-${item.product_id}`}
                   >
                     <select
+                      className="select select-bordered"
                       required
                       value={item.product_id}
                       disabled={productsLoading}
@@ -363,6 +374,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                       ))}
                     </select>
                     <input
+                      className="input input-bordered"
                       aria-label={`Quantity for item ${index + 1}`}
                       type="number"
                       min="1"
@@ -375,7 +387,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                     {values.items.length > 1 && (
                       <button
                         type="button"
-                        className="quiet"
+                        className="quiet btn btn-ghost btn-sm"
                         onClick={() => removeOrderItem(index)}
                       >
                         Remove
@@ -447,6 +459,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                 {values.warehouse_inventory.map((allocation, index) => (
                   <div className="inventory-allocation-row" key={`${index}-${allocation.warehouse_id}`}>
                     <select
+                      className="select select-bordered"
                       required
                       value={allocation.warehouse_id}
                       onChange={(event) => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.map((item, itemIndex) => itemIndex === index ? { ...item, warehouse_id: event.target.value } : item) }))}
@@ -459,6 +472,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                       ))}
                     </select>
                     <input
+                      className="input input-bordered"
                       aria-label={`Initial quantity for warehouse ${index + 1}`}
                       type="number"
                       min="0"
@@ -467,12 +481,12 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                       onChange={(event) => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.map((item, itemIndex) => itemIndex === index ? { ...item, on_hand_quantity: event.target.value } : item) }))}
                     />
                     {values.warehouse_inventory.length > 1 && (
-                      <button type="button" className="quiet" onClick={() => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
+                      <button type="button" className="quiet btn btn-ghost btn-sm" onClick={() => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
                     )}
                   </div>
                 ))}
                 <div className="inventory-allocation-footer">
-                  <button type="button" className="quiet" disabled={values.warehouse_inventory.length >= warehouses.length} onClick={() => setValues((current) => ({ ...current, warehouse_inventory: [...current.warehouse_inventory, { warehouse_id: "", on_hand_quantity: 0 }] }))}>+ Add warehouse</button>
+                  <button type="button" className="quiet btn btn-ghost btn-sm" disabled={values.warehouse_inventory.length >= warehouses.length} onClick={() => setValues((current) => ({ ...current, warehouse_inventory: [...current.warehouse_inventory, { warehouse_id: "", on_hand_quantity: 0 }] }))}>+ Add warehouse</button>
                   <b>Total sellable stock: {values.warehouse_inventory.reduce((total, allocation) => total + (Number(allocation.on_hand_quantity) || 0), 0)}</b>
                 </div>
               </>
@@ -486,57 +500,70 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         )}
         {kind === "webhook" && (
           <>
-            <p>
+            <p className="webhook-form-intro">
               Choose the events this endpoint should receive. It does not emit
               events itself.
             </p>
-            <label>
-              Endpoint URL
-              <input
-                required
-                type="url"
-                value={inputValue(values.url)}
-                placeholder="https://example.test/webhooks/marketplace"
-                onChange={(event) => update("url", event.target.value)}
-              />
-            </label>
-            <label>
-              Replace secret (optional)
-              <input
-                value={inputValue(values.secret)}
-                placeholder={
-                  initial
-                    ? "Leave blank to keep the current secret"
-                    : "Leave blank to generate one"
-                }
-                onChange={(event) => update("secret", event.target.value)}
-              />
-            </label>
+            <div className="webhook-primary-fields">
+              <label>
+                Endpoint URL
+                <input
+                  className="input input-bordered"
+                  required
+                  type="url"
+                  value={inputValue(values.url)}
+                  placeholder="https://example.test/webhooks/marketplace"
+                  onChange={(event) => update("url", event.target.value)}
+                />
+              </label>
+              <label>
+                Replace secret (optional)
+                <input
+                  className="input input-bordered"
+                  value={inputValue(values.secret)}
+                  placeholder={
+                    initial
+                      ? "Leave blank to keep the current secret"
+                      : "Leave blank to generate one"
+                  }
+                  onChange={(event) => update("secret", event.target.value)}
+                />
+              </label>
+            </div>
             <fieldset className="event-selector">
               <legend>Subscribed events</legend>
-              {webhookEvents.map((eventName) => (
-                <label key={eventName}>
-                  <input
-                    type="checkbox"
-                    checked={values.subscribed_events.includes(eventName)}
-                    onChange={(event) =>
-                      update(
-                        "subscribed_events",
-                        event.target.checked
-                          ? [...values.subscribed_events, eventName]
-                          : values.subscribed_events.filter(
-                              (item: string) => item !== eventName,
-                            ),
-                      )
-                    }
-                  />
-                  {eventName}
-                </label>
+              {webhookEventGroups.map((group) => (
+                <div className="event-selector-group" key={group.label}>
+                  <span>{group.label}</span>
+                  <div className="event-option-grid">
+                    {group.events.map((eventName) => (
+                      <label className="event-option" key={eventName}>
+                        <input
+                          className="checkbox checkbox-primary checkbox-sm"
+                          type="checkbox"
+                          checked={values.subscribed_events.includes(eventName)}
+                          onChange={(event) =>
+                            update(
+                              "subscribed_events",
+                              event.target.checked
+                                ? [...values.subscribed_events, eventName]
+                                : values.subscribed_events.filter(
+                                    (item: string) => item !== eventName,
+                                  ),
+                            )
+                          }
+                        />
+                        <span>{eventName}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </fieldset>
             {initial && (
               <label className="switch">
                 <input
+                  className="toggle toggle-primary"
                   type="checkbox"
                   checked={Boolean(values.enabled)}
                   onChange={(event) => update("enabled", event.target.checked)}
@@ -551,6 +578,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             {label}
             {key === "role" ? (
               <select
+                className="select select-bordered"
                 value={inputValue(values[key]) || "OPERATOR"}
                 onChange={(event) => update(key, event.target.value)}
               >
@@ -559,6 +587,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               </select>
             ) : key === "status" ? (
               <select
+                className="select select-bordered"
                 value={inputValue(values[key]) || "ACTIVE"}
                 onChange={(event) => update(key, event.target.value)}
               >
@@ -567,6 +596,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               </select>
             ) : key === "provider_profile" ? (
               <select
+                className="select select-bordered"
                 value={inputValue(values[key]) || "SHOPEE_LIKE"}
                 onChange={(event) => update(key, event.target.value)}
               >
@@ -575,6 +605,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               </select>
             ) : (
               <input
+                className="input input-bordered"
                 type={type}
                 required={key !== "description"}
                 disabled={kind === "product" && initial && key === "sku"}
@@ -584,12 +615,12 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             )}
           </label>
         ))}
-        {error && <p className="error">{error}</p>}
-        <div className="form-actions">
-          <button type="button" className="quiet" onClick={onClose}>
+        {error && <p className="error alert alert-error" role="alert">{error}</p>}
+        <div className="form-actions modal-action">
+          <button type="button" className="quiet btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button>
+          <button className="btn btn-primary">
             {initial ? (kind === "warehouse" ? "Save warehouse" : kind === "product" ? "Save product" : "Save settings") : "Create"} <span>→</span>
           </button>
         </div>

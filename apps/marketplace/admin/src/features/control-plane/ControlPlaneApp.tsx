@@ -199,7 +199,7 @@ export function ControlPlaneApp() {
   const isDocumentation = page === "Documentation";
   return (
     <main className={isDocumentation ? "documentation-shell" : "app-shell"}>
-      {!isDocumentation && <aside>
+      {!isDocumentation && <aside className="sidebar-panel">
         <div className="brand">
           <span className="signal"></span>
           <span>
@@ -208,7 +208,7 @@ export function ControlPlaneApp() {
             OPS
           </span>
         </div>
-        <nav className="sidebar-navigation" aria-label="Primary navigation">
+        <nav className="sidebar-navigation menu" aria-label="Primary navigation">
           {navigation.map((section) => (
             <div className="navigation-section" key={section.label}>
               <p className="nav-label">{section.label}</p>
@@ -219,7 +219,7 @@ export function ControlPlaneApp() {
                   title={item.description}
                   className={
                     page === item.page && item.showActiveState !== false
-                      ? "active"
+                      ? "active menu-active"
                       : ""
                   }
                 >
@@ -231,11 +231,11 @@ export function ControlPlaneApp() {
         </nav>
         <div className="profile">
           <span>{session.user.email}</span>
-          <button onClick={logout}>Sign out</button>
+          <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
         </div>
       </aside>}
       <section className={`workspace ${isDocumentation ? "documentation-workspace" : ""}`}>
-        {!isDocumentation && <header>
+        {!isDocumentation && <header className="workspace-header navbar">
           <div>
             <p className="eyebrow">
               {page === "Dashboard" ? "Integration runbook" : "Control plane"}
@@ -251,7 +251,7 @@ export function ControlPlaneApp() {
                     <button
                       key={profile}
                       type="button"
-                      className={providerFilter === profile ? "active" : ""}
+                      className={`btn btn-xs ${providerFilter === profile ? "active btn-primary" : "btn-ghost"}`}
                       aria-pressed={providerFilter === profile}
                       onClick={() => chooseOrderProvider(profile)}
                     >
@@ -264,6 +264,7 @@ export function ControlPlaneApp() {
             <label className="shop-selector">
               <span>{page === "Orders" ? "Order scope" : "Current shop"}</span>
               <select
+                className="select select-bordered"
                 aria-label="Current shop"
                 value={shopID}
                 onChange={(event) => setShopID(event.target.value)}
@@ -277,16 +278,16 @@ export function ControlPlaneApp() {
               </select>
             </label>
             {page === "Orders" && selectedShop && (
-              <span className={`provider-badge ${selectedShop.provider_profile?.toLowerCase()}`}>
+              <span className={`provider-badge badge badge-secondary ${selectedShop.provider_profile?.toLowerCase()}`}>
                 {providerLabel(selectedShop.provider_profile)}
               </span>
             )}
           </div>
         </header>}
         {message && (
-          <p className={`toast ${message.type}`} role="alert">
+          <p className={`toast alert ${message.type === "error" ? "alert-error" : "alert-success"}`} role="alert">
             {message.text}
-            <button onClick={() => setMessage(null)}>×</button>
+            <button className="btn btn-ghost btn-xs" onClick={() => setMessage(null)}>×</button>
           </p>
         )}
         <section className={`content ${isDocumentation ? "documentation-content" : ""}`}>

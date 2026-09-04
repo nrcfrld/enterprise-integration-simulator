@@ -70,7 +70,7 @@ test-integration: ## Run PostgreSQL/Redis integration tests using Testcontainers
 	go test -race -count=1 -tags=testcontainers ./integration ./cmd/worker -v
 
 admin-test: ## Run Admin UI tests.
-	bun --cwd $(ADMIN_DIR) test
+	bun run --cwd $(ADMIN_DIR) test
 
 admin-lint: ## Lint and type-check the Admin UI.
 	bun run --cwd $(ADMIN_DIR) lint

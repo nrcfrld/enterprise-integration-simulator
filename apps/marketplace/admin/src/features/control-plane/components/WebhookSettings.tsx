@@ -53,7 +53,7 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
     );
   return (
     <>
-      <section className="webhook-explainer">
+      <section className="webhook-explainer card">
         <p className="eyebrow">Registration settings</p>
         <h2>Tell the simulator where to send matching events.</h2>
         <p>
@@ -61,17 +61,17 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
           creates an event; this registration decides whether it is delivered to
           your endpoint.
         </p>
-        <button onClick={() => onForm({ kind: "webhook" })}>
+        <button className="btn btn-primary" onClick={() => onForm({ kind: "webhook" })}>
           + Register webhook <span>→</span>
         </button>
       </section>
       <div className="webhook-list">
         {hooks.length ? (
           hooks.map((hook) => (
-            <article key={hook.id} className={!hook.enabled ? "disabled" : ""}>
+            <article key={hook.id} className={`card bg-base-100 ${!hook.enabled ? "disabled" : ""}`}>
               <div className="webhook-head">
                 <div>
-                  <span className={`state ${hook.enabled ? "on" : "off"}`}>
+                  <span className={`state badge ${hook.enabled ? "on badge-success" : "off badge-ghost"}`}>
                     {hook.enabled ? "Enabled" : "Disabled"}
                   </span>
                   <h3>{hook.url}</h3>
@@ -79,15 +79,15 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
                 </div>
                 <div className="row-actions">
                   <button
-                    className="quiet"
+                    className="quiet btn btn-ghost btn-sm"
                     onClick={() => onForm({ kind: "webhook", initial: hook })}
                   >
                     Edit
                   </button>
-                  <button className="quiet" onClick={() => toggle(hook)}>
+                  <button className="quiet btn btn-ghost btn-sm" onClick={() => toggle(hook)}>
                     {hook.enabled ? "Disable" : "Enable"}
                   </button>
-                  <button className="danger" onClick={() => remove(hook.id)}>
+                  <button className="danger btn btn-error btn-soft btn-sm" onClick={() => remove(hook.id)}>
                     Delete
                   </button>
                 </div>

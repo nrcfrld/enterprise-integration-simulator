@@ -75,26 +75,26 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
   ];
   return (
     <>
-      <div className="status-strip">
+      <div className="status-strip alert alert-success">
         <span>
           <i className="live"></i> Simulator online
         </span>
         <span>Follow the runbook from setup to delivery.</span>
       </div>
-      <div className="metrics">
+      <div className="metrics stats">
         {[
           ["Shops", data?.shops],
           ["Orders", data?.orders],
           ["Failed deliveries", data?.failed_deliveries],
         ].map(([label, value]) => (
-          <article key={label}>
-            <p>{label}</p>
-            <strong>{value ?? "—"}</strong>
+          <article className="stat" key={label}>
+            <p className="stat-title">{label}</p>
+            <strong className="stat-value">{value ?? "—"}</strong>
           </article>
         ))}
       </div>
       <section className="runbook">
-        <div className="runbook-intro">
+        <div className="runbook-intro card">
           <p className="eyebrow">Start here</p>
           <h2>Set up an integration in five deliberate moves.</h2>
           <p>
@@ -112,7 +112,7 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
                 <p>{description}</p>
               </div>
               <button
-                className="quiet"
+                className="quiet btn btn-ghost btn-sm"
                 disabled={(!shopID && number !== "1") || (title === "Prepare catalog" && isSeeding)}
                 onClick={() => void action()}
               >
@@ -131,7 +131,7 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
           ))}
         </ol>
       </section>
-      <section className="setup-readiness" aria-label="Integration setup readiness">
+      <section className="setup-readiness card" aria-label="Integration setup readiness">
         <div>
           <h2>Setup readiness</h2>
           <p>{data?.setup?.ready ? "This shop is ready for an end-to-end integration." : "Complete the remaining setup before triggering a delivery."}</p>
@@ -156,7 +156,7 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
           <i>→</i>
           <span>Delivery log</span>
         </div>
-        <button disabled={!shopID} onClick={() => onNavigate("Orders")}>
+        <button className="btn btn-primary" disabled={!shopID} onClick={() => onNavigate("Orders")}>
           View orders and events <span>→</span>
         </button>
       </section>
@@ -192,7 +192,7 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
     }
   };
   return (
-    <section className={`maintenance-control ${enabled ? "active" : ""}`}>
+    <section className={`maintenance-control card ${enabled ? "active" : ""}`}>
       <div>
         <p className="eyebrow">Admin-only global control</p>
         <h2>Maintenance mode</h2>
@@ -204,6 +204,7 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
       </div>
       <label className="switch">
         <input
+          className="toggle toggle-primary"
           type="checkbox"
           checked={enabled}
           disabled={loading || saving}
@@ -227,12 +228,12 @@ export function Shops({ data, onSelect, onForm, listPage, onPageChange }: ShopsP
   const shops = (data?.data ?? []) as Shop[];
   return (
     <>
-      <div className="page-hint">
+      <div className="page-hint alert alert-info">
         A shop isolates catalog data, credentials, webhook registrations, and
         failure scenarios for one integration participant.
       </div>
       <div className="table-toolbar">
-        <button onClick={() => onForm({ kind: "shop" })}>+ New shop</button>
+        <button className="btn btn-primary" onClick={() => onForm({ kind: "shop" })}>+ New shop</button>
         <span>
           {shops.length} shop{shops.length === 1 ? "" : "s"}
         </span>
@@ -241,7 +242,7 @@ export function Shops({ data, onSelect, onForm, listPage, onPageChange }: ShopsP
         {shops.length ? (
           shops.map((shop) => (
             <button
-              className="record shop"
+              className="record shop card"
               key={shop.id}
               onClick={() => onSelect(shop.id)}
             >
@@ -250,7 +251,7 @@ export function Shops({ data, onSelect, onForm, listPage, onPageChange }: ShopsP
                 <b>{shop.name}</b>
                 <small>{shop.id}</small>
               </span>
-              <em className={`provider-badge ${shop.provider_profile?.toLowerCase()}`}>
+              <em className={`provider-badge badge badge-secondary ${shop.provider_profile?.toLowerCase()}`}>
                 {providerLabel(shop.provider_profile)}
               </em>
               <em>{shop.status}</em>
