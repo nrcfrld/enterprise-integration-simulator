@@ -4,7 +4,7 @@ ROOT_DIR := $(abspath ../..)
 COMPOSE := docker compose -f $(ROOT_DIR)/docker-compose.yml
 GO_FILES = $$(find . -type f -name '*.go' -not -path './admin/*')
 GO_PACKAGES = $$(go list ./... | grep -v '/admin/node_modules/')
-CORE_PACKAGES = ./internal/auth ./internal/events ./internal/orders ./internal/products ./internal/ratelimit ./internal/scenarios ./internal/tokopedia ./internal/webhooks
+CORE_PACKAGES = ./internal/auth ./internal/events ./internal/idempotency ./internal/inventory ./internal/orders ./internal/products ./internal/ratelimit ./internal/scenarios ./internal/tokopedia ./internal/webhooks
 CORE_COVERAGE_MIN ?= 80
 CORE_COVERAGE_FILE ?= /tmp/marketplace-core-coverage.out
 ADMIN_COVERAGE_MIN ?= 60
@@ -55,8 +55,20 @@ lint-full: lint ## Run golangci-lint too (requires golangci-lint on PATH).
 test-unit: ## Run Go unit and package tests.
 	go test $(GO_PACKAGES)
 
-coverage-core: ## Enforce at least 80% statement coverage for core domain packages.
+coverage-core: ## Enforce at least 80% statement coverage per core package and in aggregate.
 	go test $(CORE_PACKAGES) -covermode=atomic -coverprofile=$(CORE_COVERAGE_FILE)
+	@awk -v minimum="$(CORE_COVERAGE_MIN)" 'NR > 1 { \
+		split($$1, location, ":"); package = location[1]; sub("/[^/]+$$", "", package); \
+		total[package] += $$2; if ($$3 > 0) covered[package] += $$2 \
+	} END { \
+		failed = 0; \
+		for (package in total) { \
+			coverage = 100 * covered[package] / total[package]; display = package; sub("^.*/internal/", "internal/", display); \
+			if (coverage + 0 < minimum + 0) { printf "%s coverage %.1f%% is below %.1f%%\n", display, coverage, minimum; failed = 1 } \
+			else { printf "%s coverage %.1f%% meets %.1f%% minimum\n", display, coverage, minimum } \
+		} \
+		exit failed \
+	}' $(CORE_COVERAGE_FILE)
 	@coverage="$$(go tool cover -func=$(CORE_COVERAGE_FILE) | awk '/^total:/ {gsub(/%/, "", $$3); print $$3}')"; \
 	awk -v coverage="$$coverage" -v minimum="$(CORE_COVERAGE_MIN)" 'BEGIN { if (coverage + 0 < minimum + 0) { printf "Core coverage %.1f%% is below %.1f%%\n", coverage, minimum; exit 1 } printf "Core coverage %.1f%% meets %.1f%% minimum\n", coverage, minimum }'
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,9 +38,14 @@ type Result struct {
 	Body    []byte
 }
 
+type database interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Manager owns PostgreSQL-backed idempotency claims.
 type Manager struct {
-	db    *pgxpool.Pool
+	db    database
 	lease time.Duration
 }
 

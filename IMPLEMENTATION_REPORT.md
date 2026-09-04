@@ -1,6 +1,6 @@
 # Implementation Report — Enterprise Integration Simulator
 
-Audit date: 2026-09-03
+Audit date: 2026-09-04
 PRD: Enterprise Integration Simulator v0.2, updated by Order Lifecycle & API Brief  
 Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
@@ -11,6 +11,24 @@ Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 The original Marketplace and Order Lifecycle requirements remain complete. The update replaces the obsolete `CREATED → CONFIRMED → …` order flow with `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`, keeping cancellation only before shipment. The latest update also separates Admin **Shipments** from Orders: creation remains exclusively in the public API, while the control plane lists, inspects, and advances existing fulfillment records. Verification is behavior-driven, not inferred from routes or source-file presence.
 
 The Provider/Payment/Package P0 expansion is complete: provider-specific detail/UI, package workflow/Admin visibility, and worker integration coverage have been implemented and verified with Testcontainers. P1 is also complete: `SHOPEE_LIKE` changes the external integration boundary—not only stored state—through a separate API prefix, signing protocol, pagination/error/rate-limit contract, and webhook representation. P2 is complete: `TOKOPEDIA_LIKE` now models the combined Tokopedia & Shop / TikTok Shop contract with its own authenticated API, status vocabulary, webhook envelope, inventory safety, and return-to-sender behavior.
+
+### Latest update — Backend core coverage hardening
+
+- Added direct table-driven unit tests for idempotency claim acquisition,
+  replay/conflict/in-progress decisions, lease renewal, completion, and release.
+  A narrow internal database interface makes those failure paths testable while
+  preserving the public constructor and production PostgreSQL implementation.
+- Added direct unit coverage for warehouse allocation, reservation release, and
+  package fulfillment, including scan/query failures, inventory drift, invalid
+  reservation state, and duplicate/invalid order lines.
+- Expanded the core coverage gate to include `idempotency` and `inventory` and
+  to enforce the 80% minimum on every core package as well as the aggregate.
+  Current statement coverage is 100.0% for idempotency, 96.6% for inventory,
+  98.1% for orders, 98.2% for products, and 93.8% aggregate.
+- **Product & DX Review:** domain failure behavior, internal database seams,
+  backend tests, local Make targets, CI enforcement, checklist, and audit
+  evidence were updated together. Public routes, OpenAPI, Developer Portal,
+  Request Simulator, examples, and Admin UI behavior are unchanged.
 
 ### Latest update — Audit priority P0 security closure
 
@@ -126,8 +144,9 @@ The Provider/Payment/Package P0 expansion is complete: provider-specific detail/
 
 Current verification: `make check` passes the complete lint, frontend, unit,
 race-enabled PostgreSQL/Redis Testcontainers, production frontend build, and
-81.1% core-domain coverage gate, including `govulncheck`; the frontend suite
-contains 25 passing tests.
+93.8% core-domain coverage gate, including `govulncheck`; the frontend suite
+contains 74 passing tests. Every package selected by the core gate independently
+meets the 80% statement threshold.
 `make test-race` and `make lint-full` also pass independently with zero
 `golangci-lint` issues. All three production images build, all five Compose
 services report healthy, Goose reports applied migration version 12, and API
@@ -313,6 +332,9 @@ Implemented in the current increment:
 | Rebuild/recreate Admin after audit-priority P2 closure | PASS — all five Compose services healthy; `/ready` is ready, `/docs` returns 200, and the served production bundle contains all three provider pagination markers. |
 | `make check` after audit-priority P0 security closure | PASS — generated bindings clean; zero lint issues; `govulncheck` reports 0 reachable vulnerabilities; 25 frontend tests plus typecheck/build; race-enabled Testcontainers integration 106.414s and worker 38.073s; core coverage 81.1%. |
 | Final API/worker Docker build, binary metadata, and binary-mode vulnerability scan | PASS — both binaries use Go 1.25.14 and patched dependency versions; both scans report 0 reachable vulnerabilities; recreated services are healthy and `/health` plus `/ready` succeed. |
+| `cd apps/marketplace && make check` after backend core coverage hardening | PASS — generated bindings clean; zero Go lint issues; 0 reachable vulnerabilities; 74 frontend tests plus coverage/build; race-enabled PostgreSQL/Redis Testcontainers; all 10 core packages independently meet 80%; aggregate core coverage 93.8%. |
+| `go test -race ./internal/idempotency ./internal/inventory ./internal/orders ./internal/products` | PASS — focused race detection covers all packages changed by the backend coverage work. |
+| `make coverage-core CORE_COVERAGE_MIN=99` negative gate check | EXPECTED FAIL — packages below 99% are reported individually, proving the per-package threshold cannot be masked by aggregate coverage. |
 
 ## E2E flows verified
 

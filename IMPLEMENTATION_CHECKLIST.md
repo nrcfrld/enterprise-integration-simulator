@@ -1,11 +1,16 @@
 # Implementation Checklist — Enterprise Integration Simulator
 
-Audit date: 2026-09-03
+Audit date: 2026-09-04
 Scope: Marketplace Simulator, PRD v0.2 as superseded for orders by **Order Lifecycle & API Brief**
 
 Status summary: **85 COMPLETE · 0 PARTIAL · 0 NOT_IMPLEMENTED**
 
 The status below is based on executable evidence, not merely the presence of a route or source file. `Testcontainers` means isolated PostgreSQL and Redis containers; `Compose E2E` means the independently running Docker stack.
+
+Latest verification: `make check` passes with 74 frontend tests and 93.8%
+aggregate backend core statement coverage. The gate also verifies every selected
+core package independently at a minimum of 80%; `idempotency` is at 100.0%,
+`inventory` 96.6%, `orders` 98.1%, and `products` 98.2%.
 
 | # | Requirement | Status | Implementation location | Test / evidence |
 |---:|---|---|---|---|
@@ -18,7 +23,7 @@ The status below is based on executable evidence, not merely the presence of a r
 | 7 | Admin control panel provides Dashboard, Shops, Products, Orders, Order Detail, Credentials, Webhooks, Deliveries, and Scenarios. | COMPLETE | `admin/src/features/control-plane/ControlPlaneApp.tsx` | Authenticated browser verification rendered every page with live seeded data and no console errors. |
 | 8 | API contract is specification-first OpenAPI with Swagger and integration documentation. | COMPLETE | `openapi/openapi.yaml`, `internal/api/openapi/client.gen.go`, `docs/marketplace/*` | Served `/openapi.yaml` and `/swagger/index.html`; generator and `TestSwaggerUIIsServedFromTheCommittedOpenAPISpec` pass. |
 | 9 | Structured logging and operational metrics are available. | COMPLETE | `internal/observability`, `cmd/api/main.go`, `cmd/worker/main.go` | Compose worker logs structured delivery records; `/metrics`, request IDs, `/health`, and `/ready` implemented. |
-| 10 | Go tests plus real PostgreSQL/Redis Testcontainers cover priority integration behavior. | COMPLETE | `integration/*_test.go`, `cmd/worker/testcontainers_test.go` | Full race-enabled Testcontainers suite passes. |
+| 10 | Go tests plus real PostgreSQL/Redis Testcontainers cover priority integration behavior. | COMPLETE | `internal/*`, `integration/*_test.go`, `cmd/worker/testcontainers_test.go`, `Makefile` | Full race-enabled Testcontainers suite passes; every selected core package and the 93.8% aggregate independently meet the 80% statement-coverage gate. |
 | 11 | Generic dummy data is separated from Marketplace domain data and uses gofakeit. | COMPLETE | `packages/dummy-generator`, `internal/products/seed.go` | `packages/dummy-generator`: `go test ./...` passes; reset produces 100 products / 50 orders. |
 | 12 | `docker compose up --build` starts API, worker, PostgreSQL, Redis, and Admin UI. | COMPLETE | `docker-compose.yml`, Dockerfiles | Final Compose build completed; all five services were Up and PostgreSQL/Redis healthy. |
 | 13 | Multiple shops are supported and data is isolated per shop. | COMPLETE | `shops` schema, control API, `internal/store/queries.sql` | `TestContainerResetPermissionAndTransactionalOutbox` and `TestContainerRateLimitAndScenarioIsolation` pass. |
@@ -92,7 +97,7 @@ The status below is based on executable evidence, not merely the presence of a r
 | 80 | Warehouse migration and all existing backend/frontend/provider workflows have regression coverage without Compose/browser E2E. | COMPLETE | `integration/testcontainers_server_test.go`, `cmd/worker/testcontainers_test.go` | `go test ./...`, dummy-generator tests, frontend checks, and `go test -count=1 -race -tags=testcontainers ./integration ./cmd/worker` all pass; Compose/browser E2E was intentionally excluded by user constraint. |
 | 81 | Generic order-provider schema and behavior are removed; the only supported order profiles are Shopee-like and Tokopedia-like. | COMPLETE | migrations `009`, `orders/provider.go`, `server.Router`, OpenAPI, Developer Portal, docs | Migration v9 converts existing Generic shops to Shopee-like before tightening the constraint. Full Testcontainers race matrix, Go suite, and Admin typecheck/lint/unit/build pass. |
 | 82 | Public product catalogue contracts are provider-specific; no Generic public product API remains. | COMPLETE | Shopee/Tokopedia product handlers, `Router`, OpenAPI, Developer Portal, provider client examples, README/integration guide | `TestContainerProviderProductContracts` verifies provider-specific fields/envelopes/signing and asserts `/api/v1/products` returns 404. |
-| 83 | Developer Portal and API Request Simulator cover every current public shared, Shopee-like, and Tokopedia-like operation with contract-aware signing, executable defaults, success/error examples, and workflow guidance. | COMPLETE | `admin/src/features/developer-portal/*`, `docs/marketplace/integration-guide.md` | Frontend contract tests compare all 25 portal operations directly with OpenAPI method/path, query/path parameters, payload presence/fields, and idempotency metadata; provider pagination vocabulary also matches runtime. Typecheck, lint, 25 tests, and production build pass. |
+| 83 | Developer Portal and API Request Simulator cover every current public shared, Shopee-like, and Tokopedia-like operation with contract-aware signing, executable defaults, success/error examples, and workflow guidance. | COMPLETE | `admin/src/features/developer-portal/*`, `docs/marketplace/integration-guide.md` | Frontend contract tests compare all 25 portal operations directly with OpenAPI method/path, query/path parameters, payload presence/fields, and idempotency metadata; provider pagination vocabulary also matches runtime. Typecheck, lint, 74 tests, and production build pass. |
 | 84 | Control Plane frontend keeps strict TypeScript protection active across API responses, resource state, forms, detail views, and callback props. | COMPLETE | `admin/src/shared/types/controlPlane.ts`, `admin/src/features/control-plane/*`, `admin/eslint.config.js` | Explicit domain/UI types replace the Control Plane's `any` usage and `@typescript-eslint/no-explicit-any` is enforced as an error; typecheck and lint pass. |
 | 85 | Production Go binaries use a patched toolchain and dependency graph, and CI rejects newly reachable known vulnerabilities. | COMPLETE | `go.work`, module files, `apps/marketplace/Dockerfile`, Makefiles, CI | Go is pinned to `1.25.14`; `pgx` is `v5.9.2`, `quic-go` is `v0.59.1`, `x/crypto` is the latest Go-1.25-compatible `v0.55.0`, and pinned `govulncheck v1.7.0` scans all Marketplace packages locally and in CI. |
 
@@ -111,3 +116,5 @@ The status below is based on executable evidence, not merely the presence of a r
 11. **Stale shared-catalogue claim** — the OpenAPI overview still advertised a removed Generic shared catalogue. It now describes only the remaining shared warehouse and webhook resources.
 12. **Weak Control Plane type safety** — broad component props, API responses, form state, and detail data used explicit `any`, while lint allowed it. Those boundaries now have explicit types and future `any` usage fails lint.
 13. **Reachable vulnerabilities in production Go binaries** — the API and worker embedded vulnerable `pgx v5.7.6` and `quic-go v0.54.0`, while patch-level Go was not consistently pinned. The workspace, CI, and Docker builder now use Go `1.25.14`; dependencies are upgraded to `pgx v5.9.2`, `quic-go v0.59.1`, and the latest Go-1.25-compatible `x/crypto v0.55.0`; and a pinned reachable-vulnerability gate prevents regression.
+14. **Critical packages missing from the core coverage gate** — `idempotency` and `inventory` carried transaction and concurrency-sensitive behavior but were excluded from the enforced package set. Direct table-driven tests now cover their success, invalid-state, drift, lease, and database-failure paths; both packages are included in the gate.
+15. **Aggregate coverage could hide a weak package** — the previous 80% gate checked only the combined profile. `coverage-core` now fails when any selected core package is below 80%, then independently verifies the aggregate threshold.
