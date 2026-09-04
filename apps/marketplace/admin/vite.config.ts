@@ -35,6 +35,7 @@ const config = {
     },
   },
   test: {
+    include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "istanbul" as const,
       reporter: ["text", "html", "lcov"],

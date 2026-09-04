@@ -1,0 +1,150 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+import { CONTROL_PATHS, type ControlPage } from "@/app/navigation";
+import { API_BASE_URL } from "@/shared/api/controlPlaneClient";
+import type {
+  ControlPlaneData,
+  ControlRole,
+  DetailRequest,
+  FormRequest,
+} from "@/shared/types/controlPlane";
+import { DeveloperPortal } from "../developer-portal/DeveloperPortal";
+import { Dashboard, Shops } from "./components/DashboardPages";
+import { ResourcePage } from "./components/ResourcePage";
+import { Scenario } from "./components/Scenario";
+import { WebhookSettings } from "./components/WebhookSettings";
+
+interface ControlPlaneRoutesProps {
+  data: ControlPlaneData | null;
+  shopID: string;
+  token: string | null | undefined;
+  role: ControlRole;
+  onNavigate: (page: ControlPage) => void;
+  onForm: (form: FormRequest) => void;
+  onSeed: () => Promise<void>;
+  isSeeding: boolean;
+  onDetail: (detail: DetailRequest) => void;
+  onRefresh: () => Promise<void>;
+  onNotice: (text: string) => void;
+  onSelectShop: (id: string) => void;
+  listPage: number;
+  onPageChange: (page: number) => void;
+}
+
+export function ControlPlaneRoutes({
+  data,
+  shopID,
+  token,
+  role,
+  onNavigate,
+  onForm,
+  onSeed,
+  isSeeding,
+  onDetail,
+  onRefresh,
+  onNotice,
+  onSelectShop,
+  listPage,
+  onPageChange,
+}: ControlPlaneRoutesProps) {
+  const resourceProps = {
+    data,
+    shopID,
+    token,
+    role,
+    onForm,
+    onDetail,
+    onRefresh,
+    onNotice,
+    onSeed,
+    isSeeding,
+  };
+  const resourcePages = [
+    "Products",
+    "Warehouses",
+    "Credentials",
+    "Orders",
+    "Packages",
+    "Shipments",
+    "Deliveries",
+    "Users",
+  ] as const;
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate replace to={CONTROL_PATHS.Dashboard} />} />
+      <Route
+        path={CONTROL_PATHS.Dashboard}
+        element={
+          <Dashboard
+            data={data}
+            shopID={shopID}
+            token={token}
+            role={role}
+            onNavigate={onNavigate}
+            onForm={onForm}
+            onSeed={onSeed}
+            isSeeding={isSeeding}
+          />
+        }
+      />
+      <Route
+        path={CONTROL_PATHS.Documentation}
+        element={<DeveloperPortal api={API_BASE_URL} onNavigate={onNavigate} />}
+      />
+      <Route
+        path={CONTROL_PATHS.Scenarios}
+        element={
+          <Scenario
+            token={token}
+            shopID={shopID}
+            data={data}
+            onSaved={() => {
+              void onRefresh();
+              onNotice("Scenario updated");
+            }}
+          />
+        }
+      />
+      <Route
+        path={CONTROL_PATHS.Shops}
+        element={
+          <Shops
+            data={data}
+            onSelect={onSelectShop}
+            onForm={onForm}
+            listPage={listPage}
+            onPageChange={onPageChange}
+          />
+        }
+      />
+      <Route
+        path={CONTROL_PATHS.Webhooks}
+        element={
+          <WebhookSettings
+            data={data}
+            shopID={shopID}
+            token={token}
+            onForm={onForm}
+            onRefresh={onRefresh}
+            onNotice={onNotice}
+          />
+        }
+      />
+      {resourcePages.map((resource) => (
+        <Route
+          key={resource}
+          path={CONTROL_PATHS[resource]}
+          element={
+            <ResourcePage
+              page={resource}
+              {...resourceProps}
+              listPage={listPage}
+              onPageChange={onPageChange}
+            />
+          }
+        />
+      ))}
+      <Route path="*" element={<Navigate replace to={CONTROL_PATHS.Dashboard} />} />
+    </Routes>
+  );
+}

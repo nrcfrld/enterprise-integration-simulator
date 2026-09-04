@@ -104,12 +104,11 @@ export interface FormRequest {
   initial?: FormInitial;
 }
 
-export type DetailType = "order" | "shipment" | "package" | "warehouse" | "delivery";
+export type DetailRequest =
+  | { type: "product"; id: string; shopID: string }
+  | { type: "order" | "shipment" | "package" | "warehouse" | "delivery"; id: string };
 
-export interface DetailRequest {
-  type: DetailType;
-  id: string;
-}
+export type DetailType = DetailRequest["type"];
 
 export interface ListResponse<T> {
   data: T[];

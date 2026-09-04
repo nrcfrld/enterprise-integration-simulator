@@ -126,6 +126,7 @@ export function ResourcePage({
                   <td className="row-actions" data-label="Actions">
                     {page === "Products" && (
                       <>
+                        <button className="btn btn-ghost btn-sm" onClick={() => onDetail({ type: "product", id: row.id, shopID })}>View product</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => onForm({ kind: "product", initial: row })}>Edit product</button>
                         <button className="danger btn btn-error btn-soft btn-sm" onClick={() => archiveProduct(row)}>Archive</button>
                       </>

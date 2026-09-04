@@ -82,6 +82,13 @@ describe("ResourcePage critical product actions", () => {
       kind: "product",
       initial: product,
     });
+
+    await user.click(screen.getByRole("button", { name: "View product" }));
+    expect(props.onDetail).toHaveBeenCalledWith({
+      type: "product",
+      id: "product_1",
+      shopID: "shop_operator",
+    });
   });
 
   it("archives a confirmed product and refreshes the list", async () => {

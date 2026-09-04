@@ -12,6 +12,34 @@ The original Marketplace and Order Lifecycle requirements remain complete. The u
 
 The Provider/Payment/Package P0 expansion is complete: provider-specific detail/UI, package workflow/Admin visibility, and worker integration coverage have been implemented and verified with Testcontainers. P1 is also complete: `SHOPEE_LIKE` changes the external integration boundary—not only stored state—through a separate API prefix, signing protocol, pagination/error/rate-limit contract, and webhook representation. P2 is complete: `TOKOPEDIA_LIKE` now models the combined Tokopedia & Shop / TikTok Shop contract with its own authenticated API, status vocabulary, webhook envelope, inventory safety, and return-to-sender behavior.
 
+### Latest update — Frontend architecture and browser hardening
+
+- Reduced `ControlPlaneApp.tsx` from 458 to 130 lines by moving session
+  persistence, resource loading/filtering/pagination, and seed-reset behavior
+  into focused hooks. Routing and shell chrome now live in dedicated modules,
+  leaving the app component responsible for composition and modal state.
+- Reduced the roughly 500-line `DetailPanel.tsx` to an 80-line dispatcher and
+  separated Product, Order, Warehouse, Package, Shipment, and Delivery detail
+  views. Product rows now open a first-class product detail view as well.
+- Expanded focused component and app regression coverage to 82 frontend tests.
+  Frontend aggregate coverage is now 86.52% statements, 80.28% branches,
+  81.52% functions, and 89.28% lines; `DetailPanel.tsx` reaches 100% statement,
+  function, and line coverage.
+- Removed the duplicate frontend test execution from `make check`: Vitest now
+  runs once through the coverage gate, while lint, typecheck, build, backend,
+  security, and integration gates remain unchanged.
+- Added a Playwright Chromium smoke test for the production Compose stack. It
+  signs in, creates and selects a shop, resets it to 100 products/50 orders,
+  creates a one-time credential, and sends a successful signed request through
+  the Developer Portal. CI installs the matching browser, waits for healthy
+  services, runs the journey, preserves diagnostics on failure, and tears the
+  stack down.
+- **Product & DX Review:** the `react-vite-expert` architecture guidance drove
+  the feature-level hook/component boundaries and colocated behavior tests.
+  Public API contracts and backend behavior are unchanged; maintainability,
+  frontend coverage, local quality-gate speed, and browser-level confidence
+  are improved together.
+
 ### Latest update — Backend core coverage hardening
 
 - Added direct table-driven unit tests for idempotency claim acquisition,
@@ -145,8 +173,10 @@ The Provider/Payment/Package P0 expansion is complete: provider-specific detail/
 Current verification: `make check` passes the complete lint, frontend, unit,
 race-enabled PostgreSQL/Redis Testcontainers, production frontend build, and
 93.8% core-domain coverage gate, including `govulncheck`; the frontend suite
-contains 74 passing tests. Every package selected by the core gate independently
-meets the 80% statement threshold.
+contains 82 passing tests and reaches 86.52% statement / 81.52% function
+coverage. Every package selected by the core gate independently meets the 80%
+statement threshold. The frontend tests execute once inside that gate, and the
+separate `make browser-smoke` production-Compose journey also passes.
 `make test-race` and `make lint-full` also pass independently with zero
 `golangci-lint` issues. All three production images build, all five Compose
 services report healthy, Goose reports applied migration version 12, and API
@@ -335,6 +365,8 @@ Implemented in the current increment:
 | `cd apps/marketplace && make check` after backend core coverage hardening | PASS — generated bindings clean; zero Go lint issues; 0 reachable vulnerabilities; 74 frontend tests plus coverage/build; race-enabled PostgreSQL/Redis Testcontainers; all 10 core packages independently meet 80%; aggregate core coverage 93.8%. |
 | `go test -race ./internal/idempotency ./internal/inventory ./internal/orders ./internal/products` | PASS — focused race detection covers all packages changed by the backend coverage work. |
 | `make coverage-core CORE_COVERAGE_MIN=99` negative gate check | EXPECTED FAIL — packages below 99% are reported individually, proving the per-package threshold cannot be masked by aggregate coverage. |
+| `make check` after frontend architecture hardening | PASS — generated bindings clean; zero Go lint issues; 0 reachable vulnerabilities; race-enabled PostgreSQL/Redis Testcontainers; 82 frontend tests executed once with 86.52% statement / 81.52% function coverage; production build; all core packages independently meet 80% and aggregate coverage remains 93.8%. |
+| `make browser-smoke` | PASS — production Compose images build, all five services become healthy, and Playwright Chromium completes login → shop creation/selection → seed reset → credential creation → signed Shopee catalogue request with `200 OK`. |
 
 ## E2E flows verified
 

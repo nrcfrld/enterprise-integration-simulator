@@ -1,0 +1,54 @@
+import { expect, test } from "@playwright/test";
+
+interface CredentialResponse {
+  client_id: string;
+  client_secret: string;
+}
+
+test("login, select shop, seed data, create credential, and send a signed request", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto("/");
+  await page.getByLabel("Email").fill("admin@example.test");
+  await page.getByLabel("Password").fill("change-me-now");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+
+  const shopName = `Browser Smoke ${Date.now()}`;
+  await page.getByRole("button", { name: "Open shops" }).click();
+  await page.getByRole("button", { name: "+ New shop" }).click();
+  await page.getByLabel("Shop name").fill(shopName);
+  await page.getByLabel("Marketplace behavior").selectOption("SHOPEE_LIKE");
+  await page.getByRole("button", { name: /^Create/ }).click();
+  await expect(page.getByRole("alert")).toContainText("shop created");
+
+  await page.getByLabel("Current shop").selectOption({ label: shopName });
+  await page.getByRole("link", { name: "Products" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reset to seed" }).click();
+  await expect(page.getByRole("alert")).toContainText("Seed complete: 100 products and 50 orders");
+
+  await page.getByRole("link", { name: "API Credentials" }).click();
+  await page.getByRole("button", { name: "+ New credential" }).click();
+  const credentialResponse = page.waitForResponse(
+    (response) => response.url().includes("/credentials")
+      && response.request().method() === "POST"
+      && response.status() === 201,
+  );
+  await page.getByRole("button", { name: /^Create/ }).click();
+  const credential = await (await credentialResponse).json() as CredentialResponse;
+  expect(credential.client_id).toMatch(/^client_/);
+  expect(credential.client_secret).toMatch(/^sec_/);
+
+  await page.getByRole("link", { name: "API Documentation" }).click();
+  await page.getByRole("button", { name: "Request simulator", exact: true }).click();
+  await page.getByRole("button", { name: "Shopee-like" }).click();
+  await page.getByLabel("Client ID").fill(credential.client_id);
+  await page.getByLabel("Client secret").fill(credential.client_secret);
+  await page.getByRole("button", { name: "Send signed request" }).click();
+
+  const response = page.locator(".simulator-response");
+  await expect(response).toContainText("200 OK");
+  await expect(response).toContainText("item_id");
+  await expect(response).toContainText("total_count");
+});

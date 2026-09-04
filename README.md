@@ -83,5 +83,11 @@ make check
 Use `make vuln` for only the Go vulnerability gate,
 `make test-integration` for the race-enabled integration/worker matrix, or
 `make admin-coverage` to generate the Admin UI text, HTML, and LCOV reports.
+For the production-browser journey, install Chromium once with
+`cd apps/marketplace/admin && bunx playwright install chromium`, then run
+`make browser-smoke` from the repository root. The target builds and waits for
+the Compose stack, then verifies login, shop creation/selection, seed reset,
+one-time credential creation, and a signed catalogue request. CI installs the
+browser and runs the same journey automatically.
 Use `make docker-build` to verify all production images. The Go patch release
 is pinned consistently across the workspace, CI, and production build image.

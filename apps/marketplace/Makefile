@@ -13,7 +13,7 @@ ADMIN_DIR := admin
 
 .DEFAULT_GOAL := help
 .PHONY: help generate generate-check fmt fmt-check vet vuln lint lint-full test test-fast test-unit test-race test-integration coverage-core \
-	admin-test admin-coverage admin-lint admin-build test-all lint-all check \
+	admin-test admin-coverage admin-lint admin-build browser-smoke test-all lint-all check \
 	docker-build docker-build-api docker-build-worker docker-build-admin \
 	compose-build compose-up compose-down compose-logs compose-ps
 
@@ -95,11 +95,14 @@ admin-lint: ## Lint and type-check the Admin UI.
 admin-build: ## Build the Admin UI production bundle.
 	bun run --cwd $(ADMIN_DIR) build
 
+browser-smoke: compose-up ## Run the browser integration journey against the Compose stack.
+	bun run --cwd $(ADMIN_DIR) test:browser
+
 test-all: test ## Alias for the complete test suite.
 
 lint-all: lint admin-lint ## Run backend and Admin UI checks.
 
-check: generate-check lint-full vuln admin-lint test admin-coverage admin-build coverage-core ## Run the complete local quality gate.
+check: generate-check lint-full vuln admin-lint test-unit test-integration admin-coverage admin-build coverage-core ## Run the complete local quality gate without duplicate frontend tests.
 
 docker-build: docker-build-api docker-build-worker docker-build-admin ## Build all local Docker images.
 
@@ -116,7 +119,7 @@ compose-build: ## Build images declared in Docker Compose.
 	$(COMPOSE) build
 
 compose-up: ## Start the full local stack in the background.
-	$(COMPOSE) up --detach --build
+	$(COMPOSE) up --detach --build --wait
 
 compose-down: ## Stop the local stack (keeps the database volume).
 	$(COMPOSE) down

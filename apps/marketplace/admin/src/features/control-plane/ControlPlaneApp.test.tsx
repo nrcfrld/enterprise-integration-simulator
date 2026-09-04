@@ -27,6 +27,13 @@ const shop = {
   provider_profile: "SHOPEE_LIKE",
 };
 
+const tokopediaShop = {
+  id: "shop_2",
+  name: "Tokopedia shop",
+  status: "ACTIVE",
+  provider_profile: "TOKOPEDIA_LIKE",
+};
+
 function mockControlPlaneRequests() {
   requestMock.mockImplementation((path: string) => {
     if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
@@ -115,5 +122,97 @@ describe("ControlPlaneApp critical session and seed flows", () => {
         "session-token",
       ),
     );
+  });
+
+  it("signs in, persists the session, and signs out", async () => {
+    localStorage.clear();
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/auth/login") return Promise.resolve(session);
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
+      if (path.startsWith("/control/v1/dashboard")) return Promise.resolve({ shops: 1 });
+      if (path === "/control/v1/maintenance") return Promise.resolve({ enabled: false });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sign in →" }));
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeVisible();
+    expect(JSON.parse(localStorage.getItem("marketplace-session") || "{}")).toEqual(session);
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("heading", { name: "Enter the simulator" })).toBeVisible();
+    expect(localStorage.getItem("marketplace-session")).toBeNull();
+  });
+
+  it("switches order provider scope to the first matching shop", async () => {
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop, tokopediaShop] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/orders"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    const selector = await screen.findByLabelText("Current shop");
+    await user.click(screen.getByRole("button", { name: "Tokopedia & TikTok Shop" }));
+    expect(selector).toHaveValue("shop_2");
+    expect(screen.getByText("Tokopedia & TikTok Shop", { selector: "span.provider-badge" })).toBeVisible();
+  });
+
+  it("opens and closes product detail and create form", async () => {
+    const product = { id: "product_1", sku: "SKU-1", name: "Travel Bag", status: "ACTIVE", stock: 4 };
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
+      if (path === "/control/v1/shops/shop_1/products/product_1") return Promise.resolve(product);
+      if (path.includes("/products")) return Promise.resolve({ data: [product] });
+      if (path.includes("/warehouses")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/products"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "View product" }));
+    expect(await screen.findByRole("dialog", { name: "product details" })).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "Travel Bag" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+    expect(screen.queryByRole("dialog", { name: "product details" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "+ New product" }));
+    expect(screen.getByRole("heading", { name: "Create product" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("heading", { name: "Create product" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes shops and resources after a form saves", async () => {
+    requestMock.mockImplementation((path: string, _token?: string, options?: RequestInit) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
+      if (path.includes("/credentials") && options?.method === "POST") {
+        return Promise.resolve({ client_secret: "sec_once" });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/credentials"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "+ New credential" }));
+    await user.click(screen.getByRole("button", { name: /^Create/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Created. Save this secret now: sec_once");
+    expect(requestMock.mock.calls.filter(([path]) => path === "/control/v1/shops").length).toBeGreaterThan(1);
   });
 });
