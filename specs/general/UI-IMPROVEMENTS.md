@@ -2,7 +2,7 @@
 
 Audit date: 2026-09-05 · Baseline: commit 0dfdd77 · Audience: entry-level and junior integration developers.
 
-**Status: C1–C4 FIXED and verified on 2026-09-05; 19 findings remain OPEN / NOT IMPLEMENTED.** Remaining: zero Critical, fifteen High Priority, and four Nice to Have (23 findings originally recorded). This report recommends targeted corrections and workflow improvements; it does not authorize or claim a redesign.
+**Status: C1–C4 and H1–H2 FIXED and verified on 2026-09-05; 17 findings remain OPEN / NOT IMPLEMENTED.** Remaining: zero Critical, thirteen High Priority, and four Nice to Have (23 findings originally recorded). This report recommends targeted corrections and workflow improvements; it does not authorize or claim a redesign.
 
 ## Scope, method, and limits
 
@@ -35,7 +35,7 @@ All four Critical findings are now fixed. Original problem statements and source
 
 **Verified:** 35 Developer Portal tests passed, including a rendered list → select the second returned order → signed detail request regression and malformed/missing-ID response cases. The focused real-API TestContainerShopeeLikePublicContract passed with isolated PostgreSQL/Redis: a listed order_id returns matching detail with HTTP 200; the display order_sn returns HTTP 404/error_not_found. Frontend typecheck, lint, production build, and the UI mechanical detector passed. OpenAPI generation completed with no generated binding changes. No Compose build or browser E2E was run.
 
-**Product & DX surfaces:** Portal reference, Request Simulator, OpenAPI descriptions, repository examples/guidance, frontend/backend contract tests, and reports updated together. Domain/backend behavior and Admin resource screens were reviewed and did not need changes. C2–C4 were subsequently fixed as recorded below. H1–H15 and N1–N4 remain open.
+**Product & DX surfaces:** Portal reference, Request Simulator, OpenAPI descriptions, repository examples/guidance, frontend/backend contract tests, and reports updated together. Domain/backend behavior and Admin resource screens were reviewed and did not need changes. C2–C4 were subsequently fixed as recorded below. H1–H2 were subsequently fixed as recorded below. H3–H15 and N1–N4 remain open.
 
 **Problem:** List guidance says to copy order_sn; the shared Order ID help accepts either order_id or order_sn. The example places an ord_… identifier in order_sn and omits order_id. Actual list responses contain order_id as the API identifier and order_sn as the human order number. Detail queries and mutations use the internal order ID. Following the documented copy/paste path therefore produces not-found or transition errors.
 
@@ -105,6 +105,12 @@ All four Critical findings are now fixed. Original problem statements and source
 
 ### H1 — The explicit-package workflow is missing a necessary simulator capability
 
+**Status: FIXED and verified on 2026-09-05.** Original problem and source evidence below are retained as audit history.
+
+**Implemented:** Both shipment simulators now expose package selection modes and package_id guidance/examples. Existing-package mode writes the selected ID into the signed body; automatic mode removes it and explains why it fails after full allocation. A successful Shopee allocation offers a direct shipment handoff that retains the returned order/package IDs and credentials. Tokopedia uses Admin allocation because it has no public allocation endpoint. The Admin form loads eligible READY_TO_SHIP orders across pagination, displays real line IDs and ordered/allocated/remaining quantities, and supports selecting multiple lines within their remaining limits. Allocation success surfaces the returned package ID. Provider detail examples, the reachable fulfillment guide, generated Node example instructions, OpenAPI and repository guides explain both paths and creating all shipments before movement.
+
+**Verified:** Both simulator modes, rendered Shopee allocation-to-shipment handoff, later-page eligible-order selection, exhausted-line controls, and all ShipmentInput properties (including optional package_id) have regression coverage. Real HTTP/container tests for both providers allocate all quantities into two packages, reproduce omission failure, and successfully create shipments using each explicit ID. Full frontend and backend verification is recorded in IMPLEMENTATION_REPORT.md.
+
 **Problem:** Both shipment endpoints accept optional package_id in OpenAPI and backend, but portal body-field metadata and default examples omit it. Omitting it creates a new package for remaining unallocated items. After a learner explicitly allocates all items, the default shipment request fails with “order has no remaining items to package.” Admin allocation asks for order/item IDs with no picker or source guidance; order detail does not display item IDs.
 
 **Why it matters for juniors:** “Allocate package → create shipment” appears supported but fails, and the missing input must be discovered outside the normal workflow.
@@ -116,6 +122,12 @@ All four Critical findings are now fixed. Original problem statements and source
 **Evidence:** [ShipmentInput](/Users/enrico/Documents/engineering-challenge/apps/marketplace/openapi/openapi.yaml:511), [package-selection behavior](/Users/enrico/Documents/engineering-challenge/apps/marketplace/internal/server/provider_fulfillment.go:320), [simulator shipment fields](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/data/endpoints.ts:14), [allocation form](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/control-plane/components/ControlForm.tsx:108).
 
 ### H2 — The UI does not explain or connect Order → Package → Shipment → Warehouse
+
+**Status: FIXED and verified on 2026-09-05.** Original problem and source evidence below are retained as audit history.
+
+**Implemented:** Order Detail uses the complete packages/shipments collections, groups shipments under their packages, displays each package's quantities and each order line's allocated/remaining amounts, and names the shared warehouse. Shipment actions apply to the displayed shipment. Package and shipment details link to related resources; package/shipment list rows link to the order and warehouse, and shipment rows also link to the package. Linked detail views replace the current view with a Back action and remount their data/action state. Control responses now supply missing package/warehouse identities, package contents, and allocation totals. Portal and repository guidance explain the one-warehouse-per-order rule and why one delivered package does not finish a multi-shipment order.
+
+**Verified:** Rendered regression follows an order with two packages through Package → Shipment → Warehouse and back, and confirms the compatibility singleton cannot hide the second shipment. Both-provider HTTP/database tests check list/detail relationship IDs and complete allocation collections. The existing multiple-package delivery-completion and partial-allocation tests pass. No migration or fulfillment-domain rule changes were needed.
 
 **Problem:** Order detail displays only the compatibility shipment, ignoring the backend shipments collection, and has no package section. Package detail shows an unlinked order ID and warehouse text. Shipment detail has an unlinked order number but no package/warehouse context; its control API also omits those links. Package list discards warehouse fields the backend supplies. All details are modal state, with no cross-resource navigation.
 
@@ -358,7 +370,7 @@ This records the discoverable path and the source-supported stumbling points. It
 | Authentication | Correct provider signing implementations and header tables; minimal Shopee Go/Node clients. | Exact request export; credential/provider association; credential handoff improvements. Provider receiver verifier and Tokopedia key selection are fixed under C2. | H5, H12 |
 | Orders | All public order routes represented. | Shopee ID guidance fixed (C1); created-time filters, full detail examples, legal next steps/actors and provider mappings remain open. | H3, H6 |
 | Warehouses/inventory | Repository allocation guide; signed shared reads; functional Admin inventory editor. | In-portal worked stock example and links; per-product warehouse view; accurate statement of which provider response exposes origin. | H2, H3, H10, H11 |
-| Packages/shipments | Explicit package API and optional shipment package_id exist; order detail returns collections. | Simulator package_id metadata; item IDs/remaining quantities; linked Admin collections; exact singular versus list response guidance. | H1–H3 |
+| Packages/shipments | Explicit package API and optional shipment package_id exist; order detail returns collections. | H1/H2 completed: package_id modes, IDs/remaining quantities, linked collections and singular-versus-list guidance. Other response/filter/pagination gaps remain under H3. | H3 |
 | Webhooks | Provider verification formulas in repository webhook guide; durable retries in worker. | C2 completes the reachable guide, provider selection/envelopes, local receiver and key rotation guidance. Full event catalog and delivery diagnosis remain open. | H8, H9, H11 |
 | Pagination | Shopee page_no/page_size with product has_next_page versus order more; Tokopedia opaque page_token. | Shared webhook page/limit is real but undocumented/unsupported by simulator; working next-page exercises. | H3, H13, H14 |
 | Errors/recovery | Operation-specific example envelopes; error/limit overview; repository idempotency guidance. | In-simulator header diagnostics, schema validation, no-shop/fault/timeout explanations, workflow recovery after expiry and partial shipment. | H6–H8, H11–H13 |
@@ -384,7 +396,7 @@ This records the discoverable path and the source-supported stumbling points. It
 
 | Implemented capability | Current discovery gap | Finding |
 | --- | --- | --- |
-| Multiple shipments and package-specific shipment creation | Compatibility singleton dominates order UI; package_id missing from simulator guidance. | H1, H2 |
+| Multiple shipments and package-specific shipment creation | Resolved: all packages/shipments and origin links are visible; explicit and automatic shipment modes are available. | H1, H2 fixed |
 | Warehouse allocation and reservations | Product stock has no warehouse link; single-origin rule absent at order entry. | H10 |
 | Stored event payloads and attempt headers | Not exposed together in delivery inspection. Actual transformed body needs additional persistence. | H8 |
 | Payment expiry, seller SLA, payment failure, shipment RTS events | Incomplete subscription controls and order-only aggregate trail. | H6, H9 |
@@ -395,7 +407,7 @@ This records the discoverable path and the source-supported stumbling points. It
 ## Dead, duplicated, or obsolete UI/documentation after domain changes
 
 - **Resolved under C2:** the corrected Webhooks learning component is now mounted by DeveloperPortal; a navigation regression proves reachability.
-- **Compatibility UI retained as primary model:** OrderDetail uses shipment instead of shipments; paymentInfo duplicates the authoritative payment status. These are migration leftovers that materially misrepresent current behavior (H2, H6).
+- **Partially resolved compatibility UI:** H2 replaces the primary singleton shipment presentation with all packages/shipments. paymentInfo still duplicates the authoritative payment status (H6).
 - **Old hand-maintained event list:** Admin selector predates payment/SLA and shipment failure/return additions; C2 corrects the outbound provider OpenAPI contracts; the incomplete Admin event list remains open (H9).
 - **Duplicated navigation destinations:** Event Logs→Orders and Integration Guide→Documentation lack the promised distinct destination (H9, N3).
 - **Account simulator inside public request signing:** optional educational content interrupts the core auth task; move rather than automatically delete it (N4).
@@ -404,13 +416,13 @@ This records the discoverable path and the source-supported stumbling points. It
 
 ## Prioritized implementation plan
 
-C1–C4 are implemented and verified. H1–H15 and N1–N4 below remain **proposed, not implemented**. Fix the central journey before undertaking broad visual redesign.
+C1–C4 and H1–H2 are implemented and verified. H3–H15 and N1–N4 below remain **proposed, not implemented**. Fix the central journey before undertaking broad visual redesign.
 
 | Sequence | Scope and dependencies | Completion evidence required |
 | --- | --- | --- |
 | 1 — Correct dangerous or blocking claims | C1–C4 completed: order identifiers/list-to-detail handoff, webhook signing/identity, shop-safe loading/actions, deletion retention. Remaining: H3's incorrect time-filter claim. | A documented Shopee list ID opens detail; both provider receivers verify actual worker payloads; delayed shop responses cannot enable wrong-context writes; deletion behavior matches explicit retention/loss messaging. |
 | 2 — Make setup and first requests dependable | H4, H5, H7, H14: direct shop management, new-shop selection, truthful progress/reset descriptions, explicit empty/error/loading states, paged selectors/webhooks, provider-aware credential/request handoff. | Fresh Operator and existing multi-shop user can configure the intended shop; 21st shop/webhook is reachable; first GET/search returns expected fixtures; rejected actions show actionable errors. |
-| 3 — Make fulfillment inspectable and teachable | H1, H2, H6, H10: package_id, line IDs/remaining quantities, multiple shipments and origin links, authoritative status/actor guidance, discoverable stock editor. | Exercise an order split into two packages; create shipments for each; inspect the correct warehouse and quantities; explain aggregate state and inventory changes; reject invalid actions with prerequisites visible. |
+| 3 — Make fulfillment inspectable and teachable | H1–H2 completed: package_id, line IDs/remaining quantities, multiple shipments and origin links. Remaining H6/H10: authoritative status/actor guidance and discoverable stock editor. | Exercise an order split into two packages; create shipments for each; inspect the correct warehouse and quantities; explain aggregate state and inventory changes; reject invalid actions with prerequisites visible. |
 | 4 — Complete the callback/debugging loop | H8, H9, H11 build on C2’s receiver/verification guide: full event catalog, payload/header snapshots, failure reasons, linked events/deliveries/attempts, refresh, consumer next steps. | For both profiles, learner observes success, duplicate, failed attempt/retry, delayed/out-of-order delivery, and RTS event; identifies the stable key and explains the external application's durable next action without source access. |
 | 5 — Finish simulator fidelity and documentation parity | Remaining H3, H12, H13: semantic filter/pagination checks, complete nested examples, edited-request export, diagnostic headers, per-operation drafts, explicit new-operation/retry and timeout controls. | Exported request matches edited request; paginated results can be exhausted; explicit-package shipment works from portal alone; same-key replay, conflict, retry-after, and timeout outcomes are visible and explained. |
 | 6 — Apply interaction/accessibility fixes and focused polish | H15 should accompany touched dialogs from sequence 2 onward; then N1–N4: stable columns, terminology, scenario exercises, durable links, optional account/admin navigation cleanup. | Keyboard-only setup and inspection; consistent named relationships, dates/counts; deep link restores intended non-secret context; scenario reset restores the happy path. |

@@ -1,12 +1,16 @@
+import type { DetailRequest } from "@/shared/types/controlPlane";
 export interface DetailItem {
   id?: string;
   sku: string;
   product_name: string;
   quantity: number;
+  allocated_quantity?: number;
+  remaining_quantity?: number;
   price?: number;
 }
 
 export interface ShipmentSummary {
+  package_id?: string;
   id?: string;
   status?: string;
   tracking_number?: string;
@@ -32,6 +36,7 @@ export interface DetailData {
   price?: number;
   stock?: number;
   status?: string;
+  package_id?: string;
   order_id?: string;
   order_number?: string;
   order_status?: string;
@@ -63,8 +68,10 @@ export interface DetailData {
   address?: { address_line?: string; city?: string; postal_code?: string };
   items?: DetailItem[];
   shipment?: ShipmentSummary;
+  shipments?: ShipmentSummary[];
+  packages?: Array<{ id: string; status: string; warehouse_id?: string; items?: DetailItem[] }>;
   fulfillment?: { warehouse_name?: string; warehouse_code?: string; warehouse_id?: string };
-  warehouse?: { warehouse_name?: string; warehouse_code?: string; name?: string; code?: string };
+  warehouse?: { warehouse_id?: string; warehouse_name?: string; warehouse_code?: string; name?: string; code?: string };
   events?: Array<{ id: string; event_type: string; occurred_at: string }>;
   deliveries?: Array<{ id: string; status: string; attempt_count: number; event_id: string }>;
   inventory?: WarehouseInventoryItem[];
@@ -79,6 +86,7 @@ export interface DetailData {
 }
 
 export interface DetailContentProps {
+  onOpen?: (detail: DetailRequest) => void;
   data: DetailData;
   token: string | null | undefined;
   onReload: () => Promise<void>;

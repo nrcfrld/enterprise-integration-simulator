@@ -10,7 +10,7 @@ export function CodeExamples({ endpoint }: CodeExamplesProps) {
   return (
     <section className="code-examples">
       <h3>Run this exact request from Node.js</h3>
-      <p>Replace a path placeholder with an id from the list response, set the environment variables, then run the file with Node 20+ or Bun. The signing input matches the simulator.</p>
+      <p>Replace path and body example identifiers (including package_id and order_item_id) with returned IDs, set the environment variables, then run the file with Node 20+ or Bun. The signing input matches the simulator.</p>
       <CodeSnippet value={buildNodeExample(endpoint)} language="javascript" />
     </section>
   );

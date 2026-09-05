@@ -1,3 +1,4 @@
+import { PackageAllocationFields } from "./PackageAllocationFields";
 import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
 import { type FormEvent, useEffect, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
@@ -111,7 +112,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
   const fields =
     ({
       shop: [["name", "Shop name"], ["provider_profile", "Marketplace behavior"]],
-      package: [["order_id", "Order ID"], ["order_item_id", "Order item ID"], ["quantity", "Quantity", "number"]],
+      package: [],
       product: [
         ["sku", "SKU"],
         ["name", "Name"],
@@ -286,8 +287,9 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
         }
       }
       if (kind === "package") {
+        if (!Array.isArray(values.package_items) || !values.package_items.length) throw new Error("Select an order and at least one remaining item quantity.");
         path = `/control/v1/shops/${shopID}/packages`;
-        body = { order_id: values.order_id, items: [{ order_item_id: values.order_item_id, quantity: Number(values.quantity) }] };
+        body = { order_id: values.order_id, items: values.package_items };
       }
       if (kind === "credential") {
         path = `/control/v1/shops/${shopID}/credentials`;
@@ -310,6 +312,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
         method,
         body: JSON.stringify(body),
       });
+      if (kind === "package") { await onSaved(`Package ${result.id} allocated for order ${values.order_id}. Use this package_id in the provider shipment request.`); return; }
       const secret = result.client_secret || (shop?.provider_profile === "TOKOPEDIA_LIKE" ? undefined : result.secret);
       if (kind === "credential") {
         if (!result.id || !result.client_id || !result.client_secret) {
@@ -365,6 +368,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
             ×
           </button>
         </div>
+        {kind === "package" && <PackageAllocationFields shopID={shopID} token={token} onChange={(orderID, items) => setValues(current => ({ ...current, order_id: orderID, package_items: items }))} />}
         {kind === "order" && (
           <>
             <p>

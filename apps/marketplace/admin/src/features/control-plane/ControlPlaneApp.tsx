@@ -120,6 +120,7 @@ function ControlPlaneWorkspace({ session, page, resources }: {
       )}
       {detail && (
         <DetailPanel
+            key={`${detail.type}:${detail.id}`}
           shop={resources.selectedShop}
           detail={detail}
           token={token}

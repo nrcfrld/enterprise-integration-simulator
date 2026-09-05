@@ -1,3 +1,4 @@
+import { RelatedResource } from "./details/RelatedResource";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
   ControlPlaneData,
@@ -120,7 +121,9 @@ export function ResourcePage({
                 <tr key={row.id}>
                   {columns(rows[0], page).map((key) => (
                     <td key={key} data-label={key.replaceAll("_", " ")}>
-                      {String(row[key] ?? "—")}
+                      {(page === "Packages" || page === "Shipments") && key === "order_number" ? <RelatedResource type="order" id={String(row.order_id || "")} label={String(row.order_number || row.order_id || "")} onOpen={onDetail} />
+                        : (page === "Packages" || page === "Shipments") && key === "warehouse_name" ? <RelatedResource type="warehouse" id={String(row.warehouse_id || "")} label={String(row.warehouse_name || "")} onOpen={onDetail} />
+                        : page === "Shipments" && key === "package_id" ? <RelatedResource type="package" id={String(row.package_id || "")} onOpen={onDetail} /> : String(row[key] ?? "—")}
                     </td>
                   ))}
                   <td className="row-actions" data-label="Actions">
@@ -229,8 +232,8 @@ export function Pagination({ pagination, page, onChange }: PaginationProps) {
 function columns(row: Record<string, unknown>, page: string) {
   if (page === "Warehouses") return ["code", "name", "status", "priority", "product_count", "available_quantity"];
   if (page === "Deliveries") return ["event_type", "endpoint", "status", "attempt_count", "next_attempt_at", "failure_reason"];
-  if (page === "Shipments") return ["order_number", "tracking_number", "shipping_provider", "pickup_type", "status", "created_at", "shipped_at"];
-  if (page === "Packages") return ["order_number", "status", "item_count", "created_at"];
+  if (page === "Shipments") return ["order_number", "package_id", "warehouse_name", "tracking_number", "status", "created_at"];
+  if (page === "Packages") return ["order_number", "status", "item_count", "warehouse_name", "warehouse_code", "created_at"];
   return Object.keys(row)
     .filter((key) => typeof row[key] !== "object")
     .slice(0, 7);

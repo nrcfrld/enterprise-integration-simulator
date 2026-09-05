@@ -13,6 +13,7 @@ const pageNo = [
 ];
 
 const shipmentBodyFields = [
+  { name: "package_id", type: "string", required: false, description: "Existing package ID from allocation or order detail package_list[].package_id. Omit to create a new package for remaining unallocated quantities; omission fails when all items are allocated.", example: "pkg_example_01" },
   { name: "shipping_provider", type: "string", required: true, description: "Carrier code used to create tracking for the package.", example: "provider_express" },
   { name: "pickup_type", type: "string", required: true, description: "Fulfilment handoff mode. This simulator accepts PICKUP exactly.", example: "PICKUP" },
 ];
@@ -115,8 +116,8 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "shopee-get-order", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders/{id}", title: "Get a Shopee-like order", pathParams: [shopeeOrderID],
-    summary: "Inspect status, line items, package, and shipment before moving the order.", outcome: "200 OK with order detail.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_id": "ord_example_01", "order_sn": "SIM-EXAMPLE-01", "order_status": "PAID", "item_list": [] }\n}',
+    summary: "Inspect item_list[].id for allocation and package_list[].package_id for shipment creation. Read shipment_list for all shipments.", outcome: "200 OK with order detail.",
+    response: "{\n  \"error\": \"\",\n  \"message\": \"success\",\n  \"response\": {\n    \"order_id\": \"ord_example_01\",\n    \"order_sn\": \"SIM-EXAMPLE-01\",\n    \"order_status\": \"READY_TO_SHIP\",\n    \"item_list\": [\n      {\n        \"id\": \"ori_example_01\",\n        \"sku\": \"MUG-001\",\n        \"product_name\": \"Ceramic Mug\",\n        \"quantity\": 2,\n        \"allocated_quantity\": 1,\n        \"remaining_quantity\": 1,\n        \"price\": 125000\n      }\n    ],\n    \"package_list\": [\n      {\n        \"package_id\": \"pkg_example_01\",\n        \"package_number\": \"PKG-EXAMPLE-01\",\n        \"package_status\": \"READY_TO_SHIP\"\n      }\n    ],\n    \"shipment_list\": [\n      {\n        \"id\": \"shp_example_01\",\n        \"package_id\": \"pkg_example_01\",\n        \"order_id\": \"ord_example_01\",\n        \"status\": \"CREATED\",\n        \"tracking_number\": \"GXEXAMPLE01\"\n      }\n    ]\n  }\n}",
   }),
   endpoint({
     id: "shopee-cancel-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/cancel", title: "Customer-cancel a Shopee-like order", pathParams: [shopeeOrderID], idempotent: true,
@@ -148,7 +149,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "shopee-create-shipment", group: "Fulfillment", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/shipments", title: "Create a Shopee-like shipment", pathParams: [shopeeOrderID], idempotent: true,
     summary: "A shipment adds tracking and pickup details to a READY_TO_SHIP order or allocated package.",
-    body: '{\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment and tracking number.",
+    body: '{\n  "package_id": "pkg_example_01",\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment and tracking number.",
     bodyFields: shipmentBodyFields,
     response: '{\n  "error": "",\n  "message": "success",\n  "response": { "shipment": { "id": "shp_…", "tracking_number": "GX…", "status": "CREATED" } }\n}',
   }),
@@ -192,8 +193,8 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "tokopedia-get-order", group: "Orders", contract: "tokopedia", method: "GET", path: "/api/tokopedia/v202309/orders/{id}", title: "Get a Tokopedia-like order", pathParams: [orderID],
-    summary: "Inspect lifecycle status, payment, line items, and package before changing the order.", outcome: "200 OK with order detail.",
-    response: '{\n  "code": 0,\n  "message": "success",\n  "data": { "order_id": "ord_…", "order_status": "ON_HOLD", "line_items": [] }\n}',
+    summary: "Inspect line_items[].id and package_list[].package_id before shipment creation. Read shipment_list for all shipments. Allocate explicit packages through Admin Packages; Tokopedia has no public package-allocation endpoint.", outcome: "200 OK with order detail.",
+    response: "{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"order_id\": \"ord_example_01\",\n    \"order_number\": \"SIM-EXAMPLE-01\",\n    \"order_status\": \"AWAITING_COLLECTION\",\n    \"line_items\": [\n      {\n        \"id\": \"ori_example_01\",\n        \"sku\": \"MUG-001\",\n        \"product_name\": \"Ceramic Mug\",\n        \"quantity\": 2,\n        \"allocated_quantity\": 1,\n        \"remaining_quantity\": 1,\n        \"price\": 125000\n      }\n    ],\n    \"package_list\": [\n      {\n        \"package_id\": \"pkg_example_01\",\n        \"package_number\": \"PKG-EXAMPLE-01\",\n        \"package_status\": \"READY_TO_SHIP\"\n      }\n    ],\n    \"shipment_list\": [\n      {\n        \"id\": \"shp_example_01\",\n        \"package_id\": \"pkg_example_01\",\n        \"order_id\": \"ord_example_01\",\n        \"status\": \"CREATED\",\n        \"tracking_number\": \"GXEXAMPLE01\"\n      }\n    ]\n  }\n}",
   }),
   endpoint({
     id: "tokopedia-pack-order", group: "Orders", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/orders/{id}/pack", title: "Pack a Tokopedia-like order", pathParams: [orderID], idempotent: true,
@@ -213,7 +214,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "tokopedia-create-shipment", group: "Fulfillment", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/orders/{id}/shipments", title: "Create a Tokopedia-like shipment", pathParams: [orderID], idempotent: true,
-    summary: "Add tracking and pickup details after the provider order is AWAITING_COLLECTION.", body: '{\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment.",
+    summary: "Add tracking and pickup details after the provider order is AWAITING_COLLECTION.", body: '{\n  "package_id": "pkg_example_01",\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment.",
     bodyFields: shipmentBodyFields,
     response: '{\n  "code": 0,\n  "message": "success",\n  "data": { "shipment": { "id": "shp_…", "tracking_number": "GX…", "status": "CREATED" } }\n}',
   }),

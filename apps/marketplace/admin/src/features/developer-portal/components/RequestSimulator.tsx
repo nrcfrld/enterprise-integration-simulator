@@ -1,3 +1,4 @@
+import { ShipmentMode } from "./ShipmentMode";
 import { WebhookVerification } from "./WebhookVerification";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -36,16 +37,18 @@ interface RequestSimulatorProps {
   endpoint: PortalEndpoint;
   api: string;
   credentials: IntegrationCredentials;
+  initialPackageID?: string;
+  onSelectPackage?: (orderID: string, packageID: string) => void;
   initialPathParams?: Record<string, string>;
   onSelectOrder?: (orderID: string) => void;
 }
 
-export function RequestSimulator({ endpoint, api, credentials, initialPathParams, onSelectOrder }: RequestSimulatorProps) {
+export function RequestSimulator({ endpoint, api, credentials, initialPathParams, onSelectOrder, initialPackageID, onSelectPackage }: RequestSimulatorProps) {
   const mutation = endpoint.idempotent === true;
   const hasBody = endpoint.body !== undefined;
   const [pathParams, setPathParams] = useState<Record<string, string>>(() => ({ ...fieldsToValues(endpoint.pathParams, false), ...initialPathParams }));
   const [query, setQuery] = useState<Record<string, string>>(() => fieldsToValues(endpoint.query, true));
-  const [body, setBody] = useState(endpoint.body ?? "");
+  const [body, setBody] = useState(initialPackageID ? JSON.stringify({ ...JSON.parse(endpoint.body || "{}"), package_id: initialPackageID }, null, 2) : endpoint.body ?? "");
   const [idempotencyKey, setIdempotencyKey] = useState(mutation ? createIdempotencyKey() : "");
   const [state, setState] = useState<SimulatorState>(initialState);
 
@@ -147,6 +150,14 @@ export function RequestSimulator({ endpoint, api, credentials, initialPathParams
     }
   };
 
+  let allocatedPackage: { id: string; order_id: string } | undefined;
+  if (endpoint.id === "shopee-create-package" && state.result?.status.startsWith("200 ")) {
+    try {
+      const result = JSON.parse(state.result.body);
+      const pkg = result.response?.package;
+      if (!result.error && typeof pkg?.id === "string" && pkg.id && typeof pkg.order_id === "string" && pkg.order_id) allocatedPackage = pkg;
+    } catch { /* A non-JSON/error response cannot enable a package handoff. */ }
+  }
   return (
     <section className="request-simulator">
       {endpoint.group === "Webhooks" && <WebhookVerification provider={endpoint.contract === "shopee" ? "SHOPEE_LIKE" : endpoint.contract === "tokopedia" ? "TOKOPEDIA_LIKE" : undefined} />}
@@ -155,6 +166,7 @@ export function RequestSimulator({ endpoint, api, credentials, initialPathParams
       <form onSubmit={(event) => void run(event)}>
         {endpoint.pathParams?.map((field) => <label key={field.name}>{field.label}<input value={pathParams[field.name]} onChange={(event) => setPathParams({ ...pathParams, [field.name]: event.target.value })} placeholder="Paste an id from a list response" /><small>{field.help}</small></label>)}
         {endpoint.query && endpoint.query.length > 0 && <fieldset><legend>Optional query parameters</legend><div className="query-fields">{endpoint.query.map((field) => <label key={field.name}>{field.label}<input value={query[field.name]} onChange={(event) => setQuery({ ...query, [field.name]: event.target.value })} placeholder={field.name} /><small>{field.help}</small></label>)}</div></fieldset>}
+        {endpoint.id.endsWith("-create-shipment") && <ShipmentMode body={body} onChange={setBody} />}
         {hasBody && <label>JSON request body<textarea value={body} onChange={(event) => setBody(event.target.value)} rows={10} spellCheck="false" /><small>The exact edited bytes are included in the request signature.</small></label>}
         {mutation && <label>Idempotency key<input value={idempotencyKey} onChange={(event) => setIdempotencyKey(event.target.value)} spellCheck="false" /><small>Keep this exact key if you retry this same logical operation.</small></label>}
         <div className="simulator-actions"><button type="submit" disabled={state.status === "loading"}>{state.status === "loading" ? "Sending signed request…" : "Send signed request"}</button><button type="button" className="quiet" onClick={reset}>Reset request</button></div>
@@ -164,6 +176,7 @@ export function RequestSimulator({ endpoint, api, credentials, initialPathParams
       {state.error && <p className="simulator-error" role="alert">{state.error}</p>}
       {state.canonical && <details className="request-details"><summary>See the exact signing input</summary><CodeSnippet value={state.canonical} language="text" /></details>}
       {state.result && <div className="simulator-response" aria-live="polite"><div><b>Response</b><strong>{state.result.status}</strong></div>{state.result.headers.length > 0 && <dl>{state.result.headers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>}<CodeSnippet value={state.result.body} language="json" /></div>}
+      {allocatedPackage && onSelectPackage && <button type="button" onClick={() => onSelectPackage(allocatedPackage!.order_id, allocatedPackage!.id)}>Create shipment for package {allocatedPackage.id}</button>}
       {endpoint.id === "shopee-list-orders" && state.result?.status.startsWith("200 ") && onSelectOrder && (
         <ShopeeOrderResults body={state.result.body} onSelect={onSelectOrder} />
       )}

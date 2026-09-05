@@ -221,7 +221,7 @@ type PackageInput struct {
 
 // ShipmentInput defines model for ShipmentInput.
 type ShipmentInput struct {
-	// PackageId Existing package allocated for this order.
+	// PackageId Existing package allocated for this order with no shipment yet. Omit to create a new package for remaining unallocated quantities; omission fails when none remain. Create every package shipment before progressing shipment movement.
 	PackageId        *string                 `json:"package_id,omitempty"`
 	PickupType       ShipmentInputPickupType `json:"pickup_type"`
 	ShippingProvider string                  `json:"shipping_provider"`

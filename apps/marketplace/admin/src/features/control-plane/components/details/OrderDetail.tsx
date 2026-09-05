@@ -1,5 +1,5 @@
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
-import { ShipmentActions } from "./ShipmentActions";
+import { OrderFulfillment } from "./OrderFulfillment";
 import type { DetailContentProps } from "./types";
 
 const orderActions = [
@@ -13,6 +13,7 @@ const orderActions = [
 
 export function OrderDetail({
   data,
+  onOpen,
   token,
   onReload,
   onRefresh,
@@ -123,43 +124,14 @@ export function OrderDetail({
             <p>No item snapshot found.</p>
           )}
         </section>
-        <section>
-          <p className="eyebrow">Shipment</p>
-          {data.shipment ? (
-            <>
-              <h3>{data.shipment.shipping_provider}</h3>
-              <p>{data.shipment.tracking_number} · {data.shipment.status}</p>
-            </>
-          ) : (
-            <p>Create it through the public API after the order is READY_TO_SHIP.</p>
-          )}
-        </section>
-        <section>
-          <p className="eyebrow">Fulfillment origin</p>
-          {data.fulfillment ? (
-            <>
-              <h3>{data.fulfillment.warehouse_name || data.fulfillment.warehouse_code}</h3>
-              <p>{data.fulfillment.warehouse_code} · {data.fulfillment.warehouse_id}</p>
-            </>
-          ) : (
-            <p>No warehouse allocation is recorded.</p>
-          )}
-        </section>
+
       </div>
       <div className="action-grid">
         {orderActions.map(([action, label]) => (
           <button key={action} onClick={() => void transition(action)}>{label}</button>
         ))}
       </div>
-      <ShipmentActions
-        shipmentID={data.shipment?.id}
-        status={data.shipment?.status}
-        token={token}
-        onReload={onReload}
-        onRefresh={onRefresh}
-        onNotice={onNotice}
-        onError={onError}
-      />
+      <OrderFulfillment data={data} token={token} onOpen={onOpen} onReload={onReload} onRefresh={onRefresh} onNotice={onNotice} onError={onError} />
       <h3>1. Events created by this order</h3>
       {data.events?.length ? (
         data.events.map((event) => (

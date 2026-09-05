@@ -41,7 +41,7 @@ func (s *Server) shopShipments(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT s.id,s.order_id,o.order_number,s.tracking_number,s.shipping_provider,s.pickup_type,s.status,s.created_at,s.shipped_at,s.delivered_at FROM shipments s JOIN orders o ON o.id=s.order_id WHERE o.shop_id=$1 ORDER BY s.created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT s.id,s.order_id,o.order_number,s.tracking_number,s.shipping_provider,s.pickup_type,s.status,s.created_at,s.shipped_at,s.delivered_at,s.package_id,COALESCE(w.id,''),COALESCE(w.name,'') FROM shipments s JOIN orders o ON o.id=s.order_id LEFT JOIN warehouses w ON w.id=o.fulfillment_warehouse_id WHERE o.shop_id=$1 ORDER BY s.created_at DESC`, shop)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorBody("DATABASE_ERROR", "could not list shipments"))
 		return
@@ -49,14 +49,16 @@ func (s *Server) shopShipments(c *gin.Context) {
 	defer rows.Close()
 	data := []gin.H{}
 	for rows.Next() {
-		var id, orderID, orderNumber, tracking, provider, pickupType, status string
+		var id, orderID, orderNumber, tracking, provider, pickupType, status, packageID, warehouseID, warehouseName string
 		var created time.Time
 		var shipped, delivered *time.Time
-		if err := rows.Scan(&id, &orderID, &orderNumber, &tracking, &provider, &pickupType, &status, &created, &shipped, &delivered); err != nil {
+		if err := rows.Scan(&id, &orderID, &orderNumber, &tracking, &provider, &pickupType, &status, &created, &shipped, &delivered, &packageID, &warehouseID, &warehouseName); err != nil {
 			c.JSON(http.StatusInternalServerError, errorBody("DATABASE_ERROR", "could not read shipment"))
 			return
 		}
-		data = append(data, shipmentControlData(id, orderID, orderNumber, tracking, provider, pickupType, status, created, shipped, delivered))
+		out := shipmentControlData(id, orderID, orderNumber, tracking, provider, pickupType, status, created, shipped, delivered)
+		out["package_id"], out["warehouse_id"], out["warehouse_name"] = packageID, warehouseID, warehouseName
+		data = append(data, out)
 	}
 	if err := rows.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, errorBody("DATABASE_ERROR", "could not read shipments"))
@@ -70,7 +72,7 @@ func (s *Server) shopPackages(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT p.id,p.order_id,o.order_number,p.status,p.created_at,COUNT(pi.order_item_id),COALESCE(w.code,''),COALESCE(w.name,'') FROM packages p JOIN orders o ON o.id=p.order_id LEFT JOIN package_items pi ON pi.package_id=p.id LEFT JOIN warehouses w ON w.id=p.warehouse_id WHERE o.shop_id=$1 GROUP BY p.id,o.order_number,w.code,w.name ORDER BY p.created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT p.id,p.order_id,o.order_number,p.status,p.created_at,COUNT(pi.order_item_id),COALESCE(w.code,''),COALESCE(w.name,''),COALESCE(p.warehouse_id,'') FROM packages p JOIN orders o ON o.id=p.order_id LEFT JOIN package_items pi ON pi.package_id=p.id LEFT JOIN warehouses w ON w.id=p.warehouse_id WHERE o.shop_id=$1 GROUP BY p.id,o.order_number,w.code,w.name ORDER BY p.created_at DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list packages"))
 		return
@@ -78,14 +80,14 @@ func (s *Server) shopPackages(c *gin.Context) {
 	defer rows.Close()
 	data := []gin.H{}
 	for rows.Next() {
-		var id, orderID, number, status, warehouseCode, warehouseName string
+		var id, orderID, number, status, warehouseCode, warehouseName, warehouseID string
 		var created time.Time
 		var count int
-		if err := rows.Scan(&id, &orderID, &number, &status, &created, &count, &warehouseCode, &warehouseName); err != nil {
+		if err := rows.Scan(&id, &orderID, &number, &status, &created, &count, &warehouseCode, &warehouseName, &warehouseID); err != nil {
 			c.JSON(500, errorBody("DATABASE_ERROR", "could not read package"))
 			return
 		}
-		data = append(data, gin.H{"id": id, "order_id": orderID, "order_number": number, "status": status, "item_count": count, "warehouse_code": warehouseCode, "warehouse_name": warehouseName, "created_at": created})
+		data = append(data, gin.H{"id": id, "order_id": orderID, "order_number": number, "status": status, "item_count": count, "warehouse_id": warehouseID, "warehouse_code": warehouseCode, "warehouse_name": warehouseName, "created_at": created})
 	}
 	s.controlListResponse(c, data)
 }
@@ -117,7 +119,7 @@ func (s *Server) packageDetail(c *gin.Context) {
 		}
 		items = append(items, gin.H{"id": itemID, "sku": sku, "product_name": name, "quantity": quantity})
 	}
-	c.JSON(200, gin.H{"id": id, "shop_id": shop, "order_id": orderID, "status": status, "warehouse": gin.H{"warehouse_id": warehouseID, "warehouse_code": warehouseCode, "warehouse_name": warehouseName}, "created_at": created, "items": items})
+	c.JSON(200, gin.H{"id": id, "shop_id": shop, "order_id": orderID, "status": status, "shipments": s.shipmentsForPackage(c, orderID, id), "warehouse": gin.H{"warehouse_id": warehouseID, "warehouse_code": warehouseCode, "warehouse_name": warehouseName}, "created_at": created, "items": items})
 }
 
 func (s *Server) createControlPackage(c *gin.Context) {
@@ -185,8 +187,9 @@ func (s *Server) shipmentDetail(c *gin.Context) {
 	var shop, orderID, orderNumber, tracking, provider, pickupType, status, orderStatus string
 	var created time.Time
 	var shipped, delivered, failed, returning, returned *time.Time
+	var packageID string
 	var failureReason *string
-	err := s.db.QueryRow(c, `SELECT o.shop_id,s.order_id,o.order_number,s.tracking_number,s.shipping_provider,s.pickup_type,s.status,s.created_at,s.shipped_at,s.delivered_at,o.status,s.delivery_failure_reason,s.failed_at,s.returning_at,s.returned_at FROM shipments s JOIN orders o ON o.id=s.order_id WHERE s.id=$1`, id).Scan(&shop, &orderID, &orderNumber, &tracking, &provider, &pickupType, &status, &created, &shipped, &delivered, &orderStatus, &failureReason, &failed, &returning, &returned)
+	err := s.db.QueryRow(c, `SELECT o.shop_id,s.order_id,o.order_number,s.tracking_number,s.shipping_provider,s.pickup_type,s.status,s.created_at,s.shipped_at,s.delivered_at,o.status,s.delivery_failure_reason,s.failed_at,s.returning_at,s.returned_at,s.package_id FROM shipments s JOIN orders o ON o.id=s.order_id WHERE s.id=$1`, id).Scan(&shop, &orderID, &orderNumber, &tracking, &provider, &pickupType, &status, &created, &shipped, &delivered, &orderStatus, &failureReason, &failed, &returning, &returned, &packageID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, errorBody("NOT_FOUND", "shipment not found"))
 		return
@@ -195,6 +198,8 @@ func (s *Server) shipmentDetail(c *gin.Context) {
 		return
 	}
 	out := shipmentControlData(id, orderID, orderNumber, tracking, provider, pickupType, status, created, shipped, delivered)
+	out["package_id"] = packageID
+	out["warehouse"] = s.fulfillmentForOrder(c, orderID)
 	out["shop_id"] = shop
 	out["order_status"] = orderStatus
 	out["delivery_failure_reason"] = failureReason
@@ -400,5 +405,5 @@ func (s *Server) orderDetail(c *gin.Context) {
 	if len(shipments) > 0 {
 		primaryShipment = shipments[0]
 	}
-	c.JSON(200, gin.H{"id": id, "shop_id": shop, "order_number": num, "customer_data": json.RawMessage(customer), "shipping_address": json.RawMessage(address), "total_amount": total, "status": status, "payment": paymentInfo(paymentReference, paidAt), "operations": s.orderOperations(c, id), "fulfillment": s.fulfillmentForOrder(c, id), "created_at": created, "updated_at": updated, "items": s.items(c, id), "shipment": primaryShipment, "shipments": shipments, "events": s.events(c, id), "deliveries": s.deliveriesForOrder(c, id)})
+	c.JSON(200, gin.H{"id": id, "shop_id": shop, "order_number": num, "customer_data": json.RawMessage(customer), "shipping_address": json.RawMessage(address), "total_amount": total, "status": status, "payment": paymentInfo(paymentReference, paidAt), "operations": s.orderOperations(c, id), "fulfillment": s.fulfillmentForOrder(c, id), "created_at": created, "updated_at": updated, "items": s.items(c, id), "packages": s.controlPackagesForOrder(c, id), "shipment": primaryShipment, "shipments": shipments, "events": s.events(c, id), "deliveries": s.deliveriesForOrder(c, id)})
 }

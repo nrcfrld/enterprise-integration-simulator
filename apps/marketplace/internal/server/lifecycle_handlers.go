@@ -395,7 +395,7 @@ func (s *Server) createManualEventDeliveries(c *gin.Context, copies, delaySecond
 }
 
 func (s *Server) items(ctx context.Context, orderID string) []gin.H {
-	rows, err := s.db.Query(ctx, `SELECT id,product_id,sku,product_name,price,quantity,subtotal FROM order_items WHERE order_id=$1`, orderID)
+	rows, err := s.db.Query(ctx, `SELECT id,product_id,sku,product_name,price,quantity,subtotal,COALESCE((SELECT sum(pi.quantity) FROM package_items pi WHERE pi.order_item_id=oi.id),0) FROM order_items oi WHERE order_id=$1`, orderID)
 	if err != nil {
 		return []gin.H{}
 	}
@@ -405,9 +405,9 @@ func (s *Server) items(ctx context.Context, orderID string) []gin.H {
 		var id, sku, name string
 		var product *string
 		var price, sub int64
-		var quantity int
-		if rows.Scan(&id, &product, &sku, &name, &price, &quantity, &sub) == nil {
-			data = append(data, gin.H{"id": id, "product_id": product, "sku": sku, "product_name": name, "price": price, "quantity": quantity, "subtotal": sub})
+		var quantity, allocated int
+		if rows.Scan(&id, &product, &sku, &name, &price, &quantity, &sub, &allocated) == nil {
+			data = append(data, gin.H{"id": id, "product_id": product, "sku": sku, "product_name": name, "price": price, "quantity": quantity, "subtotal": sub, "allocated_quantity": allocated, "remaining_quantity": quantity - allocated})
 		}
 	}
 	return data
@@ -526,4 +526,32 @@ func (s *Server) deliveriesForOrder(ctx context.Context, orderID string) []gin.H
 		}
 	}
 	return data
+}
+
+// controlPackagesForOrder exposes allocation contents without changing provider projections.
+func (s *Server) controlPackagesForOrder(ctx context.Context, orderID string) []gin.H {
+	rows, err := s.db.Query(ctx, `SELECT p.id,p.status,COALESCE(p.warehouse_id,''),COALESCE((SELECT jsonb_agg(jsonb_build_object('id',oi.id,'sku',oi.sku,'product_name',oi.product_name,'quantity',pi.quantity) ORDER BY oi.id) FROM package_items pi JOIN order_items oi ON oi.id=pi.order_item_id WHERE pi.package_id=p.id),'[]'::jsonb) FROM packages p WHERE p.order_id=$1 ORDER BY p.created_at,p.id`, orderID)
+	if err != nil {
+		return []gin.H{}
+	}
+	defer rows.Close()
+	result := []gin.H{}
+	for rows.Next() {
+		var id, status, warehouse string
+		var items []byte
+		if err := rows.Scan(&id, &status, &warehouse, &items); err != nil {
+			return []gin.H{}
+		}
+		result = append(result, gin.H{"id": id, "status": status, "warehouse_id": warehouse, "items": json.RawMessage(items)})
+	}
+	return result
+}
+func (s *Server) shipmentsForPackage(ctx context.Context, orderID, packageID string) []gin.H {
+	result := []gin.H{}
+	for _, shipment := range s.shipmentsForOrder(ctx, orderID) {
+		if shipment["package_id"] == packageID {
+			result = append(result, shipment)
+		}
+	}
+	return result
 }

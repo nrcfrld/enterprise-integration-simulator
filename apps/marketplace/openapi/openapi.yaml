@@ -567,7 +567,7 @@ components:
       properties:
         shipping_provider: { type: string, example: provider_express }
         pickup_type: { type: string, enum: [PICKUP] }
-        package_id: { type: string, description: Existing package allocated for this order. }
+        package_id: { type: string, description: Existing package allocated for this order with no shipment yet. Omit to create a new package for remaining unallocated quantities; omission fails when none remain. Create every package shipment before progressing shipment movement. }
     PackageInput:
       type: object
       required: [items]

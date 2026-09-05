@@ -173,3 +173,20 @@ timestamps are returned by shipment detail.
 A shared registration does not select a generic delivery format. Shopee-like shops send `X-Shopee-*` headers and use the registration secret to sign `EVENT + TIMESTAMP + RAW_BODY`. Tokopedia-like shops send `Authorization` and sign `APP_KEY + RAW_BODY` using the oldest ACTIVE shop credential (creation time, then credential ID). APP_KEY is that credential's Client ID; the registration secret is unused. Admin Webhooks shows the current signing Client ID. Revoking it changes the signing credential on the next attempt, including retries.
 
 Follow the [webhook guide and runnable receiver](webhook-guide.md#runnable-receiver) to verify raw bytes, durably deduplicate, acknowledge, and fetch current provider state. Deleting a registration preserves delivery history and cancels pending deliveries; an in-flight attempt may finish. Reset to seed still clears shop history.
+
+### Explicit packages and multiple shipments
+
+One warehouse supplies an order in this simulator. Packages split its order-line quantities within that warehouse; a shipment carries one package. You cannot split a single order across warehouses.
+
+1. Read provider order detail: Shopee `item_list`, Tokopedia `line_items`. Use each line's `id` as `order_item_id`; `allocated_quantity` and `remaining_quantity` report allocation progress.
+2. Verify payment, then process/ready-to-ship (Shopee) or pack/handover (Tokopedia). The order must be canonical `READY_TO_SHIP` / Tokopedia `AWAITING_COLLECTION`.
+3. Allocate quantities using Shopee `POST /orders/{id}/packages`, or **Admin Packages → Allocate package** for either provider. The Admin form loads eligible orders and remaining line quantities. Tokopedia has no public package-allocation route.
+4. Set `package_id` in the shipment request to the returned package `id` (or `package_list[].package_id` from order detail). The Shopee simulator offers **Create shipment for package …** directly from an allocation response, preserving order and package IDs.
+
+```json
+{"package_id":"pkg_example_01","shipping_provider":"provider_express","pickup_type":"PICKUP"}
+```
+
+Replace the example ID. In the simulator, **Ship an existing package** exposes this field; **Automatically package remaining items** omits it. Omission creates a new package for unallocated quantities and fails if everything is already allocated. Create all package shipments before progressing shipment movement. Creation returns one shipment; order detail's `shipment_list` contains all shipments.
+
+For a two-unit line, allocate two packages of one unit each and create a shipment for each package. In Admin Order Detail, inspect both packages, their quantities and shipment statuses. Follow Package → Shipment → Warehouse links and use **Back to previous resource** to return. Delivering only one shipment leaves the order unfinished; progress both shipments to delivery. The existing partial-package lifecycle rules remain authoritative.

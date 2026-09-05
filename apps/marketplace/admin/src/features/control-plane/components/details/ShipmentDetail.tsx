@@ -1,8 +1,10 @@
+import { RelatedResource } from "./RelatedResource";
 import { ShipmentActions } from "./ShipmentActions";
 import type { DetailContentProps } from "./types";
 
 export function ShipmentDetail({
   data,
+  onOpen,
   token,
   onReload,
   onRefresh,
@@ -14,6 +16,7 @@ export function ShipmentDetail({
       <p>
         Shipment status: <b>{data.status}</b>
       </p>
+      <p>Package: <RelatedResource type="package" id={data.package_id} onOpen={onOpen} /> · Warehouse: <RelatedResource type="warehouse" id={data.warehouse?.warehouse_id} label={[data.warehouse?.warehouse_name, data.warehouse?.warehouse_code].filter(Boolean).join(" · ")} onOpen={onOpen} /></p>
       <div className="order-detail-grid">
         <section>
           <p className="eyebrow">Tracking number</p>
@@ -27,7 +30,7 @@ export function ShipmentDetail({
         </section>
         <section>
           <p className="eyebrow">Linked order</p>
-          <h3>{data.order_number || "—"}</h3>
+          <h3><RelatedResource type="order" id={data.order_id} label={data.order_number} onOpen={onOpen} /></h3>
           <p>{data.order_status || "—"}</p>
         </section>
         <section>

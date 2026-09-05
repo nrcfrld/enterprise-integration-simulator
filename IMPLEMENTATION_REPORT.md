@@ -6,14 +6,14 @@ Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
 ## Latest audit — Marketplace dashboard usability and Developer Experience
 
-**C1–C4 are FIXED and verified; 19 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 15 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
+**C1–C4 and H1–H2 are FIXED and verified; 17 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 13 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
 
 The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/general/UI-IMPROVEMENTS.md) contains the problem, junior-developer impact, affected feature, concrete recommendation, and source evidence for every finding. It also includes the ten-step developer journey, documentation/implementation parity inventory, missing simulator capabilities, terminology mapping, underexposed backend functionality, obsolete UI, and a prioritized implementation plan.
 
 | Priority | Open findings |
 | --- | --- |
 | Critical | None open. C1–C4 are fixed; implementation and verification are recorded below. |
-| High Priority | **H1–H3:** missing simulator package_id guidance, incomplete order/package/shipment/warehouse relationships, and filter/pagination/response documentation mismatches. **H4–H7:** setup/reset and shop discovery, provider/credential handoff, lifecycle/actor/payment clarity, and loading/empty/error/asynchronous states. **H8–H11:** incomplete delivery diagnostics, event discovery/subscription coverage, inventory discoverability, and end-to-end learning/receiver guidance. **H12–H15:** request export/response fidelity, simulator input/default/retry controls, truncated paginated selectors/webhooks, and keyboard dialog behavior. |
+| High Priority | **H3:** remaining filter/pagination/response documentation mismatches. H1/H2 package workflow and relationship navigation are fixed. **H4–H7:** setup/reset and shop discovery, provider/credential handoff, lifecycle/actor/payment clarity, and loading/empty/error/asynchronous states. **H8–H11:** incomplete delivery diagnostics, event discovery/subscription coverage, inventory discoverability, and end-to-end learning/receiver guidance. **H12–H15:** request export/response fidelity, simulator input/default/retry controls, truncated paginated selectors/webhooks, and keyboard dialog behavior. |
 | Nice to Have | **N1:** task-specific list columns/counts/dates. **N2:** scenario exercises, consistent language, and reset. **N3:** durable documentation/detail links and distinct guide destinations. **N4:** optional account-registration placement and discoverable Admin user management. |
 
 ### Audit validation and boundaries
@@ -22,20 +22,41 @@ The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/gene
 - The documented UI address `localhost:5173` was unreachable during a connection check. No services were started or application records changed. No Docker Compose or browser E2E was run.
 - Existing focused frontend checks passed: `bun run test -- src/features/developer-portal/data/endpoints.contract.test.ts src/features/developer-portal/components/RequestSimulator.test.tsx src/features/developer-portal/components/CodeExamples.test.tsx src/features/developer-portal/sections/Guides.test.tsx` — **18 tests in 4 files**. These tests do not establish semantic documentation parity or end-to-end usability; the report identifies their relevant blind spots.
 - All 25 public operations already have simulator entries. The missing capabilities concern optional fields, pagination inputs, realistic examples, request chaining/export, and diagnostics. No absent endpoint was inferred merely from an absent standalone resource screen.
-- The historical limitation below excluding partial shipments is superseded for current behavior: partial package allocation and multiple package-linked shipments are implemented. Their UI/documentation discoverability remains open under H1/H2/H3. Returns/refunds/disputes and a separate Shipping Simulator should be scoped independently; current return-to-sender behavior does not imply a full returns/refunds workflow.
+- The historical limitation below excluding partial shipments is superseded for current behavior: partial package allocation and multiple package-linked shipments are implemented. H1/H2 now cover package workflow and relationship discoverability; other response/filter/pagination documentation gaps remain under H3. Returns/refunds/disputes and a separate Shipping Simulator should be scoped independently; current return-to-sender behavior does not imply a full returns/refunds workflow.
 
 ### Proposed remediation order
 
 1. C1–C4 completed. Correct the misleading time-filter contract in H3.
 2. Make shop setup, credentials, first requests, pagination, and state feedback dependable (H4/H5/H7/H14).
-3. Complete package/shipment/warehouse traversal and lifecycle/inventory learning (H1/H2/H6/H10).
+3. H1/H2 package workflow/traversal completed. Finish lifecycle/inventory learning (H6/H10).
 4. Complete receiver setup, event coverage, and delivery diagnosis (H8/H9/H11, with C2's corrected contracts).
 5. Finish semantic documentation parity and simulator request/retry fidelity (H3/H12/H13).
 6. Apply H15 alongside touched dialogs, then N1–N4. Validate each fix before changing its status; defer broad visual redesign.
 
 **Original audit Product & DX Review:** reviewed Domain, Backend, OpenAPI, Developer Portal, API Request Simulator, Examples, Admin/Control Plane, and Tests together. That audit updated only this implementation report and the audit artifact; the subsequent C1–C4 implementations and verification are recorded below.
 
-## Latest remediation — C2–C4 webhook contracts, shop context, and history (2026-09-05)
+## Latest remediation — H1/H2 explicit packages and fulfillment relationships (2026-09-05)
+
+**H1 and H2 FIXED.** Both shipment simulators offer **Ship an existing package** and **Automatically package remaining items**, with synchronized JSON, package_id help/examples and preserved raw-body signing. Successful Shopee allocation offers a shipment handoff carrying returned order/package IDs and retaining credentials. The Admin allocation form selects eligible orders across pages and real order lines, displays allocation totals, prevents excess quantities through input limits plus backend validation, and exposes the returned package ID. Tokopedia's explicit package flow is documented through Admin because there is no public Tokopedia allocation endpoint.
+
+Order Detail shows all packages and shipments, grouped allocation contents, per-line totals and the single warehouse origin. Each shipment's actions target that shipment. Package, shipment and warehouse detail navigation includes a return path and remounts resource state; package/shipment lists expose related order, package and warehouse links. Additive control-plane fields provide the previously missing relationship IDs/contents. Order-line reads, including provider details, now report allocated_quantity and remaining_quantity. Compatibility response fields remain available; the UI prefers the complete collection.
+
+The reachable fulfillment guide, both provider detail examples, shipment metadata, generated Node example instructions, OpenAPI description/bindings, and integration/operations guides teach explicit versus automatic packaging, one warehouse per order, and creating all shipments before movement. No storage migration or lifecycle/allocation rule change was required.
+
+| Verification | Result |
+| --- | --- |
+| Frontend tests | PASS — 115 tests across 31 files. Added provider shipment-mode/body checks, Shopee returned-package handoff, paginated allocation choices/limits, cross-resource navigation with two shipments, and parity for all optional/required ShipmentInput properties. |
+| Frontend typecheck, lint, production build | PASS |
+| Go formatting/static checks and package tests | PASS — make lint and go test ./... |
+| Focused fulfillment Testcontainers regressions | PASS — explicit full-allocation shipment success for both providers, omission failure, linked control list/detail responses, partial allocation, and final-shipment order completion. |
+| Full race-enabled integration suite | PASS — 54.958s |
+| OpenAPI/sqlc generation | PASS — generated bindings updated; no database schema migration needed. |
+| UI mechanical detector | PASS — no findings in the new fulfillment components and touched package/shipment views. |
+| Compose / browser E2E | NOT RUN, per the requested boundary. Running services were not rebuilt. |
+
+**Product & DX Review:** Domain rules were verified unchanged. Backend/control and provider read projections, OpenAPI, Developer Portal, Request Simulator, generated/request examples, Admin UI, tests and reports were updated together. H1/H2 are closed; H3–H15 and N1–N4 remain open. This does not claim closure of the broader lifecycle, pagination, diagnostics, credential-handoff or dialog accessibility findings.
+
+## Prior remediation — C2–C4 webhook contracts, shop context, and history (2026-09-05)
 
 **C2, C3, and C4 FIXED.** The remaining High Priority and Nice to Have findings remain open; these targeted fixes do not claim a complete redesign or end-to-end learning curriculum.
 
@@ -476,7 +497,7 @@ Implemented in the current increment:
 
 ## Remaining gaps / known limitations
 
-The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **19 open Product & DX findings (C1–C4 fixed)** recorded in the 2026-09-05 audit above.
+The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **17 open Product & DX findings (C1–C4 and H1–H2 fixed)** recorded in the 2026-09-05 audit above.
 
 Operational notes, not PRD gaps:
 

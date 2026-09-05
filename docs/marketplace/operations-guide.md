@@ -80,3 +80,9 @@ go test -race -tags=testcontainers ./integration ./cmd/worker
 ```
 
 Use the Admin UI delivery detail to inspect immutable attempt history. Manual retry re-queues one delivery; event replay fans the same durable event ID out again to currently matching webhooks. In Order Detail, the per-event **Duplicate** and **Delay** actions create additional delivery records for currently enabled, matching registrations; they never mutate the original event or delivery attempt history.
+
+### Inspect package fulfillment
+
+Order Detail shows all packages and shipments, the single allocated warehouse, and ordered/allocated/remaining quantities for each order item ID. Package and shipment lists link to the related order and warehouse; shipment rows also link to their package. Detail links replace the current detail view and offer **Back to previous resource**.
+
+To allocate a package, open **Packages → Allocate package**, select a READY_TO_SHIP order, and enter quantities no greater than each line's remaining amount. Then use its returned Package ID as `package_id` in the provider shipment request. Create every package's shipment before advancing physical shipment movement. Omitting `package_id` automatically allocates remaining quantities and fails when there are none. See the [explicit-package workflow](integration-guide.md#explicit-packages-and-multiple-shipments) for both provider paths.

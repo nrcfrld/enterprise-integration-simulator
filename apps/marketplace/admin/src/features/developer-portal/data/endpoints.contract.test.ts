@@ -57,6 +57,17 @@ function escapeRegExp(value: string) {
 }
 
 describe("developer portal endpoint contract metadata", () => {
+  it("documents all optional and required ShipmentInput properties for both providers", () => {
+    const schema = componentSchema(openapi, "ShipmentInput");
+    const fields = [...schema.matchAll(/^ {8}([a-z_]+):/gm)].map(match => match[1]).sort();
+    for (const provider of ["shopee", "tokopedia"]) {
+      const endpoint = ENDPOINTS.find(endpoint => endpoint.id === `${provider}-create-shipment`)!;
+      expect(endpoint.bodyFields!.map(field => field.name).sort()).toEqual(fields);
+      expect(endpoint.bodyFields!.find(field => field.name === "package_id")?.required).toBe(false);
+      expect(JSON.parse(endpoint.body!)).toHaveProperty("package_id");
+    }
+  });
+
   it("gives every operation a unique id, an absolute API path, and junior-friendly guidance", () => {
     expect(new Set(ENDPOINTS.map((endpoint) => endpoint.id))).toHaveLength(ENDPOINTS.length);
     for (const endpoint of ENDPOINTS) {
