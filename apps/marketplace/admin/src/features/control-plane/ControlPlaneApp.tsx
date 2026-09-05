@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PAGE_BY_PATH, CONTROL_PATHS, type ControlPage } from "@/app/navigation";
-import type { DetailRequest, FormRequest, NoticeMessage } from "@/shared/types/controlPlane";
+import type { CreatedCredential, DetailRequest, FormRequest, NoticeMessage } from "@/shared/types/controlPlane";
 import { LoginPage } from "../auth/LoginPage";
 import { ControlForm } from "./components/ControlForm";
+import { CredentialCreatedDialog } from "./components/CredentialCreatedDialog";
 import {
   ControlPlaneSidebar,
   Notice,
@@ -21,6 +22,7 @@ export function ControlPlaneApp() {
   const [detail, setDetail] = useState<DetailRequest | null>(null);
   const [form, setForm] = useState<FormRequest | null>(null);
   const [message, setMessage] = useState<NoticeMessage | null>(null);
+  const [createdCredential, setCreatedCredential] = useState<CreatedCredential | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const page = PAGE_BY_PATH[location.pathname] || "Dashboard";
@@ -107,12 +109,25 @@ export function ControlPlaneApp() {
             shopID={resources.shopID}
             token={token}
             onClose={() => setForm(null)}
-            onSaved={async (text) => {
+            onSaved={async (text, credential) => {
               setForm(null);
+              if (credential) {
+                setMessage(null);
+                setCreatedCredential(credential);
+                void Promise.all([resources.refreshShops(), resources.refresh()])
+                  .catch((error: unknown) => reportError(error instanceof Error ? error.message : "Request failed"));
+                return;
+              }
               await resources.refreshShops();
               await resources.refresh();
               notice(text);
             }}
+          />
+        )}
+        {createdCredential && (
+          <CredentialCreatedDialog
+            credential={createdCredential}
+            onClose={() => setCreatedCredential(null)}
           />
         )}
         {detail && (

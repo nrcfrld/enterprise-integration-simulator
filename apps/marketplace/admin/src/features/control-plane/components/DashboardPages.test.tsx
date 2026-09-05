@@ -58,12 +58,17 @@ describe("Dashboard setup and maintenance states", () => {
     const user = userEvent.setup();
     render(<Dashboard {...props} role="ADMIN" />);
 
-    const toggle = screen.getByRole("checkbox");
+    const toggle = screen.getByRole("checkbox", { name: "Enable maintenance mode" });
     expect(toggle).toBeDisabled();
+    expect(screen.getByText("Checking current status…")).toBeVisible();
     await waitFor(() => expect(toggle).toBeEnabled());
+    expect(screen.getByText("Public API available")).toBeVisible();
     await user.click(toggle);
 
     await waitFor(() => expect(toggle).toBeChecked());
+    expect(screen.getByText("Public API paused")).toBeVisible();
+    expect(screen.getByText("All public endpoints return HTTP 503")).toBeVisible();
+    expect(toggle).toHaveAccessibleName("Disable maintenance mode");
     expect(requestMock).toHaveBeenLastCalledWith(
       "/control/v1/maintenance",
       "session-token",
@@ -78,6 +83,6 @@ describe("Dashboard setup and maintenance states", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Maintenance status unavailable",
     );
-    expect(screen.getByRole("checkbox")).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Enable maintenance mode" })).toBeEnabled();
   });
 });

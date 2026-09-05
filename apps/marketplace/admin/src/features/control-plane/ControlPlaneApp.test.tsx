@@ -78,7 +78,7 @@ describe("ControlPlaneApp critical session and seed flows", () => {
         { method: "POST" },
       ),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await screen.findByRole("status")).toHaveTextContent(
       "Seed complete: 12 products and 4 orders.",
     );
     expect(screen.getByRole("button", { name: "Reset to seed" })).toBeEnabled();
@@ -199,7 +199,12 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     requestMock.mockImplementation((path: string, _token?: string, options?: RequestInit) => {
       if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
       if (path.includes("/credentials") && options?.method === "POST") {
-        return Promise.resolve({ client_secret: "sec_once" });
+        return Promise.resolve({
+          id: "credential_1",
+          client_id: "client_once",
+          client_secret: "sec_once",
+          access_token: "acc_once",
+        });
       }
       return Promise.resolve({ data: [] });
     });
@@ -212,7 +217,14 @@ describe("ControlPlaneApp critical session and seed flows", () => {
 
     await user.click(await screen.findByRole("button", { name: "+ New credential" }));
     await user.click(screen.getByRole("button", { name: /^Create/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Created. Save this secret now: sec_once");
+    const dialog = await screen.findByRole("dialog", { name: "Credential created" });
+    expect(dialog).toHaveTextContent("client_once");
+    expect(dialog).toHaveTextContent("sec_once");
+    expect(dialog).toHaveTextContent("acc_once");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(requestMock.mock.calls.filter(([path]) => path === "/control/v1/shops").length).toBeGreaterThan(1);
+
+    await user.click(screen.getByRole("button", { name: "I saved these credentials" }));
+    expect(screen.queryByRole("dialog", { name: "Credential created" })).not.toBeInTheDocument();
   });
 });

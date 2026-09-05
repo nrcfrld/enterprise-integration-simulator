@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -206,7 +208,15 @@ func TestContainerWorkerEnforcesPaymentExpiryAndSellerSLA(t *testing.T) {
 			t.Fatalf("seed deadline order: %v", err)
 		}
 	}
-	w := &worker{db: env.DB, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	w := &worker{
+		db: env.DB,
+		cfg: platform.Config{
+			DeadlineBatchSize:   1,
+			DeadlineConcurrency: 2,
+			DeadlineLease:       time.Second,
+		},
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
 	if err := w.enforceOrderDeadlines(ctx); err != nil {
 		t.Fatalf("enforce deadlines: %v", err)
 	}
@@ -232,6 +242,130 @@ func TestContainerWorkerEnforcesPaymentExpiryAndSellerSLA(t *testing.T) {
 	}
 	if onHand != 2 || reserved != 0 || stock != 2 {
 		t.Fatalf("deadline release inventory = on_hand=%d reserved=%d stock=%d, want 2/0/2", onHand, reserved, stock)
+	}
+}
+
+func TestContainerDeadlineClaimsAreExclusiveAndRetryAfterLease(t *testing.T) {
+	env := testsupport.Start(t)
+	ctx := context.Background()
+	if err := platform.RunMigrations(ctx, env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	var indexDefinition string
+	if err := env.DB.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname='orders_payment_expiry_idx'`).Scan(&indexDefinition); err != nil {
+		t.Fatalf("read payment-expiry index: %v", err)
+	}
+	if !strings.Contains(indexDefinition, "(payment_expires_at, id)") || !strings.Contains(indexDefinition, "payment_status = 'PENDING'") {
+		t.Fatalf("payment-expiry polling index does not cover the claim query: %s", indexDefinition)
+	}
+	for _, query := range []string{
+		`INSERT INTO users(id,email,password_hash,role) VALUES('usr_claims','claims@test.local','unused','ADMIN')`,
+		`INSERT INTO shops(id,owner_user_id,name,provider_profile) VALUES('shop_claims','usr_claims','Claims shop','SHOPEE_LIKE')`,
+		`INSERT INTO orders(id,order_number,shop_id,customer_data,shipping_address,total_amount,status,payment_status,payment_expires_at)
+		 SELECT 'ord_claim_'||value,'CLAIM-'||value,'shop_claims','{}','{}',1,'UNPAID','PENDING',now()-interval '1 minute'
+		 FROM generate_series(1,3) AS value`,
+	} {
+		if _, err := env.DB.Exec(ctx, query); err != nil {
+			t.Fatalf("seed deadline claims: %v", err)
+		}
+	}
+
+	config := platform.Config{DeadlineBatchSize: 2, DeadlineLease: 100 * time.Millisecond}
+	workers := []*worker{{db: env.DB, cfg: config}, {db: env.DB, cfg: config}}
+	type result struct {
+		candidates []deadlineCandidate
+		err        error
+	}
+	results := make(chan result, len(workers))
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for _, current := range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			candidates, err := current.claimDeadlineBatch(ctx, deadlineRules[0])
+			results <- result{candidates: candidates, err: err}
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(results)
+
+	claimed := map[string]bool{}
+	for claim := range results {
+		if claim.err != nil {
+			t.Fatalf("claim deadline batch: %v", claim.err)
+		}
+		if len(claim.candidates) == 0 {
+			t.Fatal("a worker replica did not receive a disjoint claim")
+		}
+		for _, candidate := range claim.candidates {
+			if claimed[candidate.id] {
+				t.Fatalf("order %s was claimed by more than one replica", candidate.id)
+			}
+			claimed[candidate.id] = true
+		}
+	}
+	if len(claimed) != 3 {
+		t.Fatalf("claimed %d orders, want 3", len(claimed))
+	}
+	if candidates, err := workers[0].claimDeadlineBatch(ctx, deadlineRules[0]); err != nil || len(candidates) != 0 {
+		t.Fatalf("active lease was reclaimed: candidates=%v err=%v", candidates, err)
+	}
+
+	time.Sleep(120 * time.Millisecond)
+	reclaimed, err := workers[0].claimDeadlineBatch(ctx, deadlineRules[0])
+	if err != nil {
+		t.Fatalf("reclaim expired deadline lease: %v", err)
+	}
+	if len(reclaimed) != 2 {
+		t.Fatalf("reclaimed %d orders, want batch size 2", len(reclaimed))
+	}
+}
+
+func TestContainerDeadlineWorkerDrainsBacklogAcrossBatches(t *testing.T) {
+	env := testsupport.Start(t)
+	ctx := context.Background()
+	if err := platform.RunMigrations(ctx, env.DB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	for _, query := range []string{
+		`INSERT INTO users(id,email,password_hash,role) VALUES('usr_backlog','backlog@test.local','unused','ADMIN')`,
+		`INSERT INTO shops(id,owner_user_id,name,provider_profile) VALUES('shop_backlog','usr_backlog','Backlog shop','SHOPEE_LIKE')`,
+		`INSERT INTO orders(id,order_number,shop_id,customer_data,shipping_address,total_amount,status,payment_status,payment_expires_at)
+		 SELECT 'ord_backlog_'||value,'BACKLOG-'||value,'shop_backlog','{}','{}',1,'UNPAID','PENDING',now()-interval '1 minute'
+		 FROM generate_series(1,250) AS value`,
+	} {
+		if _, err := env.DB.Exec(ctx, query); err != nil {
+			t.Fatalf("seed deadline backlog: %v", err)
+		}
+	}
+
+	w := &worker{
+		db: env.DB,
+		cfg: platform.Config{
+			DeadlineBatchSize:   17,
+			DeadlineConcurrency: 6,
+			DeadlineLease:       time.Second,
+		},
+	}
+	if err := w.enforceOrderDeadlines(ctx); err != nil {
+		t.Fatalf("drain deadline backlog: %v", err)
+	}
+
+	var cancelled, expirationEvents, cancellationEvents int
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM orders WHERE shop_id='shop_backlog' AND status='CANCELLED' AND payment_status='EXPIRED' AND cancellation_reason='PAYMENT_EXPIRED'`).Scan(&cancelled); err != nil {
+		t.Fatalf("count expired backlog orders: %v", err)
+	}
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM domain_events WHERE shop_id='shop_backlog' AND event_type='order.payment_expired'`).Scan(&expirationEvents); err != nil {
+		t.Fatalf("count expiration events: %v", err)
+	}
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM domain_events WHERE shop_id='shop_backlog' AND event_type='order.cancelled'`).Scan(&cancellationEvents); err != nil {
+		t.Fatalf("count cancellation events: %v", err)
+	}
+	if cancelled != 250 || expirationEvents != 250 || cancellationEvents != 250 {
+		t.Fatalf("backlog result cancelled=%d expiration_events=%d cancellation_events=%d", cancelled, expirationEvents, cancellationEvents)
 	}
 }
 

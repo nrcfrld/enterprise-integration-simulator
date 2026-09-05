@@ -96,3 +96,45 @@ func TestLoadConfigRejectsInvalidRateLimit(t *testing.T) {
 		t.Fatal("LoadConfig accepted a zero rate limit")
 	}
 }
+
+func TestLoadConfigReadsDeadlineWorkerSettings(t *testing.T) {
+	t.Setenv("MARKETPLACE_ENCRYPTION_KEY", "test-encryption")
+	t.Setenv("MARKETPLACE_SESSION_SECRET", "test-session")
+	t.Setenv("MARKETPLACE_ADMIN_PASSWORD", "test-password")
+	t.Setenv("MARKETPLACE_DEADLINE_POLL_INTERVAL", "2s")
+	t.Setenv("MARKETPLACE_DEADLINE_LEASE", "45s")
+	t.Setenv("MARKETPLACE_DEADLINE_BATCH_SIZE", "250")
+	t.Setenv("MARKETPLACE_DEADLINE_CONCURRENCY", "12")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DeadlinePollInterval != 2*time.Second || cfg.DeadlineLease != 45*time.Second || cfg.DeadlineBatchSize != 250 || cfg.DeadlineConcurrency != 12 {
+		t.Fatalf("unexpected deadline worker config: %#v", cfg)
+	}
+}
+
+func TestLoadConfigRejectsInvalidDeadlineWorkerSettings(t *testing.T) {
+	tests := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{name: "poll interval", key: "MARKETPLACE_DEADLINE_POLL_INTERVAL", value: "never"},
+		{name: "lease", key: "MARKETPLACE_DEADLINE_LEASE", value: "0s"},
+		{name: "batch size", key: "MARKETPLACE_DEADLINE_BATCH_SIZE", value: "0"},
+		{name: "concurrency", key: "MARKETPLACE_DEADLINE_CONCURRENCY", value: "-1"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("MARKETPLACE_ENCRYPTION_KEY", "test-encryption")
+			t.Setenv("MARKETPLACE_SESSION_SECRET", "test-session")
+			t.Setenv("MARKETPLACE_ADMIN_PASSWORD", "test-password")
+			t.Setenv(test.key, test.value)
+			if _, err := LoadConfig(); err == nil {
+				t.Fatalf("LoadConfig accepted %s=%q", test.key, test.value)
+			}
+		})
+	}
+}

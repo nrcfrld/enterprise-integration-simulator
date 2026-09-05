@@ -29,7 +29,7 @@ On a fresh Compose volume, the API automatically creates **Marketplace Demo Stor
 
 Orders use the lifecycle `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`. The external order boundary is provider-specific: payment verification, shipment movement, and completion remain simulator control-plane operations.
 
-Each shop has either a `SHOPEE_LIKE` or `TOKOPEDIA_LIKE` profile. `SHOPEE_LIKE` applies payment expiry, a seller fulfillment SLA, and customer/seller/system-specific cancellation eligibility; `TOKOPEDIA_LIKE` represents the combined Tokopedia & Shop / TikTok Shop integration boundary. Every shop has a default **Warehouse** and may add more fulfillment origins. At order creation, the simulator atomically selects the highest-priority active warehouse that can fulfill every item, reserves its inventory, and records it on the order. A **Package** contains allocated order items for that warehouse, and a Shipment carries logistics/tracking for that package. Payment and SLA expiry are enforced asynchronously by the worker.
+Each shop has either a `SHOPEE_LIKE` or `TOKOPEDIA_LIKE` profile. `SHOPEE_LIKE` applies payment expiry, a seller fulfillment SLA, and customer/seller/system-specific cancellation eligibility; `TOKOPEDIA_LIKE` represents the combined Tokopedia & Shop / TikTok Shop integration boundary. Every shop has a default **Warehouse** and may add more fulfillment origins. At order creation, the simulator atomically selects the highest-priority active warehouse that can fulfill every item, reserves its inventory, and records it on the order. A **Package** contains allocated order items for that warehouse, and a Shipment carries logistics/tracking for that package. Payment and SLA expiry are enforced asynchronously through indexed, leased `SKIP LOCKED` batches and a bounded worker pool, so multiple worker replicas can safely drain large due-order backlogs.
 
 `SHOPEE_LIKE` has an intentionally separate external integration contract at `/api/shopee/v1`: partner-style signing headers, page-number pagination, provider-specific errors/rate-limit headers, `order_sn` and `item_*` terminology, package/shipment creation, and transformed webhook event/payloads. It is a simulator-owned Shopee-like adapter contract, not a claim of production Shopee API compatibility. The shared `/api/v1` HMAC API is limited to warehouse and webhook resources.
 
@@ -40,6 +40,8 @@ For `SHOPEE_LIKE`, cancellation reasons are validated: customer (`CHANGE_OF_MIND
 Every state-changing public endpoint requires `Idempotency-Key`. The key is scoped by credential and operation: an identical successful retry replays the original status/body, a different request returns `409`, and concurrent duplicates receive a retryable in-progress conflict. A success response is published only after its replay record is durable; a finalization failure returns an indeterminate server error without leaking the buffered success response. Read and provider search operations do not require the header.
 
 In Admin UI, **Shipments** is a separate fulfillment workspace. It lists only the selected shop’s shipment records and can advance an existing shipment one valid state at a time. Tracking/provider/pickup details are set only when an external developer creates the shipment through that shop’s Shopee-like or Tokopedia-like order contract.
+
+The **Orders → Simulate order → Mass order** mode sends up to 250 order attempts through a configurable pool of 2–50 concurrent workers. Point every attempt at the same low-stock product to exercise the real transactional inventory-reservation path; the live result reports created versus rejected orders so oversell protection can be inspected directly.
 
 Inventory is reserved atomically during order creation and released for permitted cancellation/payment failure or expiry. Marking a shipment `SHIPPED` atomically converts its package reservation into physical warehouse stock usage. The shared HMAC API exposes read-only `GET /api/v1/warehouses` and `GET /api/v1/warehouses/{id}`; warehouse setup and stock adjustment are control-plane operations. A shipment can also take the return-to-sender path `DELIVERY_FAILED → RETURNING → RETURNED`; the linked order becomes `RETURNED` once every shipment has returned.
 
@@ -87,7 +89,7 @@ For the production-browser journey, install Chromium once with
 `cd apps/marketplace/admin && bunx playwright install chromium`, then run
 `make browser-smoke` from the repository root. The target builds and waits for
 the Compose stack, then verifies login, shop creation/selection, seed reset,
-one-time credential creation, and a signed catalogue request. CI installs the
-browser and runs the same journey automatically.
+concurrent inventory contention, one-time credential creation, and a signed
+catalogue request. CI installs the browser and runs the same journey automatically.
 Use `make docker-build` to verify all production images. The Go patch release
 is pinned consistently across the workspace, CI, and production build image.

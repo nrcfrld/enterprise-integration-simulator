@@ -22,6 +22,13 @@ export interface NoticeMessage {
   text: string;
 }
 
+export interface CreatedCredential {
+  id: string;
+  client_id: string;
+  client_secret: string;
+  access_token?: string;
+}
+
 export interface Shop extends ResourceRecord {
   id: string;
   name: string;

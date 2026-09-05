@@ -202,15 +202,30 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
         </p>
         {error && <p className="error alert alert-error" role="alert">{error}</p>}
       </div>
-      <label className="switch">
+      <label className="maintenance-switch" aria-busy={loading || saving}>
+        <span className="maintenance-switch-copy">
+          <strong>{enabled ? "Public API paused" : "Public API available"}</strong>
+          <small id="maintenance-status-detail">
+            {loading
+              ? "Checking current status…"
+              : saving
+                ? enabled
+                  ? "Restoring public API…"
+                  : "Pausing public API…"
+                : enabled
+                  ? "All public endpoints return HTTP 503"
+                  : "Public endpoints are accepting requests"}
+          </small>
+        </span>
         <input
-          className="toggle toggle-primary"
+          className="toggle toggle-primary maintenance-toggle"
           type="checkbox"
           checked={enabled}
           disabled={loading || saving}
+          aria-label={enabled ? "Disable maintenance mode" : "Enable maintenance mode"}
+          aria-describedby="maintenance-status-detail"
           onChange={(event) => update(event.target.checked)}
         />
-        <span>{enabled ? "Maintenance enabled" : "Maintenance disabled"}</span>
       </label>
     </section>
   );

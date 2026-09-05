@@ -201,6 +201,49 @@ describe("ControlForm critical mutations", () => {
     });
   });
 
+  it("runs concurrent order attempts against one product and summarizes contention", async () => {
+    let orderAttempts = 0;
+    requestMock.mockImplementation((path: string) => {
+      if (path.endsWith("/products?limit=100")) {
+        return Promise.resolve({
+          data: [{ id: "product_hot", name: "Limited Bag", sku: "HOT-001", stock: 2 }],
+        });
+      }
+      orderAttempts += 1;
+      return orderAttempts <= 2
+        ? Promise.resolve({ id: `order_${orderAttempts}` })
+        : Promise.reject(new Error("insufficient inventory"));
+    });
+    const user = userEvent.setup();
+    render(<ControlForm {...baseProps} kind="order" />);
+
+    await user.click(screen.getByRole("button", { name: "Mass order" }));
+    await screen.findByRole("option", { name: /Limited Bag/ });
+    await user.clear(screen.getByLabelText("Number of orders"));
+    await user.type(screen.getByLabelText("Number of orders"), "4");
+    await user.clear(screen.getByLabelText("Concurrent workers"));
+    await user.type(screen.getByLabelText("Concurrent workers"), "2");
+    await user.click(screen.getByRole("button", { name: "Run mass simulation →" }));
+
+    await waitFor(() =>
+      expect(baseProps.onSaved).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Mass simulation finished in \d+\.\d+s: 2 created and 2 rejected across 2 concurrent workers\.$/,
+        ),
+      ),
+    );
+    expect(orderAttempts).toBe(4);
+    const orderCalls = requestMock.mock.calls.filter(([path]) =>
+      String(path).endsWith("/orders"),
+    );
+    expect(orderCalls).toHaveLength(4);
+    for (const call of orderCalls) {
+      expect(JSON.parse(call[2].body as string)).toEqual({
+        items: [{ product_id: "product_hot", quantity: 1 }],
+      });
+    }
+  });
+
   it("registers a webhook with the selected subscriptions", async () => {
     requestMock.mockResolvedValue({ secret: "generated-secret" });
     const user = userEvent.setup();
@@ -315,9 +358,19 @@ describe("ControlForm critical mutations", () => {
 
     expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
     expect(requestMock).toHaveBeenCalledTimes(1);
-    resolveRequest?.({});
+    resolveRequest?.({
+      id: "credential_1",
+      client_id: "client_once",
+      client_secret: "sec_once",
+      access_token: "acc_once",
+    });
     await waitFor(() =>
-      expect(baseProps.onSaved).toHaveBeenCalledWith("credential created"),
+      expect(baseProps.onSaved).toHaveBeenCalledWith("Credential created", {
+        id: "credential_1",
+        client_id: "client_once",
+        client_secret: "sec_once",
+        access_token: "acc_once",
+      }),
     );
   });
 

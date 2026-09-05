@@ -51,6 +51,25 @@ All scenarios are scoped to one shop. They are intentionally visible in the cont
 
 `webhook_out_of_order` delays `order.paid` by at least ten seconds, which permits a later lifecycle event to be delivered first. This is intentional: consumers must treat the event ID as their deduplication key and query the order if they need the current state.
 
+## Deadline worker capacity
+
+The payment-expiry and seller-SLA worker polls indexed deadline columns, claims
+rows in bounded batches with `FOR UPDATE SKIP LOCKED`, and processes them with a
+bounded pool. Multiple worker replicas can therefore drain the same backlog
+without waiting on or intentionally claiming the same eligible order. A
+persisted lease returns abandoned work to the queue after a crashed process.
+
+The local defaults are a `1s` polling interval, `100` orders per batch, `8`
+concurrent transitions, and a `30s` claim lease. Override them with
+`MARKETPLACE_DEADLINE_POLL_INTERVAL`, `MARKETPLACE_DEADLINE_BATCH_SIZE`,
+`MARKETPLACE_DEADLINE_CONCURRENCY`, and `MARKETPLACE_DEADLINE_LEASE`. Keep the
+lease comfortably longer than the worst expected processing time of a batch.
+The worker drains consecutive batches immediately; the polling interval only
+adds delay after no currently due work remains. Under sustained overload,
+expiration remains correct but can be later than its timestamp, so monitor due
+backlog age and add worker capacity or tune batch/concurrency rather than
+shortening the poll interval alone.
+
 ## Verification suite
 
 `go test ./...` remains a quick unit/in-process check. The tagged Testcontainers suite starts an isolated PostgreSQL 16 and Redis 7 instance and verifies transactional outbox writes, Redis-backed rate limits, reset and permission isolation, scenario isolation, outbox publishing, durable delivery attempts, and retry scheduling:

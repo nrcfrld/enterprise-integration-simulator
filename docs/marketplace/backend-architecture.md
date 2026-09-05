@@ -73,9 +73,18 @@ package and any package allocation above its order-item quantity; the
 referenced order-item row serializes concurrent commits, protecting the
 invariant even when writes bypass the application service. Product archival
 and order allocation also share a product-row lock so an active reservation
-cannot race a catalogue deletion. Deadline
-cancellation is revalidated under an order lock before status, reservation,
-event, and outbox changes commit atomically.
+cannot race a catalogue deletion.
+
+Payment-expiry and seller-SLA processing use partial indexes ordered by deadline
+and order ID. Each worker replica atomically claims a bounded batch with
+`FOR UPDATE SKIP LOCKED`, persists a short lease, and processes the claims
+through a bounded goroutine pool. The worker immediately claims the next batch
+until the currently due backlog is empty and alternates deadline classes between
+batches so one busy class cannot starve another. A dedicated deadline loop keeps
+webhook scheduling independent. A crashed claim becomes eligible again after
+its lease expires. Deadline cancellation is still revalidated under an order
+lock before status, reservation, event, and outbox changes commit atomically,
+so retries or an expired lease cannot apply the transition twice.
 
 Webhook registration validates callback URLs. Production delivery resolves the
 hostname again at dial time and accepts only public IP addresses; every redirect

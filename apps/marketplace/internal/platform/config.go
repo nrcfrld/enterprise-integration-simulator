@@ -26,6 +26,10 @@ type Config struct {
 	SeedOnBoot           bool
 	PaymentExpiry        time.Duration
 	SellerSLA            time.Duration
+	DeadlinePollInterval time.Duration
+	DeadlineLease        time.Duration
+	DeadlineBatchSize    int
+	DeadlineConcurrency  int
 	Environment          string
 	AllowPrivateWebhooks bool
 }
@@ -33,17 +37,21 @@ type Config struct {
 // LoadConfig reads configuration from MARKETPLACE_* environment variables.
 func LoadConfig() (Config, error) {
 	cfg := Config{
-		DatabaseURL:        value("MARKETPLACE_DATABASE_URL", "postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable"),
-		RedisURL:           value("MARKETPLACE_REDIS_URL", "redis://localhost:6379/0"),
-		AdminEmail:         value("MARKETPLACE_ADMIN_EMAIL", "admin@example.test"),
-		AdminPassword:      value("MARKETPLACE_ADMIN_PASSWORD", "change-me-now"),
-		HTTPAddress:        value("MARKETPLACE_HTTP_ADDRESS", ":8080"),
-		RequestLifetime:    30 * time.Second,
-		RequestBodyLimit:   1 << 20,
-		RateLimitPerMinute: 100,
-		PaymentExpiry:      30 * time.Minute,
-		SellerSLA:          48 * time.Hour,
-		Environment:        strings.ToLower(value("MARKETPLACE_ENV", "development")),
+		DatabaseURL:          value("MARKETPLACE_DATABASE_URL", "postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable"),
+		RedisURL:             value("MARKETPLACE_REDIS_URL", "redis://localhost:6379/0"),
+		AdminEmail:           value("MARKETPLACE_ADMIN_EMAIL", "admin@example.test"),
+		AdminPassword:        value("MARKETPLACE_ADMIN_PASSWORD", "change-me-now"),
+		HTTPAddress:          value("MARKETPLACE_HTTP_ADDRESS", ":8080"),
+		RequestLifetime:      30 * time.Second,
+		RequestBodyLimit:     1 << 20,
+		RateLimitPerMinute:   100,
+		PaymentExpiry:        30 * time.Minute,
+		SellerSLA:            48 * time.Hour,
+		DeadlinePollInterval: time.Second,
+		DeadlineLease:        30 * time.Second,
+		DeadlineBatchSize:    100,
+		DeadlineConcurrency:  8,
+		Environment:          strings.ToLower(value("MARKETPLACE_ENV", "development")),
 	}
 	cfg.AllowPrivateWebhooks = cfg.Environment != "production"
 	if cfg.AdminPassword == "" {
@@ -76,11 +84,28 @@ func LoadConfig() (Config, error) {
 	}{
 		{"MARKETPLACE_PAYMENT_EXPIRY", &cfg.PaymentExpiry},
 		{"MARKETPLACE_SELLER_SLA", &cfg.SellerSLA},
+		{"MARKETPLACE_DEADLINE_POLL_INTERVAL", &cfg.DeadlinePollInterval},
+		{"MARKETPLACE_DEADLINE_LEASE", &cfg.DeadlineLease},
 	} {
 		if raw := os.Getenv(setting.name); raw != "" {
 			parsed, err := time.ParseDuration(raw)
 			if err != nil || parsed <= 0 {
 				return Config{}, fmt.Errorf("%s must be a positive duration", setting.name)
+			}
+			*setting.to = parsed
+		}
+	}
+	for _, setting := range []struct {
+		name string
+		to   *int
+	}{
+		{"MARKETPLACE_DEADLINE_BATCH_SIZE", &cfg.DeadlineBatchSize},
+		{"MARKETPLACE_DEADLINE_CONCURRENCY", &cfg.DeadlineConcurrency},
+	} {
+		if raw := os.Getenv(setting.name); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed <= 0 {
+				return Config{}, fmt.Errorf("%s must be a positive integer", setting.name)
 			}
 			*setting.to = parsed
 		}

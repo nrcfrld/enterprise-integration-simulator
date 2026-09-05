@@ -132,10 +132,27 @@ export function Notice({
   message: NoticeMessage;
   onDismiss: () => void;
 }) {
+  const isError = message.type === "error";
   return (
-    <p className={`toast alert ${message.type === "error" ? "alert-error" : "alert-success"}`} role="alert">
-      {message.text}
-      <button aria-label="Dismiss notification" className="btn btn-ghost btn-xs" onClick={onDismiss}>×</button>
-    </p>
+    <div
+      className={`app-notice ${isError ? "app-notice-error" : "app-notice-success"}`}
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+    >
+      <span className="app-notice-icon" aria-hidden="true">
+        {isError ? (
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 8v4m0 4h.01M10.3 4.9 3.8 16.2A2 2 0 0 0 5.5 19h13a2 2 0 0 0 1.7-2.8L13.7 4.9a2 2 0 0 0-3.4 0Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="m7.5 12.5 3 3 6.5-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        )}
+      </span>
+      <span className="app-notice-content">
+        <strong>{isError ? "Action failed" : "Done"}</strong>
+        <span>{message.text}</span>
+      </span>
+      <button aria-label="Dismiss notification" className="app-notice-dismiss" onClick={onDismiss}>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      </button>
+    </div>
   );
 }

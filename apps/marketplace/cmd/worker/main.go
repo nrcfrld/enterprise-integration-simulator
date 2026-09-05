@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -38,7 +37,7 @@ type worker struct {
 	client *asynq.Client
 	logger *slog.Logger
 	http   *http.Client
-	orders *orders.Service
+	orders deadlineOrderService
 }
 type deliveryPayload struct {
 	DeliveryID string `json:"delivery_id"`
@@ -79,6 +78,7 @@ func main() {
 	srv := asynq.NewServer(redisOpt, asynq.Config{Concurrency: 10, Queues: map[string]int{"webhooks": 10}})
 	go w.publishLoop(ctx)
 	go w.scheduleLoop(ctx)
+	go w.deadlineLoop(ctx)
 	go func() {
 		if err := srv.Run(mux); err != nil {
 			logger.Error("asynq server stopped", "error", err)
@@ -113,47 +113,8 @@ func (w *worker) scheduleLoop(ctx context.Context) {
 			if err := w.scheduleDeliveries(ctx); err != nil {
 				w.logger.Error("delivery schedule failed", "error", err)
 			}
-			if err := w.enforceOrderDeadlines(ctx); err != nil {
-				w.logger.Error("order deadline enforcement failed", "error", err)
-			}
 		}
 	}
-}
-
-func (w *worker) enforceOrderDeadlines(ctx context.Context) error {
-	for _, rule := range []struct{ query, reason string }{
-		{`SELECT id,shop_id FROM orders WHERE status='UNPAID' AND payment_status='PENDING' AND payment_expires_at<=now() ORDER BY payment_expires_at,id LIMIT 50`, orders.PaymentExpiredReason},
-		{`SELECT id,shop_id FROM orders WHERE status IN ('PAID','PROCESSING') AND seller_deadline_at<=now() ORDER BY seller_deadline_at,id LIMIT 50`, orders.SellerSLAExpiredReason},
-	} {
-		rows, err := w.db.Query(ctx, rule.query)
-		if err != nil {
-			return fmt.Errorf("find overdue orders: %w", err)
-		}
-		for rows.Next() {
-			var id, shop string
-			if err := rows.Scan(&id, &shop); err != nil {
-				rows.Close()
-				return err
-			}
-			if err := w.orderService().CancelOverdue(ctx, shop, id, rule.reason); err != nil && !errors.Is(err, orders.ErrDeadlineNotEligible) {
-				rows.Close()
-				return err
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return err
-		}
-		rows.Close()
-	}
-	return nil
-}
-
-func (w *worker) orderService() *orders.Service {
-	if w.orders == nil {
-		w.orders = orders.NewService(orderrepo.NewPostgreSQLLifecycleRepository(w.db))
-	}
-	return w.orders
 }
 
 func (w *worker) publishOutbox(ctx context.Context) error {

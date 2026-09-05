@@ -1,12 +1,15 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
+  CreatedCredential,
   FormInitial,
   FormKind,
   ListResponse,
   ProductSummary,
   WarehouseSummary,
 } from "@/shared/types/controlPlane";
+import { MassOrderFields, type MassOrderConfig } from "./MassOrderFields";
+import { runMassOrders, type MassOrderProgress } from "../lib/massOrders";
 
 const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
   controlPlaneRequest<T>(...args);
@@ -57,10 +60,10 @@ interface ControlFormProps {
   shopID: string;
   token: string | null | undefined;
   onClose: () => void;
-  onSaved: (message: string) => void | Promise<void>;
+  onSaved: (message: string, credential?: CreatedCredential) => void | Promise<void>;
 }
 
-interface SecretResponse {
+interface SecretResponse extends Partial<CreatedCredential> {
   client_secret?: string;
   secret?: string;
 }
@@ -88,7 +91,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
     city: initial?.address?.city || supplied.city || "Jakarta",
     postal_code: initial?.address?.postal_code || supplied.postal_code || "",
   });
-  const [orderMode, setOrderMode] = useState("random");
+  const [orderMode, setOrderMode] = useState<"random" | "custom" | "mass">("random");
+  const [massOrder, setMassOrder] = useState<MassOrderConfig>({
+    productID: "",
+    orderCount: 50,
+    concurrency: 20,
+    quantity: 1,
+  });
+  const [massProgress, setMassProgress] = useState<MassOrderProgress | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [warehouses, setWarehouses] = useState<WarehouseSummary[]>([]);
@@ -137,10 +147,17 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
       items: current.items.filter((_, itemIndex) => itemIndex !== index),
     }));
   useEffect(() => {
-    if (kind !== "order" || orderMode !== "custom" || !shopID) return;
+    if (kind !== "order" || orderMode === "random" || !shopID) return;
     setProductsLoading(true);
     request<ListResponse<ProductSummary>>(`/control/v1/shops/${shopID}/products?limit=100`, token)
-      .then((result) => setProducts(result.data || []))
+      .then((result) => {
+        const records = result.data || [];
+        setProducts(records);
+        setMassOrder((current) => ({
+          ...current,
+          productID: current.productID || records.find((product) => product.stock > 0)?.id || "",
+        }));
+      })
       .catch((err: Error) => setError(err.message))
       .finally(() => setProductsLoading(false));
   }, [kind, orderMode, shopID, token]);
@@ -212,7 +229,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         path = `/control/v1/shops/${shopID}/orders`;
         if (orderMode === "random") {
           body = {};
-        } else {
+        } else if (orderMode === "custom") {
           const items = values.items
             .filter((item) => item.product_id)
             .map((item) => ({
@@ -234,6 +251,35 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               postal_code: values.postal_code.trim(),
             },
           };
+        } else {
+          if (!massOrder.productID) throw new Error("Choose a target product.");
+          if (!Number.isInteger(massOrder.orderCount) || massOrder.orderCount < 2 || massOrder.orderCount > 250) {
+            throw new Error("Number of orders must be between 2 and 250.");
+          }
+          if (!Number.isInteger(massOrder.concurrency) || massOrder.concurrency < 2 || massOrder.concurrency > 50 || massOrder.concurrency > massOrder.orderCount) {
+            throw new Error("Concurrent workers must be between 2 and 50, and cannot exceed the order count.");
+          }
+          if (!Number.isInteger(massOrder.quantity) || massOrder.quantity < 1 || massOrder.quantity > 1000) {
+            throw new Error("Quantity per order must be between 1 and 1000.");
+          }
+          const startedAt = performance.now();
+          setMassProgress({ completed: 0, created: 0, rejected: 0, total: massOrder.orderCount });
+          const result = await runMassOrders({
+            total: massOrder.orderCount,
+            concurrency: massOrder.concurrency,
+            onProgress: setMassProgress,
+            createOrder: () => request(path, token, {
+              method: "POST",
+              body: JSON.stringify({
+                items: [{ product_id: massOrder.productID, quantity: massOrder.quantity }],
+              }),
+            }),
+          });
+          const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+          await onSaved(
+            `Mass simulation finished in ${elapsedSeconds}s: ${result.created} created and ${result.rejected} rejected across ${massOrder.concurrency} concurrent workers.`,
+          );
+          return;
         }
       }
       if (kind === "package") {
@@ -262,6 +308,18 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         body: JSON.stringify(body),
       });
       const secret = result.client_secret || result.secret;
+      if (kind === "credential") {
+        if (!result.id || !result.client_id || !result.client_secret) {
+          throw new Error("The credential was created, but its one-time values were not returned. Revoke it before creating another credential.");
+        }
+        await onSaved("Credential created", {
+          id: result.id,
+          client_id: result.client_id,
+          client_secret: result.client_secret,
+          access_token: result.access_token,
+        });
+        return;
+      }
       await onSaved(
         secret
           ? `Created. Save this secret now: ${secret}`
@@ -299,7 +357,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             <p className="eyebrow">Control plane action</p>
             <h2>{title}</h2>
           </div>
-          <button type="button" className="icon-button btn btn-circle btn-ghost btn-sm" onClick={onClose}>
+          <button type="button" className="icon-button btn btn-circle btn-ghost btn-sm" aria-label="Close form" disabled={submitting} onClick={onClose}>
             ×
           </button>
         </div>
@@ -311,12 +369,14 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
             </p>
             <div
               className="order-mode"
-              role="radiogroup"
+              role="group"
               aria-label="Order mode"
             >
               <button
                 type="button"
                 className={`btn btn-sm ${orderMode === "random" ? "selected btn-primary" : "quiet btn-ghost"}`}
+                aria-pressed={orderMode === "random"}
+                disabled={submitting}
                 onClick={() => setOrderMode("random")}
               >
                 Random order
@@ -324,9 +384,20 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               <button
                 type="button"
                 className={`btn btn-sm ${orderMode === "custom" ? "selected btn-primary" : "quiet btn-ghost"}`}
+                aria-pressed={orderMode === "custom"}
+                disabled={submitting}
                 onClick={() => setOrderMode("custom")}
               >
                 Custom order
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${orderMode === "mass" ? "selected btn-primary" : "quiet btn-ghost"}`}
+                aria-pressed={orderMode === "mass"}
+                disabled={submitting}
+                onClick={() => setOrderMode("mass")}
+              >
+                Mass order
               </button>
             </div>
             {orderMode === "random" ? (
@@ -334,6 +405,15 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                 The simulator chooses one active product and a generated
                 customer snapshot.
               </p>
+            ) : orderMode === "mass" ? (
+              <MassOrderFields
+                config={massOrder}
+                products={products}
+                loading={productsLoading}
+                progress={massProgress}
+                disabled={submitting}
+                onChange={setMassOrder}
+              />
             ) : (
               <div className="custom-order-fields">
                 <div className="order-items-heading">
@@ -623,19 +703,23 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         ))}
         {error && <p className="error alert alert-error" role="alert">{error}</p>}
         <div className="form-actions modal-action">
-          <button type="button" className="quiet btn btn-ghost" onClick={onClose}>
+          <button type="button" className="quiet btn btn-ghost" disabled={submitting} onClick={onClose}>
             Cancel
           </button>
           <button className="btn btn-primary" disabled={submitting}>
             {submitting
-              ? "Saving…"
+              ? orderMode === "mass" && massProgress
+                ? `Creating ${massProgress.completed}/${massProgress.total}…`
+                : "Saving…"
               : initial
                 ? kind === "warehouse"
                   ? "Save warehouse"
                   : kind === "product"
                     ? "Save product"
                     : "Save settings"
-                : "Create"}{" "}
+                : orderMode === "mass"
+                  ? "Run mass simulation"
+                  : "Create"}{" "}
             {!submitting && <span>→</span>}
           </button>
         </div>

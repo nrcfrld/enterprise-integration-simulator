@@ -75,6 +75,7 @@ type Order struct {
 	CancellationActor      pgtype.Text
 	CancellationReason     pgtype.Text
 	FulfillmentWarehouseID pgtype.Text
+	DeadlineClaimedUntil   pgtype.Timestamptz
 }
 
 type OrderItem struct {

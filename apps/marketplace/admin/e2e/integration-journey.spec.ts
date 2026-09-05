@@ -5,7 +5,7 @@ interface CredentialResponse {
   client_secret: string;
 }
 
-test("login, select shop, seed data, create credential, and send a signed request", async ({ page }) => {
+test("login, seed data, race inventory, create credential, and send a signed request", async ({ page }) => {
   test.setTimeout(90_000);
 
   await page.goto("/");
@@ -20,13 +20,27 @@ test("login, select shop, seed data, create credential, and send a signed reques
   await page.getByLabel("Shop name").fill(shopName);
   await page.getByLabel("Marketplace behavior").selectOption("SHOPEE_LIKE");
   await page.getByRole("button", { name: /^Create/ }).click();
-  await expect(page.getByRole("alert")).toContainText("shop created");
+  await expect(page.getByRole("status")).toContainText("shop created");
 
   await page.getByLabel("Current shop").selectOption({ label: shopName });
   await page.getByRole("link", { name: "Products" }).click();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Reset to seed" }).click();
-  await expect(page.getByRole("alert")).toContainText("Seed complete: 100 products and 50 orders");
+  await expect(page.getByRole("status")).toContainText("Seed complete: 100 products and 50 orders");
+
+  await page.getByRole("link", { name: "Orders" }).click();
+  await page.getByRole("button", { name: "+ Simulate order" }).click();
+  await page.getByRole("button", { name: "Mass order" }).click();
+  const targetProduct = page.getByLabel("Target product");
+  await expect(targetProduct).not.toHaveValue("");
+  const selectedProduct = await targetProduct.locator("option:checked").textContent();
+  const availableStock = Number(selectedProduct?.match(/available (\d+)/)?.[1]);
+  expect(availableStock).toBeGreaterThan(0);
+  await page.getByLabel("Number of orders").fill("3");
+  await page.getByLabel("Concurrent workers").fill("3");
+  await page.getByLabel("Quantity per order").fill(String(availableStock));
+  await page.getByRole("button", { name: "Run mass simulation →" }).click();
+  await expect(page.locator(".app-notice")).toContainText("1 created and 2 rejected");
 
   await page.getByRole("link", { name: "API Credentials" }).click();
   await page.getByRole("button", { name: "+ New credential" }).click();
@@ -39,6 +53,10 @@ test("login, select shop, seed data, create credential, and send a signed reques
   const credential = await (await credentialResponse).json() as CredentialResponse;
   expect(credential.client_id).toMatch(/^client_/);
   expect(credential.client_secret).toMatch(/^sec_/);
+  const credentialDialog = page.getByRole("dialog", { name: "Credential created" });
+  await expect(credentialDialog).toContainText(credential.client_id);
+  await expect(credentialDialog).toContainText(credential.client_secret);
+  await page.getByRole("button", { name: "I saved these credentials" }).click();
 
   await page.getByRole("link", { name: "API Documentation" }).click();
   await page.getByRole("button", { name: "Request simulator", exact: true }).click();
