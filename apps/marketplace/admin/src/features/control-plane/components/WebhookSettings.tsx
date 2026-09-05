@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
+  Shop,
   ControlPlaneData,
   FormRequest,
   WebhookRegistration,
@@ -9,6 +12,7 @@ const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
   controlPlaneRequest<T>(...args);
 
 interface WebhookSettingsProps {
+  shop?: Shop;
   data: ControlPlaneData | null;
   shopID: string;
   token: string | null | undefined;
@@ -17,12 +21,19 @@ interface WebhookSettingsProps {
   onNotice: (text: string) => void;
 }
 
-export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNotice }: WebhookSettingsProps) {
+export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, onNotice }: WebhookSettingsProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const mutate = async (action: () => Promise<void>) => {
+    setPending(true); setError("");
+    try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Could not update webhook. Try again."); }
+    finally { setPending(false); }
+  };
   const hooks = (data?.data ?? []) as WebhookRegistration[];
   const remove = async (id: string) => {
     if (
       !window.confirm(
-        "Delete this webhook registration? Existing delivery history remains.",
+        "Delete this webhook registration? Delivery history remains in Deliveries. Pending deliveries will be cancelled. An attempt already in flight may still finish.",
       )
     )
       return;
@@ -53,6 +64,8 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
     );
   return (
     <>
+      {error && <p role="alert">{error}</p>}
+      <WebhookVerification provider={shop?.provider_profile} signingClientID={data?.delivery_contract?.signing_client_id} />
       <section className="webhook-explainer card">
         <p className="eyebrow">Registration settings</p>
         <h2>Tell the simulator where to send matching events.</h2>
@@ -80,14 +93,14 @@ export function WebhookSettings({ data, shopID, token, onForm, onRefresh, onNoti
                 <div className="row-actions">
                   <button
                     className="quiet btn btn-ghost btn-sm"
-                    onClick={() => onForm({ kind: "webhook", initial: hook })}
+                    disabled={pending} onClick={() => onForm({ kind: "webhook", initial: hook })}
                   >
                     Edit
                   </button>
-                  <button className="quiet btn btn-ghost btn-sm" onClick={() => toggle(hook)}>
+                  <button className="quiet btn btn-ghost btn-sm" disabled={pending} onClick={() => void mutate(() => toggle(hook))}>
                     {hook.enabled ? "Disable" : "Enable"}
                   </button>
-                  <button className="danger btn btn-error btn-soft btn-sm" onClick={() => remove(hook.id)}>
+                  <button className="danger btn btn-error btn-soft btn-sm" disabled={pending} onClick={() => void mutate(() => remove(hook.id))}>
                     Delete
                   </button>
                 </div>

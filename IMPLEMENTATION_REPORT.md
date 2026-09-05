@@ -1,10 +1,85 @@
 # Implementation Report — Enterprise Integration Simulator
 
-Audit date: 2026-09-04
+Latest Product & DX audit: 2026-09-05 (implementation verification history below begins 2026-09-04)
 PRD: Enterprise Integration Simulator v0.2, updated by Order Lifecycle & API Brief  
 Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
-## Result
+## Latest audit — Marketplace dashboard usability and Developer Experience
+
+**C1–C4 are FIXED and verified; 19 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 15 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
+
+The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/general/UI-IMPROVEMENTS.md) contains the problem, junior-developer impact, affected feature, concrete recommendation, and source evidence for every finding. It also includes the ten-step developer journey, documentation/implementation parity inventory, missing simulator capabilities, terminology mapping, underexposed backend functionality, obsolete UI, and a prioritized implementation plan.
+
+| Priority | Open findings |
+| --- | --- |
+| Critical | None open. C1–C4 are fixed; implementation and verification are recorded below. |
+| High Priority | **H1–H3:** missing simulator package_id guidance, incomplete order/package/shipment/warehouse relationships, and filter/pagination/response documentation mismatches. **H4–H7:** setup/reset and shop discovery, provider/credential handoff, lifecycle/actor/payment clarity, and loading/empty/error/asynchronous states. **H8–H11:** incomplete delivery diagnostics, event discovery/subscription coverage, inventory discoverability, and end-to-end learning/receiver guidance. **H12–H15:** request export/response fidelity, simulator input/default/retry controls, truncated paginated selectors/webhooks, and keyboard dialog behavior. |
+| Nice to Have | **N1:** task-specific list columns/counts/dates. **N2:** scenario exercises, consistent language, and reset. **N3:** durable documentation/detail links and distinct guide destinations. **N4:** optional account-registration placement and discoverable Admin user management. |
+
+### Audit validation and boundaries
+
+- Source-based review at commit `0dfdd77` of Admin UI, Developer Portal, simulator, routes/handlers, worker, OpenAPI, repository guides, and example clients. The walkthrough is a cognitive walkthrough, not a completed live integration or user study.
+- The documented UI address `localhost:5173` was unreachable during a connection check. No services were started or application records changed. No Docker Compose or browser E2E was run.
+- Existing focused frontend checks passed: `bun run test -- src/features/developer-portal/data/endpoints.contract.test.ts src/features/developer-portal/components/RequestSimulator.test.tsx src/features/developer-portal/components/CodeExamples.test.tsx src/features/developer-portal/sections/Guides.test.tsx` — **18 tests in 4 files**. These tests do not establish semantic documentation parity or end-to-end usability; the report identifies their relevant blind spots.
+- All 25 public operations already have simulator entries. The missing capabilities concern optional fields, pagination inputs, realistic examples, request chaining/export, and diagnostics. No absent endpoint was inferred merely from an absent standalone resource screen.
+- The historical limitation below excluding partial shipments is superseded for current behavior: partial package allocation and multiple package-linked shipments are implemented. Their UI/documentation discoverability remains open under H1/H2/H3. Returns/refunds/disputes and a separate Shipping Simulator should be scoped independently; current return-to-sender behavior does not imply a full returns/refunds workflow.
+
+### Proposed remediation order
+
+1. C1–C4 completed. Correct the misleading time-filter contract in H3.
+2. Make shop setup, credentials, first requests, pagination, and state feedback dependable (H4/H5/H7/H14).
+3. Complete package/shipment/warehouse traversal and lifecycle/inventory learning (H1/H2/H6/H10).
+4. Complete receiver setup, event coverage, and delivery diagnosis (H8/H9/H11, with C2's corrected contracts).
+5. Finish semantic documentation parity and simulator request/retry fidelity (H3/H12/H13).
+6. Apply H15 alongside touched dialogs, then N1–N4. Validate each fix before changing its status; defer broad visual redesign.
+
+**Original audit Product & DX Review:** reviewed Domain, Backend, OpenAPI, Developer Portal, API Request Simulator, Examples, Admin/Control Plane, and Tests together. That audit updated only this implementation report and the audit artifact; the subsequent C1–C4 implementations and verification are recorded below.
+
+## Latest remediation — C2–C4 webhook contracts, shop context, and history (2026-09-05)
+
+**C2, C3, and C4 FIXED.** The remaining High Priority and Nice to Have findings remain open; these targeted fixes do not claim a complete redesign or end-to-end learning curriculum.
+
+- **C2 — Provider-specific webhook verification:** Portal Webhooks now mounts the receiver guide and a runnable Node.js/Bun raw-body receiver, embedded from [the same example source](apps/marketplace/admin/examples/webhook-receiver.mjs). Admin, simulator, endpoint reference, repository guides and outbound OpenAPI explain that the shop profile selects delivery, regardless of registration route. Shopee uses its registration secret and X-Shopee headers; Tokopedia uses Authorization with the oldest ACTIVE app credential. Admin displays that credential's Client ID or missing-credential guidance; its Tokopedia form hides the ineffective registration-secret input. The API retains that legacy field for compatibility and explicitly labels it unused. Both metadata and worker use creation time then credential ID, including on retries; rotation/revocation and deduplication/freshness/consumer next steps are explained.
+- **C3 — Scoped asynchronous state:** Requests carry session/route/shop/page scope and generation checks; stale results/errors cannot replace current data. Context switches hide old resources/actions immediately, with loading and retryable error states. A keyed workspace resets drafts, dialogs, notices, and scenario input for each shop/path while keeping navigation/header stable. Shop forms and detail dialogs show their shop identity. Already-submitted mutations may finish against the original shop, but their detached UI state cannot appear in the new context.
+- **C4 — Retained delivery history:** [Migration 014](apps/marketplace/migrations/014_webhook_history.sql) adds `webhooks.deleted_at` and delivery status `CANCELLED`. Both deletion APIs retain registrations and their diagnostic history; pending deliveries/leases are cancelled in the same transaction. Active lists, setup counts, updates, fanout, and retries respect deletion. Row locks serialize fanout/retry with deletion. An in-flight HTTP attempt may finish and record its outcome without changing CANCELLED back to a deliverable state. Deliveries UI labels deleted registrations and removes Retry; API retry returns `409 WEBHOOK_DELETED`. Confirmation, OpenAPI, portal and repository guides document retention and replacement/replay. Reset to seed intentionally clears all shop history.
+
+| Verification | Result |
+| --- | --- |
+| Frontend suite | PASS — 109 tests across 28 files, including late A → B results, failed B/retry/scenario saves, modal clearing, portal receiver reachability, signing-credential guidance and deletion errors. |
+| Frontend typecheck / lint / production build | PASS |
+| Runnable receiver contract tests | PASS — both providers, exact raw bytes, wrong keys, modified body, freshness, malformed/missing signatures, event identity. |
+| Go package tests | PASS — `go test ./...`. |
+| Race-enabled isolated Testcontainers suites | PASS — integration 83.284s; worker 41.106s. Includes actual outbound signature checks, Tokopedia creation/revocation/missing-credential rules, both delete APIs retaining attempts, and in-flight cancellation/fanout. |
+| Final retention regression | PASS — rerun after moving retry authorization before its database transaction and tightening manual-fanout assertions. |
+| Go static checks / generation | PASS — formatting and vet; OpenAPI/sqlc regenerated with repeat generation producing the same files. |
+| UI mechanical detector | PASS — no findings in changed UI targets. |
+| Docker Compose / browser E2E | NOT RUN, as requested. Existing running stack was not rebuilt or migrated. |
+
+**Release boundary:** Migration 014 was applied in isolated test databases. Apply it before running the updated API and worker against an existing environment. Retention starts with this implementation; data already hard-deleted by the old behavior cannot be recovered. The example receiver uses a memory-only inbox for local learning and explicitly requires durable storage in the external application.
+
+**Product & DX Review:** Domain/storage and backend delivery lifecycle, OpenAPI and generated bindings, Developer Portal, Request Simulator, runnable examples, Admin/Control Plane and relevant tests were reviewed and updated together. Order/inventory domain semantics are unchanged. Reports close only C2–C4 in this task; C1 remains fixed from the prior remediation.
+
+## Prior remediation — C1 Shopee API order identifiers (2026-09-05)
+
+**C1 FIXED.** Learners now use the returned order_id for Shopee detail and action paths; order_sn is explicitly labeled as the display order number.
+
+- Corrected shared order-ID guidance and every Shopee order path helper, plus list/detail and cancellation/process/ready-to-ship response examples.
+- Added **Use this order** to successful Shopee list results. Selecting a returned order opens the detail operation with its API ID prefilled while retaining credentials. Invalid/error responses and rows without order_id do not expose an action; there is no fallback to order_sn.
+- Updated OpenAPI list/path descriptions and the repository integration guide with distinct illustrative API ID/display-number values and the simulator handoff.
+- Added frontend semantic/example and rendered list-to-detail regressions. Extended the existing Shopee API contract test to fetch detail using a listed order_id, assert both identities match, and verify the display number produces 404/error_not_found.
+
+| Verification | Result |
+| --- | --- |
+| Developer Portal tests | PASS — 35 tests across 9 files, including the new list-to-detail and invalid/missing-ID response cases. |
+| Frontend typecheck, lint, production build | PASS |
+| Focused Testcontainers Shopee public contract | PASS — real HTTP API with isolated PostgreSQL/Redis, 200 for listed order_id and 404 for order_sn. |
+| OpenAPI generation | PASS — no generated binding drift from the description-only contract update. |
+| UI mechanical detector | PASS — no findings in changed UI targets. |
+| Docker Compose build / browser E2E | NOT RUN — outside this focused remediation. |
+
+**Product & DX Review:** Domain and backend identifier semantics were confirmed and preserved. OpenAPI descriptions, Developer Portal reference/examples, Request Simulator list-to-detail navigation, repository integration guidance, frontend/backend contract tests, and reports were updated together. Admin resource screens and standalone catalogue clients need no changes for C1. Remaining audit findings are not marked implemented.
+
+## Historical implementation result
 
 **85 of 85 applicable requirements are COMPLETE.**
 
@@ -401,7 +476,7 @@ Implemented in the current increment:
 
 ## Remaining gaps / known limitations
 
-There are **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**.
+The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **19 open Product & DX findings (C1–C4 fixed)** recorded in the 2026-09-05 audit above.
 
 Operational notes, not PRD gaps:
 
@@ -409,4 +484,4 @@ Operational notes, not PRD gaps:
 - This is intentionally a local sandbox. Before any non-local use, replace the documented development credentials and encryption/session secrets.
 - The Compose volume is persistent and now contains audit-created sample shops/orders. It was deliberately not deleted; a destructive volume reset was outside the audit scope.
 - SAP, Shipping, Payment, and Identity simulators are future work explicitly outside this initial Marketplace-only scope.
-- Returns, refunds, disputes, partial shipments, and a separate Shipping Simulator remain intentionally outside v1, as specified by the new brief.
+- Historical brief exclusions were returns, refunds, disputes, partial shipments, and a separate Shipping Simulator. Later increments implemented partial package allocation, multiple shipments, and return-to-sender progression; see the current support clarification in the 2026-09-05 audit above. This does not claim a full returns/refunds/disputes workflow.

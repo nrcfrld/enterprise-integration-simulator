@@ -267,15 +267,35 @@ func (s *Server) transitionShipment(c *gin.Context, shop, shipmentID, shipmentTa
 func (s *Server) retryDelivery(c *gin.Context) {
 	id := c.Param("id")
 	var shop string
-	err := s.db.QueryRow(c, `SELECT w.shop_id FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id WHERE d.id=$1`, id).Scan(&shop)
+	if err := s.db.QueryRow(c, `SELECT w.shop_id FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id WHERE d.id=$1`, id).Scan(&shop); err != nil {
+		c.JSON(404, errorBody("NOT_FOUND", "delivery not found"))
+		return
+	}
+	// Resolve authorization before holding a transaction connection: operator
+	// authorization can itself query the pool.
+	if !s.mustAccessShop(c, shop) {
+		return
+	}
+	tx, err := s.db.Begin(c)
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not schedule retry"))
+		return
+	}
+	defer func() { _ = tx.Rollback(c) }()
+	var deleted bool
+	err = tx.QueryRow(c, `SELECT w.deleted_at IS NOT NULL FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id WHERE d.id=$1 AND w.shop_id=$2 FOR SHARE OF w`, id, shop).Scan(&deleted)
 	if err != nil {
 		c.JSON(404, errorBody("NOT_FOUND", "delivery not found"))
 		return
 	}
-	if !s.mustAccessShop(c, shop) {
+	if deleted {
+		c.JSON(409, errorBody("WEBHOOK_DELETED", "This webhook was deleted. Register a new callback and replay the event instead."))
 		return
 	}
-	_, err = s.db.Exec(c, `UPDATE webhook_deliveries SET status='PENDING',next_attempt_at=now(),leased_until=NULL WHERE id=$1`, id)
+	_, err = tx.Exec(c, `UPDATE webhook_deliveries SET status='PENDING',next_attempt_at=now(),leased_until=NULL WHERE id=$1`, id)
+	if err == nil {
+		err = tx.Commit(c)
+	}
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not schedule retry"))
 		return
@@ -338,7 +358,7 @@ func (s *Server) createManualEventDeliveries(c *gin.Context, copies, delaySecond
 		return
 	}
 	defer func() { _ = tx.Rollback(c) }()
-	rows, err := tx.Query(c, `SELECT id FROM webhooks WHERE shop_id=$1 AND enabled=true AND subscribed_events ? (SELECT event_type FROM domain_events WHERE id=$2)`, shop, eventID)
+	rows, err := tx.Query(c, `SELECT id FROM webhooks WHERE shop_id=$1 AND enabled=true AND deleted_at IS NULL AND subscribed_events ? (SELECT event_type FROM domain_events WHERE id=$2) FOR SHARE`, shop, eventID)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not load matching webhooks"))
 		return

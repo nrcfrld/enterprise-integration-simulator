@@ -56,6 +56,12 @@ const (
 	WarehouseStatusINACTIVE WarehouseStatus = "INACTIVE"
 )
 
+// Defines values for WebhookListDeliveryContractProviderProfile.
+const (
+	SHOPEELIKE    WebhookListDeliveryContractProviderProfile = "SHOPEE_LIKE"
+	TOKOPEDIALIKE WebhookListDeliveryContractProviderProfile = "TOKOPEDIA_LIKE"
+)
+
 // Defines values for WebhookRegistrationSubscribedEvents.
 const (
 	WebhookRegistrationSubscribedEventsOrderCancelled   WebhookRegistrationSubscribedEvents = "order.cancelled"
@@ -274,15 +280,24 @@ type WarehouseList struct {
 
 // WebhookList defines model for WebhookList.
 type WebhookList struct {
-	Data []WebhookRegistration `json:"data"`
+	Data             []WebhookRegistration `json:"data"`
+	DeliveryContract *struct {
+		ProviderProfile *WebhookListDeliveryContractProviderProfile `json:"provider_profile,omitempty"`
+
+		// SigningClientId Oldest ACTIVE credential Client ID; empty when none. Used for Tokopedia deliveries only.
+		SigningClientId *string `json:"signing_client_id,omitempty"`
+	} `json:"delivery_contract,omitempty"`
 }
+
+// WebhookListDeliveryContractProviderProfile defines model for WebhookList.DeliveryContract.ProviderProfile.
+type WebhookListDeliveryContractProviderProfile string
 
 // WebhookRegistration defines model for WebhookRegistration.
 type WebhookRegistration struct {
 	Enabled bool   `json:"enabled"`
 	Id      string `json:"id"`
 
-	// Secret Returned only once when the simulator generated it.
+	// Secret Returned once when generated. Verifies Shopee delivery only; unused for Tokopedia which uses its oldest ACTIVE app credential.
 	Secret           *string                               `json:"secret,omitempty"`
 	ShopId           string                                `json:"shop_id"`
 	SubscribedEvents []WebhookRegistrationSubscribedEvents `json:"subscribed_events"`
@@ -678,7 +693,7 @@ type TokopediaConfigureWebhooksJSONBody struct {
 	CallbackUrl string                                         `json:"callback_url"`
 	EventTypes  []TokopediaConfigureWebhooksJSONBodyEventTypes `json:"event_types"`
 
-	// Secret Callback verification secret.
+	// Secret Legacy optional registration secret; unused for Tokopedia delivery verification. Use the oldest ACTIVE app credential secret.
 	Secret *string `json:"secret,omitempty"`
 }
 

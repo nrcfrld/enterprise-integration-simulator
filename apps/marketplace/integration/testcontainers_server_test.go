@@ -799,6 +799,26 @@ func TestContainerShopeeLikePublicContract(t *testing.T) {
 	if len(list) != 1 || response["more"] != true || list[0].(map[string]any)["order_sn"] == nil {
 		t.Fatalf("Shopee pagination/terminology response = %#v", response)
 	}
+	// Follow the portal's list-to-detail instruction using the returned API ID,
+	// keeping the human-readable order number distinct throughout the exercise.
+	listed := list[0].(map[string]any)
+	listedID, idOK := listed["order_id"].(string)
+	listedNumber, numberOK := listed["order_sn"].(string)
+	if !idOK || !numberOK || listedID == "" || listedNumber == "" || listedID == listedNumber {
+		t.Fatalf("Shopee API ID and display number must be distinct: %#v", listed)
+	}
+	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders/"+listedID, client, secret, nil)
+	if status != http.StatusOK {
+		t.Fatalf("Shopee detail using listed order_id = %d %#v", status, body)
+	}
+	listedDetail := body["response"].(map[string]any)
+	if listedDetail["order_id"] != listedID || listedDetail["order_sn"] != listedNumber {
+		t.Fatalf("Shopee list/detail identity mismatch: %#v", listedDetail)
+	}
+	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders/"+listedNumber, client, secret, nil)
+	if status != http.StatusNotFound || body["error"] != "error_not_found" {
+		t.Fatalf("Shopee display number must not address an order: %d %#v", status, body)
+	}
 	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders?page_no=0", client, secret, nil)
 	if status != http.StatusBadRequest || body["error"] != "error_param" {
 		t.Fatalf("Shopee parameter error = %d %#v", status, body)

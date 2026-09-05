@@ -124,7 +124,7 @@ func shopeeSubscriptionEvents(event string) []string {
 
 func (s *Server) shopeeListWebhooks(c *gin.Context) {
 	client := currentClient(c)
-	rows, err := s.db.Query(c, `SELECT id,url,enabled,subscribed_events FROM webhooks WHERE shop_id=$1 ORDER BY created_at DESC`, client.ShopID)
+	rows, err := s.db.Query(c, `SELECT id,url,enabled,subscribed_events FROM webhooks WHERE shop_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC`, client.ShopID)
 	if err != nil {
 		s.shopeeError(c, 500, "error_system", "could not list webhooks")
 		return
@@ -158,7 +158,7 @@ func (s *Server) shopeeListWebhooks(c *gin.Context) {
 
 func (s *Server) listWebhooks(c *gin.Context) { s.webhookListResponse(c, currentClient(c).ShopID) }
 func (s *Server) webhookListResponse(c *gin.Context, shop string) {
-	rows, err := s.db.Query(c, `SELECT id,url,enabled,subscribed_events,created_at FROM webhooks WHERE shop_id=$1 ORDER BY created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT id,url,enabled,subscribed_events,created_at FROM webhooks WHERE shop_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list webhooks"))
 		return
@@ -176,13 +176,19 @@ func (s *Server) webhookListResponse(c *gin.Context, shop string) {
 		}
 		data = append(data, gin.H{"id": id, "shop_id": shop, "url": url, "enabled": enabled, "subscribed_events": json.RawMessage(events), "created_at": created})
 	}
-	s.controlListResponse(c, data)
+	var provider, signingClientID string
+	err = s.db.QueryRow(c, `SELECT provider_profile,COALESCE((SELECT client_id FROM credentials WHERE shop_id=$1 AND status='ACTIVE' ORDER BY created_at,id LIMIT 1),'') FROM shops WHERE id=$1`, shop).Scan(&provider, &signingClientID)
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not read webhook delivery contract"))
+		return
+	}
+	s.controlListResponse(c, data, gin.H{"delivery_contract": gin.H{"provider_profile": provider, "signing_client_id": signingClientID}})
 }
 
 // controlListResponse gives every control-plane collection the same page/limit
 // contract. This keeps the dashboard responsive while preserving existing list
 // consumers that only read the data field.
-func (s *Server) controlListResponse(c *gin.Context, data []gin.H) {
+func (s *Server) controlListResponse(c *gin.Context, data []gin.H, metadata ...gin.H) {
 	limit := 20
 	if parsed, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && parsed > 0 && parsed <= 100 {
 		limit = parsed
@@ -201,21 +207,18 @@ func (s *Server) controlListResponse(c *gin.Context, data []gin.H) {
 	if start > total {
 		start = total
 	}
-	c.JSON(http.StatusOK, gin.H{
+	out := gin.H{
 		"data":       data[start:end],
 		"pagination": gin.H{"page": pageNumber, "limit": limit, "total": total, "total_pages": totalPages, "has_previous": pageNumber > 1, "has_next": pageNumber < totalPages},
-	})
+	}
+	for _, extra := range metadata {
+		for key, value := range extra {
+			out[key] = value
+		}
+	}
+	c.JSON(http.StatusOK, out)
 }
 func (s *Server) deleteWebhook(c *gin.Context) {
 	client := currentClient(c)
-	cmd, err := s.db.Exec(c, `DELETE FROM webhooks WHERE id=$1 AND shop_id=$2`, c.Param("id"), client.ShopID)
-	if err != nil {
-		c.JSON(500, errorBody("DATABASE_ERROR", "could not delete webhook"))
-		return
-	}
-	if cmd.RowsAffected() == 0 {
-		c.JSON(404, errorBody("NOT_FOUND", "webhook not found"))
-		return
-	}
-	c.Status(204)
+	s.deleteWebhookResponse(c, c.Param("id"), client.ShopID)
 }

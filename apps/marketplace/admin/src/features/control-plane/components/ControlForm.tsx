@@ -1,6 +1,8 @@
+import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
 import { type FormEvent, useEffect, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
+  Shop,
   CreatedCredential,
   FormInitial,
   FormKind,
@@ -55,6 +57,7 @@ interface FormValues extends Record<string, unknown> {
 }
 
 interface ControlFormProps {
+  shop?: Shop;
   kind: FormKind;
   initial?: FormInitial;
   shopID: string;
@@ -72,7 +75,7 @@ function inputValue(value: unknown): string | number {
   return typeof value === "string" || typeof value === "number" ? value : "";
 }
 
-export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: ControlFormProps) {
+export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSaved }: ControlFormProps) {
   const supplied = (initial ?? {}) as Partial<FormValues>;
   const [values, setValues] = useState<FormValues>({
     status: "ACTIVE",
@@ -307,7 +310,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
         method,
         body: JSON.stringify(body),
       });
-      const secret = result.client_secret || result.secret;
+      const secret = result.client_secret || (shop?.provider_profile === "TOKOPEDIA_LIKE" ? undefined : result.secret);
       if (kind === "credential") {
         if (!result.id || !result.client_id || !result.client_secret) {
           throw new Error("The credential was created, but its one-time values were not returned. Revoke it before creating another credential.");
@@ -352,6 +355,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
   return (
     <div className="modal-backdrop modal modal-open" role="presentation">
       <form className="modal-card modal-box" onSubmit={submit}>
+        {shop && kind !== "shop" && kind !== "user" && <p className="form-help">{shop.name} · {shop.provider_profile} · {shop.id}</p>}
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Control plane action</p>
@@ -590,6 +594,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
               Choose the events this endpoint should receive. It does not emit
               events itself.
             </p>
+            <WebhookVerification provider={shop?.provider_profile} />
             <div className="webhook-primary-fields">
               <label>
                 Endpoint URL
@@ -602,8 +607,8 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                   onChange={(event) => update("url", event.target.value)}
                 />
               </label>
-              <label>
-                Replace secret (optional)
+              {shop?.provider_profile !== "TOKOPEDIA_LIKE" && <label>
+                {initial ? "Replace webhook secret (optional)" : "Webhook secret (optional)"}
                 <input
                   className="input input-bordered"
                   value={inputValue(values.secret)}
@@ -614,7 +619,7 @@ export function ControlForm({ kind, initial, shopID, token, onClose, onSaved }: 
                   }
                   onChange={(event) => update("secret", event.target.value)}
                 />
-              </label>
+              </label>}
             </div>
             <fieldset className="event-selector">
               <legend>Subscribed events</legend>

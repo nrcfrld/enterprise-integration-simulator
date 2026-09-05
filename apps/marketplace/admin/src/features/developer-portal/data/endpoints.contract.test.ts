@@ -145,6 +145,27 @@ describe("developer portal endpoint contract metadata", () => {
     expect(portal).toEqual(documented);
   });
 
+  it("distinguishes Shopee API order IDs from display numbers throughout the workflow", () => {
+    const shopee = ENDPOINTS.filter((entry) => entry.contract === "shopee");
+    const list = JSON.parse(shopee.find((entry) => entry.id === "shopee-list-orders")!.response).response.order_list[0];
+    const detail = JSON.parse(shopee.find((entry) => entry.id === "shopee-get-order")!.response).response;
+    expect(list.order_id).toMatch(/^ord_/);
+    expect(list.order_sn).toMatch(/^SIM-/);
+    expect(list.order_id).not.toBe(list.order_sn);
+    expect(detail.order_id).toBe(list.order_id);
+    expect(detail.order_sn).toBe(list.order_sn);
+
+    for (const entry of shopee.filter((value) => value.path.includes("/orders/{id}"))) {
+      expect(entry.pathParams?.[0].help, entry.id).toContain("Copy order_id");
+      expect(entry.pathParams?.[0].help, entry.id).toContain("order_sn is the display order number and cannot be used as {id}");
+    }
+    for (const id of ["shopee-cancel-order", "shopee-process-order", "shopee-ready-to-ship"]) {
+      const result = JSON.parse(shopee.find((entry) => entry.id === id)!.response).response;
+      expect(result.order_id, id).toBe(list.order_id);
+      expect(result, id).not.toHaveProperty("order_sn");
+    }
+  });
+
   it("keeps request parameters, payload shape, and idempotency metadata aligned with OpenAPI", () => {
     const operations = publicOperations(openapi);
 

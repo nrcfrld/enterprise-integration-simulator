@@ -23,6 +23,7 @@ export interface WarehouseInventoryItem {
 }
 
 export interface DetailData {
+  webhook_deleted?: boolean;
   id?: string;
   shop_id?: string;
   sku?: string;

@@ -37,7 +37,7 @@ func (s *Server) dashboard(c *gin.Context) {
 		var products, activeCredentials, webhooks, enabledWebhooks int
 		_ = s.db.QueryRow(c, `SELECT count(*) FROM products WHERE shop_id=$1`, shopID).Scan(&products)
 		_ = s.db.QueryRow(c, `SELECT count(*) FROM credentials WHERE shop_id=$1 AND status='ACTIVE'`, shopID).Scan(&activeCredentials)
-		_ = s.db.QueryRow(c, `SELECT count(*), count(*) FILTER (WHERE enabled) FROM webhooks WHERE shop_id=$1`, shopID).Scan(&webhooks, &enabledWebhooks)
+		_ = s.db.QueryRow(c, `SELECT count(*), count(*) FILTER (WHERE enabled) FROM webhooks WHERE shop_id=$1 AND deleted_at IS NULL`, shopID).Scan(&webhooks, &enabledWebhooks)
 		setup = gin.H{"shop_id": shopID, "seeded": products >= 100, "products": products, "credential_active": activeCredentials > 0, "webhook_configured": webhooks > 0, "webhook_enabled": enabledWebhooks > 0, "ready": products > 0 && activeCredentials > 0 && enabledWebhooks > 0}
 	}
 	c.JSON(http.StatusOK, gin.H{"shops": shops, "orders": orders, "failed_deliveries": failed, "role": a.Role, "setup": setup})

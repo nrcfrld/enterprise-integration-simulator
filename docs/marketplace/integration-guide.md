@@ -55,10 +55,12 @@ Rate-limited responses use HTTP `429` and expose `X-RateLimit-Limit`, `X-RateLim
 
 ## First integration
 
-1. Sign `POST /api/v1/webhooks` and register an endpoint for `order.created`, `order.paid`, `order.ready_to_ship`, and `order.shipped`. Registrations reject unsupported event types; product lifecycle subscriptions include `product.created`, `product.updated`, and `product.deleted`.
-2. Use the control plane to seed a shop or progress an order.
-3. Consume webhook events idempotently using `X-Marketplace-Event-Id`.
-4. Inspect delivery attempts in the control plane, then enable scenarios to test your recovery path.
+1. Select/create the intended shop. If you want seed fixtures, use Reset to seed **before** creating credentials and webhooks; reset deletes earlier setup and history.
+2. Create an API credential and start the [provider-specific receiver](webhook-guide.md#runnable-receiver). The shop profile selects outbound verification even when you register through the shared API. Tokopedia uses the oldest ACTIVE app credential shown in Admin Webhooks; its callback secret is unused.
+3. Sign `POST /api/v1/webhooks` and register a worker-reachable endpoint for `order.created`, `order.paid`, `order.ready_to_ship`, and `order.shipped`. For Shopee, save the registration secret and configure the receiver with it before triggering an event. Registrations reject unsupported event types; product lifecycle subscriptions include `product.created`, `product.updated`, and `product.deleted`.
+4. Create or progress an order. Verify exact raw bytes before processing, then durably accept/deduplicate using `X-Shopee-Event-Id` for Shopee or body `tts_notification_id` for Tokopedia. Return 2xx after durable acceptance and fetch current provider state from your inbox worker before acting.
+5. Inspect delivery attempts in the control plane, then enable scenarios to test your recovery path. Do not reset the shop between registration and delivery testing.
+
 
 Products are provider-specific at the public boundary. Shopee-like uses `GET /api/shopee/v1/products?page_no=&page_size=` with `item_*` fields and partner signing; Tokopedia-like uses `POST /api/tokopedia/v202309/products/search` with `data.products`, opaque page tokens, app-key signing, and an access token. Use each provider’s product detail endpoint for one product. Catalogue creation, updates, stock, and archive remain Admin Control Plane operations so warehouse inventory and product events stay atomic.
 
@@ -84,12 +86,21 @@ The path excludes query parameters and the method is deliberately not part of
 this contract. Generic headers will be rejected at this boundary.
 
 The order list is `GET /api/shopee/v1/orders?page_no=1&page_size=20`, with
-`order_status`, `time_from`, and `time_to` filters. It returns `order_sn`,
+`order_status`, `time_from`, and `time_to` filters. It returns `order_id`, `order_sn`,
 `order_status`, Unix timestamps, and an envelope such as:
 
 ```json
 {"error":"","message":"success","request_id":"req_…","response":{"order_list":[],"more":false}}
 ```
+
+Use `response.order_list[].order_id` in every Shopee order `{id}` path,
+including detail, cancellation, processing, package allocation, and shipment
+creation. `order_sn` is the human-readable order number, not the API identifier.
+For example, a row with `order_id: "ord_example_01"` and
+`order_sn: "SIM-EXAMPLE-01"` opens at
+`GET /api/shopee/v1/orders/ord_example_01`. These are illustrative values;
+use the actual `order_id` returned for your shop. In the Request Simulator,
+**Use this order** opens the detail operation with that ID already filled in.
 
 Errors use the same top-level envelope and provider codes such as
 `error_auth`, `error_param`, `error_invalid_state`, `error_not_found`, and
@@ -156,3 +167,9 @@ Inventory is reserved atomically in the selected warehouse when the order is cre
 `DELIVERY_FAILED → RETURNING → RETURNED`; the order becomes `RETURNED` only
 after all its shipments are returned. The failure reason and all failure/return
 timestamps are returned by shipment detail.
+
+### Webhook verification depends on the shop
+
+A shared registration does not select a generic delivery format. Shopee-like shops send `X-Shopee-*` headers and use the registration secret to sign `EVENT + TIMESTAMP + RAW_BODY`. Tokopedia-like shops send `Authorization` and sign `APP_KEY + RAW_BODY` using the oldest ACTIVE shop credential (creation time, then credential ID). APP_KEY is that credential's Client ID; the registration secret is unused. Admin Webhooks shows the current signing Client ID. Revoking it changes the signing credential on the next attempt, including retries.
+
+Follow the [webhook guide and runnable receiver](webhook-guide.md#runnable-receiver) to verify raw bytes, durably deduplicate, acknowledge, and fetch current provider state. Deleting a registration preserves delivery history and cancels pending deliveries; an in-flight attempt may finish. Reset to seed still clears shop history.

@@ -1,3 +1,6 @@
+import { WebhookVerification } from "../components/WebhookVerification";
+import { CodeSnippet } from "../components/CodeSnippet";
+import receiverSource from "../../../../examples/webhook-receiver.mjs?raw";
 import { useState, type FormEvent } from "react";
 import type { ControlPage } from "@/app/navigation";
 
@@ -41,7 +44,17 @@ export function Authentication({ api }: { api: string }) {
 }
 
 export function Webhooks({ onTry }: Pick<NavigationProps, "onTry">) {
-  return <><section className="reference-heading"><h2>Receive and verify webhook deliveries</h2><p>Webhook delivery is asynchronous and at-least-once. Store the event or notification id before processing so a retry does not duplicate your work.</p></section><section className="explanation-flow"><article><b>Shared resources</b><p>Register canonical events, then verify X-Marketplace-Timestamp plus raw body with X-Marketplace-Signature.</p><button type="button" onClick={() => onTry("register-webhook")}>Register shared webhook</button></article><article><b>Shopee-like</b><p>Subscribe to item_update, order_status_update, or logistics_status_update. The simulator transforms canonical events and signs deliveries with X-Shopee headers.</p><button type="button" onClick={() => onTry("shopee-create-webhook")}>Register Shopee-like callback</button></article><article><b>Tokopedia-like</b><p>Subscribe to ORDER_STATUS_CHANGE, PACKAGE_UPDATE, or PRODUCT_INFORMATION_CHANGE. Deliveries use numeric type values and Authorization HMAC.</p><button type="button" onClick={() => onTry("tokopedia-configure-webhook")}>Configure Tokopedia-like callback</button></article></section><section className="reference-callout"><b>Delivery retry</b><p>Return any 2xx after a successful verification. Non-2xx responses and network failures retry at 30 seconds, 2 minutes, 10 minutes, and 30 minutes. The delivery log in Admin shows every attempt.</p></section></>;
+  return <>
+    <section className="reference-heading"><h2>Receive and verify webhook deliveries</h2><p>Registration chooses a destination and event filter. The shop provider chooses the delivery contract.</p></section>
+    <WebhookVerification />
+    <section className="explanation-flow">
+      <article><b>Shared registration</b><p>Subscribe using canonical event names such as order.paid. Delivery still follows the shop’s Shopee-like or Tokopedia-like profile.</p><button type="button" onClick={() => onTry("register-webhook")}>Register shared webhook</button></article>
+      <article><b>Shopee registration</b><p>Subscribe to item_update, order_status_update, or logistics_status_update.</p><button type="button" onClick={() => onTry("shopee-create-webhook")}>Register Shopee-like callback</button></article>
+      <article><b>Tokopedia registration</b><p>Subscribe to ORDER_STATUS_CHANGE, PACKAGE_UPDATE, or PRODUCT_INFORMATION_CHANGE.</p><button type="button" onClick={() => onTry("tokopedia-configure-webhook")}>Configure Tokopedia-like callback</button></article>
+    </section>
+    <section className="reference-callout"><h3>Run a local receiver</h3><p>Save the example below as receiver.mjs and run it with Node.js or Bun. For Shopee set PROVIDER=SHOPEE_LIKE and WEBHOOK_SECRET. For Tokopedia set PROVIDER=TOKOPEDIA_LIKE, APP_KEY, and APP_SECRET using the signing credential shown in Admin Webhooks.</p><p>Register a worker-reachable URL ending in /webhooks. For the Docker Compose worker on Docker Desktop, use http://host.docker.internal:9000/webhooks when the receiver runs on your host; localhost inside the worker refers to that container. Private targets must be enabled for local exercises.</p><p>Create an order or change its state, then open Webhook Deliveries → Attempts. Return 2xx after durable acceptance. Other statuses and network errors retry after 30 seconds, 2 minutes, 10 minutes, and 30 minutes. The example’s memory-only inbox is for learning; use a database inbox with a unique shop/event key and process committed events in a worker in your application.</p><p>Deleting a registration preserves delivery history and cancels pending deliveries. An in-flight attempt may still finish. A deleted registration cannot be retried; register a new callback and replay the event. Reset to seed intentionally clears shop history.</p></section>
+    <details><summary>Raw-body receiver example (Node.js / Bun)</summary><CodeSnippet value={receiverSource} /></details>
+  </>;
 }
 
 export function Errors() {

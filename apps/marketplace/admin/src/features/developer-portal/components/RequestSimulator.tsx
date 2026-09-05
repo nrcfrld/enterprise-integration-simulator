@@ -1,3 +1,4 @@
+import { WebhookVerification } from "./WebhookVerification";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   buildCanonicalRequest,
@@ -9,6 +10,7 @@ import {
 } from "../lib/signing";
 import type { IntegrationCredentials, PortalEndpoint, SimulatorState } from "../types";
 import { CodeSnippet } from "./CodeSnippet";
+import { ShopeeOrderResults } from "./ShopeeOrderResults";
 
 const initialState: SimulatorState = { status: "idle", error: "", canonical: "", result: null };
 
@@ -34,12 +36,14 @@ interface RequestSimulatorProps {
   endpoint: PortalEndpoint;
   api: string;
   credentials: IntegrationCredentials;
+  initialPathParams?: Record<string, string>;
+  onSelectOrder?: (orderID: string) => void;
 }
 
-export function RequestSimulator({ endpoint, api, credentials }: RequestSimulatorProps) {
+export function RequestSimulator({ endpoint, api, credentials, initialPathParams, onSelectOrder }: RequestSimulatorProps) {
   const mutation = endpoint.idempotent === true;
   const hasBody = endpoint.body !== undefined;
-  const [pathParams, setPathParams] = useState<Record<string, string>>(() => fieldsToValues(endpoint.pathParams, false));
+  const [pathParams, setPathParams] = useState<Record<string, string>>(() => ({ ...fieldsToValues(endpoint.pathParams, false), ...initialPathParams }));
   const [query, setQuery] = useState<Record<string, string>>(() => fieldsToValues(endpoint.query, true));
   const [body, setBody] = useState(endpoint.body ?? "");
   const [idempotencyKey, setIdempotencyKey] = useState(mutation ? createIdempotencyKey() : "");
@@ -145,6 +149,7 @@ export function RequestSimulator({ endpoint, api, credentials }: RequestSimulato
 
   return (
     <section className="request-simulator">
+      {endpoint.group === "Webhooks" && <WebhookVerification provider={endpoint.contract === "shopee" ? "SHOPEE_LIKE" : endpoint.contract === "tokopedia" ? "TOKOPEDIA_LIKE" : undefined} />}
       <div className="simulator-heading"><div><h3>Build and send the request</h3><p>{endpoint.summary}</p></div><span className="contract-badge">{contractLabel(endpoint.contract)}</span></div>
       <div className="request-url"><span>{api}</span><code>{requestPath}</code></div>
       <form onSubmit={(event) => void run(event)}>
@@ -159,6 +164,9 @@ export function RequestSimulator({ endpoint, api, credentials }: RequestSimulato
       {state.error && <p className="simulator-error" role="alert">{state.error}</p>}
       {state.canonical && <details className="request-details"><summary>See the exact signing input</summary><CodeSnippet value={state.canonical} language="text" /></details>}
       {state.result && <div className="simulator-response" aria-live="polite"><div><b>Response</b><strong>{state.result.status}</strong></div>{state.result.headers.length > 0 && <dl>{state.result.headers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>}<CodeSnippet value={state.result.body} language="json" /></div>}
+      {endpoint.id === "shopee-list-orders" && state.result?.status.startsWith("200 ") && onSelectOrder && (
+        <ShopeeOrderResults body={state.result.body} onSelect={onSelectOrder} />
+      )}
     </section>
   );
 }

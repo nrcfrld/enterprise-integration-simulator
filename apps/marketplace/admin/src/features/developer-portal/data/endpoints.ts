@@ -2,7 +2,8 @@ import type { PortalEndpoint, ProviderContract } from "../types";
 
 export const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-const orderID = { name: "id", label: "Order ID", help: "List provider orders first, then copy its order_id or order_sn here.", type: "string", required: true };
+const orderID = { name: "id", label: "Order ID", help: "Copy order_id from the provider order list/search response. Every order {id} path uses order_id.", type: "string", required: true };
+const shopeeOrderID = { ...orderID, help: "Copy order_id from response.order_list into this path. order_sn is the display order number and cannot be used as {id}." };
 const productID = { name: "id", label: "Product ID", help: "List or search provider products first, then copy its product id here.", type: "string", required: true };
 const webhookID = { name: "id", label: "Webhook ID", help: "Copy an id from List shared webhooks.", type: "string", required: true };
 const warehouseID = { name: "id", label: "Warehouse ID", help: "Copy an id from List fulfillment warehouses.", type: "string", required: true };
@@ -23,7 +24,7 @@ const cancellationBodyFields = (name: "cancel_reason" | "reason") => [
 const callbackBodyFields = (provider: "shared" | "shopee" | "tokopedia") => [
   { name: provider === "shared" ? "url" : "callback_url", type: "URI string", required: true, description: "Public HTTP(S) destination that receives signed deliveries.", example: `https://example.com/hooks/${provider === "shared" ? "marketplace" : provider}` },
   { name: provider === "shared" ? "subscribed_events" : "event_types", type: "string[]", required: true, description: "Provider event names to subscribe to. Use the exact, case-sensitive values shown in the example.", example: provider === "shared" ? "[\"order.created\"]" : provider === "shopee" ? "[\"order_status_update\"]" : "[\"ORDER_STATUS_CHANGE\"]" },
-  { name: "secret", type: "string", required: false, description: "Optional verification secret. If omitted, the simulator generates one and returns it only once.", example: "whsec_your_secret" },
+  { name: "secret", type: "string", required: false, description: "Shopee delivery verification secret; unused for Tokopedia, which signs with its oldest ACTIVE app credential. If omitted, a secret is generated and returned once.", example: "whsec_your_secret" },
 ];
 
 type ErrorKind = "authentication" | "not-found" | "validation" | "transition";
@@ -79,7 +80,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "list-webhooks", group: "Webhooks", contract: "shared", method: "GET", path: "/api/v1/webhooks", title: "List shared webhooks",
-    summary: "Read generic webhook registrations without revealing their verification secrets.", outcome: "200 OK with webhook registrations.",
+    summary: "Read shop webhook registrations without revealing their stored secrets. Delivery format follows the shop provider, including registrations made here.", outcome: "200 OK with webhook registrations.",
     response: '{\n  "data": [{ "id": "wh_…", "url": "https://example.com/hooks/marketplace", "enabled": true, "subscribed_events": ["order.created"] }]\n}',
   }),
   endpoint({
@@ -92,7 +93,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "delete-webhook", group: "Webhooks", contract: "shared", method: "DELETE", path: "/api/v1/webhooks/{id}", title: "Delete a shared webhook", pathParams: [webhookID], idempotent: true,
-    summary: "Stop future deliveries. Reuse the idempotency key only when retrying this deletion.", outcome: "204 No Content.", response: "(empty response body)",
+    summary: "Stop future deliveries while retaining history. Pending deliveries are cancelled; an in-flight attempt may finish. Deleted registrations cannot be retried. Reuse the idempotency key only when retrying this deletion.", outcome: "204 No Content.", response: "(empty response body)",
   }),
 
   endpoint({
@@ -109,32 +110,32 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "shopee-list-orders", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders", title: "List Shopee-like orders",
     query: [...pageNo, { name: "order_status", label: "Order status", help: "Filter by one Shopee-like order status, such as READY_TO_SHIP.", type: "string" }, { name: "time_from", label: "Updated from", help: "Include orders updated at or after this Unix timestamp.", type: "integer<int64>" }, { name: "time_to", label: "Updated to", help: "Include orders updated at or before this Unix timestamp.", type: "integer<int64>" }],
-    summary: "Start here before an order action: copy an order_sn returned for this shop.", outcome: "200 OK with Shopee-like orders.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_list": [{ "order_sn": "ord_…", "order_status": "PAID", "total_amount": 125000 }], "page_no": 1, "page_size": 20, "total_count": 1, "more": false }\n}',
+    summary: "Start here before an order detail or action request. Copy order_id from response.order_list into {id}; order_sn is the display order number.", outcome: "200 OK with Shopee-like orders.",
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_list": [{ "order_id": "ord_example_01", "order_sn": "SIM-EXAMPLE-01", "order_status": "PAID", "total_amount": 125000 }], "page_no": 1, "page_size": 20, "total_count": 1, "more": false }\n}',
   }),
   endpoint({
-    id: "shopee-get-order", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders/{id}", title: "Get a Shopee-like order", pathParams: [orderID],
+    id: "shopee-get-order", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders/{id}", title: "Get a Shopee-like order", pathParams: [shopeeOrderID],
     summary: "Inspect status, line items, package, and shipment before moving the order.", outcome: "200 OK with order detail.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_sn": "ord_…", "order_status": "PAID", "item_list": [] }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_id": "ord_example_01", "order_sn": "SIM-EXAMPLE-01", "order_status": "PAID", "item_list": [] }\n}',
   }),
   endpoint({
-    id: "shopee-cancel-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/cancel", title: "Customer-cancel a Shopee-like order", pathParams: [orderID], idempotent: true,
+    id: "shopee-cancel-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/cancel", title: "Customer-cancel a Shopee-like order", pathParams: [shopeeOrderID], idempotent: true,
     summary: "Cancel an eligible, unshipped order. This provider accepts customer cancellation reasons.", body: '{\n  "cancel_reason": "CHANGE_OF_MIND"\n}', outcome: "200 OK with CANCELLED status.",
     bodyFields: cancellationBodyFields("cancel_reason"),
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_sn": "ord_…", "order_status": "CANCELLED" }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_id": "ord_example_01", "order_status": "CANCELLED" }\n}',
   }),
   endpoint({
-    id: "shopee-process-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/ship-order", title: "Start seller processing", pathParams: [orderID], idempotent: true,
+    id: "shopee-process-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/ship-order", title: "Start seller processing", pathParams: [shopeeOrderID], idempotent: true,
     summary: "Move a paid order into seller processing; payment verification is a control-plane action.", outcome: "200 OK with PROCESSING status.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_sn": "ord_…", "order_status": "PROCESSING" }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_id": "ord_example_01", "order_status": "PROCESSING" }\n}',
   }),
   endpoint({
-    id: "shopee-ready-to-ship", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/ready-to-ship", title: "Mark order ready to ship", pathParams: [orderID], idempotent: true,
+    id: "shopee-ready-to-ship", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/ready-to-ship", title: "Mark order ready to ship", pathParams: [shopeeOrderID], idempotent: true,
     summary: "Move a seller-processed order to READY_TO_SHIP before package allocation or shipment creation.", outcome: "200 OK with READY_TO_SHIP status.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_sn": "ord_…", "order_status": "READY_TO_SHIP" }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_id": "ord_example_01", "order_status": "READY_TO_SHIP" }\n}',
   }),
   endpoint({
-    id: "shopee-create-package", group: "Fulfillment", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/packages", title: "Allocate a Shopee-like package", pathParams: [orderID], idempotent: true,
+    id: "shopee-create-package", group: "Fulfillment", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/packages", title: "Allocate a Shopee-like package", pathParams: [shopeeOrderID], idempotent: true,
     summary: "A package is the portion of an order allocated for fulfillment. Use an order_item_id from order detail and a remaining quantity.",
     body: '{\n  "items": [{ "order_item_id": "replace-with-order-item-id", "quantity": 1 }]\n}', outcome: "200 OK with the package allocation.",
     bodyFields: [
@@ -145,7 +146,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
     response: '{\n  "error": "",\n  "message": "success",\n  "response": { "package": { "id": "pkg_…", "order_id": "ord_…", "status": "READY_TO_SHIP" } }\n}',
   }),
   endpoint({
-    id: "shopee-create-shipment", group: "Fulfillment", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/shipments", title: "Create a Shopee-like shipment", pathParams: [orderID], idempotent: true,
+    id: "shopee-create-shipment", group: "Fulfillment", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/shipments", title: "Create a Shopee-like shipment", pathParams: [shopeeOrderID], idempotent: true,
     summary: "A shipment adds tracking and pickup details to a READY_TO_SHIP order or allocated package.",
     body: '{\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment and tracking number.",
     bodyFields: shipmentBodyFields,
@@ -219,7 +220,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "tokopedia-configure-webhook", group: "Webhooks", contract: "tokopedia", method: "PUT", path: "/api/tokopedia/v202309/webhooks", title: "Configure a Tokopedia-like callback", idempotent: true,
     summary: "Configure provider notification categories. Deliveries carry a numeric type and Authorization HMAC.",
-    body: '{\n  "callback_url": "https://example.com/hooks/tokopedia",\n  "event_types": ["ORDER_STATUS_CHANGE", "PACKAGE_UPDATE"]\n}', outcome: "200 OK. The generated secret is shown once.",
+    body: '{\n  "callback_url": "https://example.com/hooks/tokopedia",\n  "event_types": ["ORDER_STATUS_CHANGE", "PACKAGE_UPDATE"]\n}', outcome: "200 OK. Any returned registration secret is unused for verification. Use the oldest ACTIVE app credential’s Client ID and secret for Authorization HMAC.",
     bodyFields: callbackBodyFields("tokopedia"),
     response: '{\n  "code": 0,\n  "message": "success",\n  "data": { "webhook_id": "wh_…", "event_types": ["ORDER_STATUS_CHANGE"], "secret": "whsec_…" }\n}',
   }),

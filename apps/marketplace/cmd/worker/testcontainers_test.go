@@ -4,6 +4,9 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -377,9 +380,20 @@ func TestContainerWorkerDeliversShopeeLikeWebhookContract(t *testing.T) {
 	}
 	var gotHeaders http.Header
 	var gotBody map[string]any
+	var rawBody []byte
+	var cancelInFlight atomic.Bool
 	receiver := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		gotHeaders = request.Header.Clone()
-		if err := json.NewDecoder(request.Body).Decode(&gotBody); err != nil {
+		rawBody, _ = io.ReadAll(request.Body)
+		if cancelInFlight.Load() {
+			if _, err := env.DB.Exec(ctx, `UPDATE webhooks SET deleted_at=now(),enabled=false WHERE id='wh_shopee_hook'`); err != nil {
+				t.Error(err)
+			}
+			if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET status='CANCELLED',next_attempt_at=NULL,leased_until=NULL WHERE id='del_shopee_hook'`); err != nil {
+				t.Error(err)
+			}
+		}
+		if err := json.Unmarshal(rawBody, &gotBody); err != nil {
 			t.Errorf("decode Shopee webhook: %v", err)
 		}
 		writer.WriteHeader(http.StatusNoContent)
@@ -416,6 +430,40 @@ func TestContainerWorkerDeliversShopeeLikeWebhookContract(t *testing.T) {
 	if gotBody["code"] != float64(0) || gotBody["response"].(map[string]any)["event_type"] != "order_status_update" {
 		t.Fatalf("Shopee webhook body = %#v", gotBody)
 	}
+	mac := hmac.New(sha256.New, []byte("shopee-webhook-secret"))
+	mac.Write([]byte(gotHeaders.Get("X-Shopee-Event") + gotHeaders.Get("X-Shopee-Timestamp") + string(rawBody)))
+	if gotHeaders.Get("X-Shopee-Signature") != hex.EncodeToString(mac.Sum(nil)) || gotHeaders.Get("X-Shopee-Event-Id") != gotBody["request_id"] {
+		t.Fatal("receiver cannot verify actual Shopee bytes/identity")
+	}
+	// Simulate deletion while the second HTTP attempt is already in flight.
+	cancelInFlight.Store(true)
+	if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET status='PENDING',leased_until=now()+interval '30 seconds' WHERE id='del_shopee_hook'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	var count int
+	if err := env.DB.QueryRow(ctx, `SELECT status,attempt_count FROM webhook_deliveries WHERE id='del_shopee_hook'`).Scan(&state, &count); err != nil || state != "CANCELLED" || count != 2 {
+		t.Fatalf("in-flight result resurrected delivery: %s %d %v", state, count, err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO outbox(id,event_id) VALUES('out_deleted','evt_shopee_paid')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.publishOutbox(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM webhook_deliveries WHERE webhook_id='wh_shopee_hook'`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("fanout delivered to deleted hook: %d %v", count, err)
+	}
+	if err := env.DB.QueryRow(ctx, `SELECT count(*) FROM webhook_delivery_attempts WHERE delivery_id='del_shopee_hook'`).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("deleted hook attempted again or lost history: %d %v", count, err)
+	}
+
 }
 
 func TestContainerWorkerDeliversTokopediaLikeWebhookContract(t *testing.T) {
@@ -426,9 +474,11 @@ func TestContainerWorkerDeliversTokopediaLikeWebhookContract(t *testing.T) {
 	}
 	var headers http.Header
 	var body map[string]any
+	var rawBody []byte
 	receiver := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		headers = request.Header.Clone()
-		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+		rawBody, _ = io.ReadAll(request.Body)
+		if err := json.Unmarshal(rawBody, &body); err != nil {
 			t.Errorf("decode Tokopedia webhook: %v", err)
 		}
 		writer.WriteHeader(http.StatusNoContent)
@@ -467,4 +517,49 @@ func TestContainerWorkerDeliversTokopediaLikeWebhookContract(t *testing.T) {
 	if headers.Get("Authorization") == "" || headers.Get("X-Marketplace-Event") != "" || body["type"] != float64(1) || body["tts_notification_id"] != "evt_toko_paid" {
 		t.Fatalf("Tokopedia webhook=%#v %#v", headers, body)
 	}
+	verify := func(key, secret string) string {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(key + string(rawBody)))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
+	if headers.Get("Authorization") != verify("toko-app-key", "tokopedia-app-secret") || headers.Get("Authorization") == verify("toko-app-key", "registration-secret") {
+		t.Fatal("wrong Tokopedia verification key/input")
+	}
+	newerSecret, err := platform.Encrypt(cfg.EncryptionKey, "newer-app-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.DB.Exec(ctx, `INSERT INTO credentials(id,shop_id,client_id,secret_ciphertext,status,created_at) VALUES('cred_newer','shop_toko_hook','newer-app-key',$1,'ACTIVE',now()+interval '1 second')`, newerSecret); err != nil {
+		t.Fatal(err)
+	}
+	redeliver := func() {
+		t.Helper()
+		if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET status='PENDING',leased_until=now()+interval '30 seconds' WHERE id='del_toko_hook'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	redeliver()
+	if headers.Get("Authorization") != verify("toko-app-key", "tokopedia-app-secret") {
+		t.Fatal("new credential unexpectedly rotated webhook key")
+	}
+	if _, err := env.DB.Exec(ctx, `UPDATE credentials SET status='REVOKED' WHERE id='cred_toko_hook'`); err != nil {
+		t.Fatal(err)
+	}
+	redeliver()
+	if headers.Get("Authorization") != verify("newer-app-key", "newer-app-secret") {
+		t.Fatal("revocation did not select next active credential")
+	}
+	if _, err := env.DB.Exec(ctx, `UPDATE credentials SET status='REVOKED' WHERE id='cred_newer'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET status='PENDING',leased_until=now()+interval '30 seconds' WHERE id='del_toko_hook'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err == nil || !strings.Contains(err.Error(), "requires an active app credential") {
+		t.Fatalf("missing credential: %v", err)
+	}
+
 }

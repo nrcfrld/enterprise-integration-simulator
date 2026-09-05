@@ -1,12 +1,13 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/webhooks"
@@ -81,7 +82,7 @@ func (s *Server) updateControlWebhook(c *gin.Context) {
 		c.JSON(500, errorBody("SERIALIZATION_ERROR", "could not encode subscribed events"))
 		return
 	}
-	command, err := s.db.Exec(c, `UPDATE webhooks SET url=$1,subscribed_events=$2,enabled=$3,secret_ciphertext=CASE WHEN $4='' THEN secret_ciphertext ELSE $4 END WHERE id=$5 AND shop_id=$6`, in.URL, events, in.Enabled, cipher, id, shop)
+	command, err := s.db.Exec(c, `UPDATE webhooks SET url=$1,subscribed_events=$2,enabled=$3,secret_ciphertext=CASE WHEN $4='' THEN secret_ciphertext ELSE $4 END WHERE id=$5 AND shop_id=$6 AND deleted_at IS NULL`, in.URL, events, in.Enabled, cipher, id, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not update webhook"))
 		return
@@ -98,16 +99,7 @@ func (s *Server) deleteControlWebhook(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	command, err := s.db.Exec(c, `DELETE FROM webhooks WHERE id=$1 AND shop_id=$2`, id, shop)
-	if err != nil {
-		c.JSON(500, errorBody("DATABASE_ERROR", "could not delete webhook"))
-		return
-	}
-	if command.RowsAffected() == 0 {
-		c.JSON(404, errorBody("NOT_FOUND", "webhook not found"))
-		return
-	}
-	c.Status(http.StatusNoContent)
+	s.deleteWebhookResponse(c, id, shop)
 }
 
 type webhookInput struct {
@@ -141,7 +133,7 @@ func (s *Server) controlDeliveries(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT d.id,d.event_id,d.status,d.attempt_count,d.created_at,d.delivered_at,d.next_attempt_at,e.event_type,w.url,COALESCE(last_attempt.response_body,'') FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id LEFT JOIN LATERAL (SELECT response_body FROM webhook_delivery_attempts WHERE delivery_id=d.id AND status='FAILURE' ORDER BY attempt DESC LIMIT 1) last_attempt ON true WHERE w.shop_id=$1 ORDER BY d.created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT d.id,d.event_id,d.status,d.attempt_count,d.created_at,d.delivered_at,d.next_attempt_at,e.event_type,w.url,COALESCE(last_attempt.response_body,''),w.deleted_at IS NOT NULL FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id LEFT JOIN LATERAL (SELECT response_body FROM webhook_delivery_attempts WHERE delivery_id=d.id AND status='FAILURE' ORDER BY attempt DESC LIMIT 1) last_attempt ON true WHERE w.shop_id=$1 ORDER BY d.created_at DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list deliveries"))
 		return
@@ -150,14 +142,15 @@ func (s *Server) controlDeliveries(c *gin.Context) {
 	data := []gin.H{}
 	for rows.Next() {
 		var id, event, status, eventType, endpoint, failureReason string
+		var deleted bool
 		var attempts int
 		var created time.Time
 		var delivered, nextAttempt *time.Time
-		if err := rows.Scan(&id, &event, &status, &attempts, &created, &delivered, &nextAttempt, &eventType, &endpoint, &failureReason); err != nil {
+		if err := rows.Scan(&id, &event, &status, &attempts, &created, &delivered, &nextAttempt, &eventType, &endpoint, &failureReason, &deleted); err != nil {
 			c.JSON(500, errorBody("DATABASE_ERROR", "could not read delivery"))
 			return
 		}
-		data = append(data, gin.H{"id": id, "event_id": event, "event_type": eventType, "endpoint": endpoint, "status": status, "attempt_count": attempts, "next_attempt_at": nextAttempt, "failure_reason": failureReason, "created_at": created, "delivered_at": delivered})
+		data = append(data, gin.H{"id": id, "event_id": event, "event_type": eventType, "endpoint": endpoint, "status": status, "attempt_count": attempts, "next_attempt_at": nextAttempt, "failure_reason": failureReason, "webhook_deleted": deleted, "created_at": created, "delivered_at": delivered})
 	}
 	s.controlListResponse(c, data)
 }
@@ -165,8 +158,9 @@ func (s *Server) controlDeliveries(c *gin.Context) {
 func (s *Server) deliveryDetail(c *gin.Context) {
 	id := c.Param("id")
 	var shop, eventID, status string
+	var deleted bool
 	var attempts int
-	err := s.db.QueryRow(c, `SELECT w.shop_id,d.event_id,d.status,d.attempt_count FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id WHERE d.id=$1`, id).Scan(&shop, &eventID, &status, &attempts)
+	err := s.db.QueryRow(c, `SELECT w.shop_id,d.event_id,d.status,d.attempt_count,w.deleted_at IS NOT NULL FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id WHERE d.id=$1`, id).Scan(&shop, &eventID, &status, &attempts, &deleted)
 	if err != nil {
 		c.JSON(404, errorBody("NOT_FOUND", "delivery not found"))
 		return
@@ -192,5 +186,40 @@ func (s *Server) deliveryDetail(c *gin.Context) {
 		}
 		data = append(data, gin.H{"id": attemptID, "attempt": attempt, "response_status": responseStatus, "response_body": body, "duration_ms": duration, "status": attemptStatus, "created_at": created})
 	}
-	c.JSON(200, gin.H{"id": id, "shop_id": shop, "event_id": eventID, "status": status, "attempt_count": attempts, "attempts": data})
+	c.JSON(200, gin.H{"id": id, "shop_id": shop, "event_id": eventID, "status": status, "attempt_count": attempts, "attempts": data, "webhook_deleted": deleted})
+}
+
+// Keep registrations as tombstones so delivery attempts remain inspectable.
+// The row lock also serializes deletion with fanout and manual retry.
+func (s *Server) retireWebhook(ctx context.Context, id, shop string) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	command, err := tx.Exec(ctx, `UPDATE webhooks SET deleted_at=now(),enabled=false WHERE id=$1 AND shop_id=$2 AND deleted_at IS NULL`, id, shop)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	_, err = tx.Exec(ctx, `UPDATE webhook_deliveries SET status='CANCELLED',next_attempt_at=NULL,leased_until=NULL WHERE webhook_id=$1 AND status='PENDING'`, id)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *Server) deleteWebhookResponse(c *gin.Context, id, shop string) {
+	err := s.retireWebhook(c, id, shop)
+	if err == pgx.ErrNoRows {
+		c.JSON(404, errorBody("NOT_FOUND", "webhook not found"))
+		return
+	}
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not delete webhook"))
+		return
+	}
+	c.Status(204)
 }

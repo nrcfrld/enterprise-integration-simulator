@@ -63,6 +63,7 @@ export interface ResourceRecord extends Record<string, unknown> {
 }
 
 export interface ControlPlaneData {
+  delivery_contract?: { provider_profile: ProviderProfile; signing_client_id: string };
   data?: ResourceRecord[];
   pagination?: PaginationMetadata;
   shops?: number;

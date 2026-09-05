@@ -1,4 +1,4 @@
-import type { DetailRequest } from "@/shared/types/controlPlane";
+import type { Shop, DetailRequest } from "@/shared/types/controlPlane";
 import { useDetailData } from "../hooks/useDetailData";
 import { DeliveryDetail } from "./details/DeliveryDetail";
 import { OrderDetail } from "./details/OrderDetail";
@@ -9,6 +9,7 @@ import { WarehouseDetail } from "./details/WarehouseDetail";
 import type { DetailContentProps } from "./details/types";
 
 interface DetailPanelProps {
+  shop?: Shop;
   detail: DetailRequest;
   token: string | null | undefined;
   onClose: () => void;
@@ -26,6 +27,7 @@ const detailLabels: Record<DetailRequest["type"], string> = {
 };
 
 export function DetailPanel({
+  shop,
   detail,
   token,
   onClose,
@@ -52,6 +54,7 @@ export function DetailPanel({
         aria-modal="true"
         aria-label={`${detail.type} details`}
       >
+        {shop && <p>{shop.name} · {shop.provider_profile} · {shop.id}</p>}
         <div className="modal-heading">
           <div>
             <p className="eyebrow">{detailLabels[detail.type]}</p>

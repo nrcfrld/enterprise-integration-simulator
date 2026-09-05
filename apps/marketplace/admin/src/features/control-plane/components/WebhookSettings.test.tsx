@@ -36,6 +36,25 @@ describe("WebhookSettings critical actions", () => {
     props.onNotice.mockClear();
   });
 
+  it("identifies the current Tokopedia signing credential and unused registration secret", () => {
+    render(<WebhookSettings {...props} shop={{ id: "shop_1", name: "Tokopedia", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} data={{ ...props.data, delivery_contract: { provider_profile: "TOKOPEDIA_LIKE", signing_client_id: "client_oldest" } }} />);
+    expect(screen.getByText("client_oldest")).toBeVisible();
+    expect(screen.getByText(/optional registration secret.*unused/)).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Shopee-like deliveries" })).not.toBeInTheDocument();
+  });
+
+  it("shows failed deletions without announcing success", async () => {
+    requestMock.mockRejectedValueOnce(new Error("Could not delete webhook"));
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    render(<WebhookSettings {...props} />);
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not delete webhook");
+    expect(props.onRefresh).not.toHaveBeenCalled();
+    expect(props.onNotice).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
+  });
+
   it("opens register and edit forms", async () => {
     const user = userEvent.setup();
     render(<WebhookSettings {...props} />);

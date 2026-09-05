@@ -147,7 +147,7 @@ func (w *worker) publishOutbox(ctx context.Context) error {
 		if outOfOrder && eventType == "order.paid" && delaySeconds < 10 {
 			delaySeconds = 10
 		}
-		hooks, err := tx.Query(ctx, `SELECT id FROM webhooks WHERE shop_id=$1 AND enabled=true AND subscribed_events ? $2`, shop, eventType)
+		hooks, err := tx.Query(ctx, `SELECT id FROM webhooks WHERE shop_id=$1 AND enabled=true AND deleted_at IS NULL AND subscribed_events ? $2 FOR SHARE`, shop, eventType)
 		if err != nil {
 			_ = tx.Rollback(ctx)
 			return fmt.Errorf("query webhook subscriptions: %w", err)
@@ -192,7 +192,7 @@ func (w *worker) publishOutbox(ctx context.Context) error {
 }
 
 func (w *worker) scheduleDeliveries(ctx context.Context) error {
-	rows, err := w.db.Query(ctx, `SELECT id FROM webhook_deliveries WHERE status='PENDING' AND (next_attempt_at IS NULL OR next_attempt_at<=now()) AND (leased_until IS NULL OR leased_until<=now()) ORDER BY created_at LIMIT 100`)
+	rows, err := w.db.Query(ctx, `SELECT id FROM webhook_deliveries WHERE status='PENDING' AND (next_attempt_at IS NULL OR next_attempt_at<=now()) AND (leased_until IS NULL OR leased_until<=now()) ORDER BY created_at,id LIMIT 100`)
 	if err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 	var payload []byte
 	var attempts int
 	var forceFailure bool
-	err := w.db.QueryRow(ctx, `SELECT w.url,w.secret_ciphertext,e.id,e.event_type,e.payload,d.attempt_count,COALESCE(s.webhook_force_failure,false),shops.provider_profile,w.shop_id,COALESCE((SELECT client_id FROM credentials WHERE shop_id=w.shop_id AND status='ACTIVE' ORDER BY created_at LIMIT 1),''),COALESCE((SELECT secret_ciphertext FROM credentials WHERE shop_id=w.shop_id AND status='ACTIVE' ORDER BY created_at LIMIT 1),'') FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id JOIN shops ON shops.id=w.shop_id LEFT JOIN shop_scenarios s ON s.shop_id=w.shop_id WHERE d.id=$1 AND d.status='PENDING' AND d.leased_until>now()`, input.DeliveryID).Scan(&urlString, &cipherText, &eventID, &eventType, &payload, &attempts, &forceFailure, &providerProfile, &shopID, &appKey, &appSecretCipher)
+	err := w.db.QueryRow(ctx, `SELECT w.url,w.secret_ciphertext,e.id,e.event_type,e.payload,d.attempt_count,COALESCE(s.webhook_force_failure,false),shops.provider_profile,w.shop_id,COALESCE((SELECT client_id FROM credentials WHERE shop_id=w.shop_id AND status='ACTIVE' ORDER BY created_at,id LIMIT 1),''),COALESCE((SELECT secret_ciphertext FROM credentials WHERE shop_id=w.shop_id AND status='ACTIVE' ORDER BY created_at,id LIMIT 1),'') FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id JOIN shops ON shops.id=w.shop_id LEFT JOIN shop_scenarios s ON s.shop_id=w.shop_id WHERE d.id=$1 AND d.status='PENDING' AND w.deleted_at IS NULL AND d.leased_until>now()`, input.DeliveryID).Scan(&urlString, &cipherText, &eventID, &eventType, &payload, &attempts, &forceFailure, &providerProfile, &shopID, &appKey, &appSecretCipher)
 	if err == pgx.ErrNoRows {
 		return nil
 	}
@@ -315,14 +315,19 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		return fmt.Errorf("record webhook attempt: %w", err)
 	}
+	// Cancellation can occur while HTTP is in flight; retain the recorded attempt count
+	// without changing CANCELLED back into a deliverable state.
+	if _, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET attempt_count=GREATEST(attempt_count,$2) WHERE id=$1 AND status='CANCELLED'`, input.DeliveryID, attempt); err != nil {
+		return err
+	}
 	if callErr == nil {
 		w.logger.Info("webhook delivery succeeded", "delivery_id", input.DeliveryID, "event_id", eventID, "event_type", eventType, "attempt", attempt, "response_status", status, "duration_ms", time.Since(start).Milliseconds())
-		_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET status='DELIVERED',attempt_count=$2,delivered_at=now(),next_attempt_at=NULL,leased_until=NULL WHERE id=$1`, input.DeliveryID, attempt)
+		_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET status='DELIVERED',attempt_count=$2,delivered_at=now(),next_attempt_at=NULL,leased_until=NULL WHERE id=$1 AND status='PENDING'`, input.DeliveryID, attempt)
 		return err
 	}
 	if attempt >= 5 {
 		w.logger.Warn("webhook delivery exhausted retries", "delivery_id", input.DeliveryID, "event_id", eventID, "event_type", eventType, "attempt", attempt, "response_status", status, "failure_reason", callErr.Error())
-		_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET status='FAILED',attempt_count=$2,next_attempt_at=NULL,leased_until=NULL WHERE id=$1`, input.DeliveryID, attempt)
+		_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET status='FAILED',attempt_count=$2,next_attempt_at=NULL,leased_until=NULL WHERE id=$1 AND status='PENDING'`, input.DeliveryID, attempt)
 		if err != nil {
 			return err
 		}
@@ -330,7 +335,7 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 	}
 	delay := webhooks.RetryAfter(attempt)
 	w.logger.Warn("webhook delivery failed; retry scheduled", "delivery_id", input.DeliveryID, "event_id", eventID, "event_type", eventType, "attempt", attempt, "response_status", status, "retry_in_seconds", int(delay.Seconds()), "failure_reason", callErr.Error())
-	_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET attempt_count=$2,next_attempt_at=now()+($3 * interval '1 second'),leased_until=NULL WHERE id=$1`, input.DeliveryID, attempt, int(delay.Seconds()))
+	_, err = w.db.Exec(ctx, `UPDATE webhook_deliveries SET attempt_count=$2,next_attempt_at=now()+($3 * interval '1 second'),leased_until=NULL WHERE id=$1 AND status='PENDING'`, input.DeliveryID, attempt, int(delay.Seconds()))
 	if err != nil {
 		return fmt.Errorf("schedule webhook retry: %w", err)
 	}

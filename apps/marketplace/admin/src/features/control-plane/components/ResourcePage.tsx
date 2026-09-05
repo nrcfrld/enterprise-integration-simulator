@@ -167,7 +167,7 @@ export function ResourcePage({
                         >
                           Attempts
                         </button>
-                        <button onClick={() => retry(row.id)}>Retry</button>
+                        {row.webhook_deleted ? <span>Webhook deleted · history retained</span> : <button onClick={() => retry(row.id)}>Retry</button>}
                       </>
                     )}
                     {page === "Credentials" && row.status === "ACTIVE" && (

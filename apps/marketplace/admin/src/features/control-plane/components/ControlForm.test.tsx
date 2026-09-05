@@ -30,6 +30,13 @@ describe("ControlForm critical mutations", () => {
     baseProps.onSaved.mockReset();
   });
 
+  it("does not ask Tokopedia learners for an unused callback secret", () => {
+    render(<ControlForm kind="webhook" shopID="shop_toko" token="session-token" shop={{ id: "shop_toko", name: "Tokopedia", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.queryByLabelText(/Webhook secret|Replace webhook secret/)).not.toBeInTheDocument();
+    expect(screen.getByText(/oldest ACTIVE credential/)).toBeVisible();
+    expect(screen.getByText("app credential secret")).toBeVisible();
+  });
+
   it("creates a product with warehouse inventory and derived stock", async () => {
     requestMock
       .mockResolvedValueOnce({
@@ -253,7 +260,7 @@ describe("ControlForm critical mutations", () => {
       screen.getByLabelText("Endpoint URL"),
       "https://receiver.example/webhooks",
     );
-    await user.type(screen.getByLabelText("Replace secret (optional)"), "secret-123");
+    await user.type(screen.getByLabelText("Webhook secret (optional)"), "secret-123");
     await user.click(screen.getByLabelText("product.updated"));
     await user.click(screen.getByRole("button", { name: "Create →" }));
 

@@ -210,6 +210,7 @@ type Webhook struct {
 	Enabled          bool
 	SubscribedEvents []byte
 	CreatedAt        pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
 }
 
 type WebhookDelivery struct {

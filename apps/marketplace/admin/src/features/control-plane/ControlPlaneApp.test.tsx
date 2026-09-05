@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@/test/setup";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -161,9 +161,9 @@ describe("ControlPlaneApp critical session and seed flows", () => {
       </MemoryRouter>,
     );
 
-    const selector = await screen.findByLabelText("Current shop");
+    await screen.findByLabelText("Current shop");
     await user.click(screen.getByRole("button", { name: "Tokopedia & TikTok Shop" }));
-    expect(selector).toHaveValue("shop_2");
+    expect(screen.getByLabelText("Current shop")).toHaveValue("shop_2");
     expect(screen.getByText("Tokopedia & TikTok Shop", { selector: "span.provider-badge" })).toBeVisible();
   });
 
@@ -227,4 +227,70 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     await user.click(screen.getByRole("button", { name: "I saved these credentials" }));
     expect(screen.queryByRole("dialog", { name: "Credential created" })).not.toBeInTheDocument();
   });
+  it("ignores a late shop A response after shop B loads", async () => {
+    let resolveA!: (data: unknown) => void;
+    const lateA = new Promise((resolve) => { resolveA = resolve; });
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop, tokopediaShop] });
+      if (path.includes("shop_1/products")) return lateA;
+      if (path.includes("shop_2/products")) return Promise.resolve({ data: [{ id: "b", name: "Shop B product", sku: "B" }] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/products"]}><ControlPlaneApp /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText("Current shop")).toHaveValue("shop_1"));
+    expect(screen.queryByRole("button", { name: "+ New product" })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Current shop"), "shop_2");
+    expect(await screen.findByText("Shop B product")).toBeVisible();
+    await act(async () => resolveA({ data: [{ id: "a", name: "Stale A product" }] }));
+    expect(screen.queryByText("Stale A product")).not.toBeInTheDocument();
+    expect(screen.getByText("Shop B product")).toBeVisible();
+  });
+
+  it("clears scenario drafts and blocks saving while the new shop load fails, then retries", async () => {
+    let rejectB!: (error: Error) => void;
+    const failingB = new Promise((_, reject) => { rejectB = reject; });
+    let failed = false;
+    requestMock.mockImplementation((path: string, _token?: string, options?: RequestInit) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop, tokopediaShop] });
+      if (options?.method === "PUT") return Promise.resolve({});
+      if (path.includes("shop_1/scenario")) return Promise.resolve({ api_slow_ms: 123 });
+      if (path.includes("shop_2/scenario")) return failed ? Promise.resolve({ api_slow_ms: 456 }) : failingB;
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/scenarios"]}><ControlPlaneApp /></MemoryRouter>);
+    expect(await screen.findByLabelText("API slow response (ms)")).toHaveValue(123);
+    await user.clear(screen.getByLabelText("API slow response (ms)"));
+    await user.type(screen.getByLabelText("API slow response (ms)"), "999");
+    await user.selectOptions(screen.getByLabelText("Current shop"), "shop_2");
+    expect(screen.queryByLabelText("API slow response (ms)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Apply scenario/ })).not.toBeInTheDocument();
+    await act(async () => { failed = true; rejectB(new Error("Shop B is unavailable")); });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Shop B is unavailable");
+    await user.click(screen.getByRole("button", { name: "Retry loading" }));
+    expect(await screen.findByLabelText("API slow response (ms)")).toHaveValue(456);
+    await user.click(screen.getByRole("button", { name: /Apply scenario/ }));
+    expect(requestMock).toHaveBeenCalledWith("/control/v1/shops/shop_2/scenario", session.token, { method: "PUT", body: JSON.stringify({ api_slow_ms: 456 }) });
+  });
+
+  it("closes old-shop details and forms on each switch", async () => {
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop, tokopediaShop] });
+      if (path.endsWith("/products/product_1")) return Promise.resolve({ id: "product_1", name: "Travel Bag" });
+      if (path.includes("/products")) return Promise.resolve({ data: [{ id: "product_1", name: "Travel Bag" }] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/products"]}><ControlPlaneApp /></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: "View product" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Test shop · SHOPEE_LIKE · shop_1");
+    await user.selectOptions(screen.getByLabelText("Current shop"), "shop_2");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "+ New product" }));
+    expect(screen.getByRole("heading", { name: "Create product" })).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("Current shop"), "shop_1");
+    expect(screen.queryByRole("heading", { name: "Create product" })).not.toBeInTheDocument();
+  });
+
 });

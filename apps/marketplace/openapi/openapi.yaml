@@ -152,6 +152,7 @@ paths:
       operationId: shopeeListOrders
       tags: [Orders]
       summary: List SHOPEE_LIKE orders with page-number pagination
+      description: Copy response.order_list[].order_id into every order {id} path. The order_sn field is the human-readable order number, not the API identifier.
       parameters: [{ $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { name: page_no, in: query, schema: { type: integer, minimum: 1, default: 1 } }, { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: order_status, in: query, schema: { type: string } }, { name: time_from, in: query, description: Unix seconds, schema: { type: integer } }, { name: time_to, in: query, description: Unix seconds, schema: { type: integer } }]
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '403': { $ref: '#/components/responses/ShopeeError' }, '429': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/products:
@@ -169,7 +170,7 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }]
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '401': { $ref: '#/components/responses/ShopeeError' }, '404': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}:
-    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }]
     get:
       operationId: shopeeGetOrder
       tags: [Orders]
@@ -181,7 +182,7 @@ paths:
       operationId: shopeeCancelOrder
       tags: [Orders]
       summary: Customer cancellation with Shopee-like request/error contract
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [cancel_reason], properties: { cancel_reason: { type: string, enum: [CHANGE_OF_MIND, DUPLICATE_ORDER, ADDRESS_ISSUE] } } } } } }
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}/ship-order:
@@ -189,21 +190,21 @@ paths:
       operationId: shopeeProcessOrder
       tags: [Orders]
       summary: Move a paid SHOPEE_LIKE order into seller processing
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}/ready-to-ship:
     post:
       operationId: shopeeReadyToShipOrder
       tags: [Orders]
       summary: Mark a SHOPEE_LIKE seller-processed order ready for fulfillment
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}/packages:
     post:
       operationId: shopeeCreatePackage
       tags: [Fulfillment]
       summary: Allocate selected order items into a Shopee-like package
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PackageInput' } } } }
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}/shipments:
@@ -211,7 +212,7 @@ paths:
       operationId: shopeeCreateShipment
       tags: [Fulfillment]
       summary: Create a Shopee-like shipment for a ready-to-ship order
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } } }
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/webhooks:
@@ -291,11 +292,12 @@ paths:
       responses: { '200': { $ref: '#/components/responses/TokopediaResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '401': { $ref: '#/components/responses/TokopediaError' }, '409': { $ref: '#/components/responses/TokopediaError' }, '413': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
   /api/tokopedia/v202309/webhooks:
     put:
+      description: The optional registration secret is unused for delivery verification. Delivery Authorization uses APP_KEY plus raw body with the oldest ACTIVE shop credential secret (creation time then credential ID).
       operationId: tokopediaConfigureWebhooks
       tags: [Tokopedia Like, Webhooks]
       summary: Configure a TOKOPEDIA_LIKE callback for order, package, or product notifications
       parameters: [{ $ref: '#/components/parameters/TokopediaAppKey' }, { $ref: '#/components/parameters/TokopediaTimestamp' }, { $ref: '#/components/parameters/TokopediaSign' }, { $ref: '#/components/parameters/TokopediaAccessToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [callback_url, event_types], properties: { callback_url: { type: string, format: uri }, secret: { type: string, description: Callback verification secret. }, event_types: { type: array, items: { type: string, enum: [ORDER_STATUS_CHANGE, PACKAGE_UPDATE, PRODUCT_INFORMATION_CHANGE] } } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [callback_url, event_types], properties: { callback_url: { type: string, format: uri }, secret: { type: string, description: Legacy optional registration secret; unused for Tokopedia delivery verification. Use the oldest ACTIVE app credential secret. }, event_types: { type: array, items: { type: string, enum: [ORDER_STATUS_CHANGE, PACKAGE_UPDATE, PRODUCT_INFORMATION_CHANGE] } } } } } } }
       responses: { '200': { $ref: '#/components/responses/TokopediaResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '401': { $ref: '#/components/responses/TokopediaError' }, '409': { $ref: '#/components/responses/TokopediaError' }, '413': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
   /api/v1/warehouses:
     get:
@@ -322,6 +324,7 @@ paths:
     post:
       operationId: createWebhook
       tags: [Webhooks]
+      description: Delivery format follows the shop provider even through this shared registration API. The registration secret verifies Shopee deliveries only; Tokopedia uses the oldest ACTIVE app credential.
       summary: Register a webhook; omit secret to have one generated and returned once
       parameters: [{ $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [url, subscribed_events], properties: { url: { type: string, format: uri }, secret: { type: string, writeOnly: true }, subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.payment_failed, order.payment_expired, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled, order.sla_expired] } } } } } } }
@@ -331,23 +334,77 @@ paths:
       operationId: deleteWebhook
       tags: [Webhooks]
       summary: Delete a webhook registration
+      description: Stops future fanout and cancels pending deliveries while preserving delivery/attempt history in the control plane. An in-flight HTTP attempt may finish. Deleted registrations cannot be retried; register a new callback and replay the event. Reset to seed intentionally clears shop history.
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '204': { description: Webhook deleted, headers: { X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }, X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }, X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' } } }, '401': { $ref: '#/components/responses/Error' }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '413': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/RateLimited' }, '503': { $ref: '#/components/responses/Maintenance' } }
 webhooks:
-  marketplace.event:
+  shopee.event:
     post:
       tags: [Webhooks]
-      summary: Webhook payload sent by the simulator to the registered endpoint
-      description: A 2xx response succeeds. Network failures and non-2xx responses retry at 30 seconds, 2 minutes, 10 minutes, and 30 minutes. Event IDs are stable across replay and duplicate/delay scenarios create distinct deliveries for the same event.
+      summary: SHOPEE_LIKE delivery regardless of registration route
+      description: >-
+        Verify hex HMAC-SHA256 of EVENT + TIMESTAMP + RAW_BODY (no separators) with the
+        registration webhook secret. EVENT and TIMESTAMP are the X-Shopee header values.
+        Verify raw bytes and timestamp freshness before processing. Deduplicate on
+        X-Shopee-Event-Id, which equals body request_id. Replacing the registration secret
+        changes the key used on subsequent attempts including retries. Payload data has canonical simulator fields/statuses.
+        A 2xx acknowledges durable acceptance; other responses/network failures retry at 30s, 2m, 10m, 30m.
+        Duplicates and replays retain event identity; events may arrive out of order.
       parameters:
-        - { $ref: '#/components/parameters/WebhookEvent' }
-        - { $ref: '#/components/parameters/WebhookEventID' }
-        - { $ref: '#/components/parameters/WebhookTimestamp' }
-        - { $ref: '#/components/parameters/WebhookSignature' }
+        - { name: X-Shopee-Event, in: header, required: true, schema: { type: string, enum: [item_update, order_status_update, logistics_status_update] } }
+        - { name: X-Shopee-Event-Id, in: header, required: true, schema: { type: string } }
+        - { name: X-Shopee-Timestamp, in: header, required: true, schema: { type: string }, description: Unix seconds of this attempt. }
+        - { name: X-Shopee-Signature, in: header, required: true, schema: { type: string } }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, additionalProperties: true } } }
-      responses: { '204': { description: Event processed successfully }, '400': { description: Receiver rejected the payload; simulator retries it } }
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, message, request_id, response]
+              properties:
+                code: { type: integer, enum: [0] }
+                message: { type: string }
+                request_id: { type: string }
+                response:
+                  type: object
+                  required: [event_type, data]
+                  properties:
+                    event_type: { type: string }
+                    data: { type: object, additionalProperties: true }
+            example: { code: 0, message: success, request_id: evt_example, response: { event_type: order_status_update, data: { order_id: ord_example, status: PAID } } }
+      responses: { '204': { description: Event durably accepted or already accepted }, '400': { description: Receiver rejected payload; simulator retries } }
+  tokopedia.event:
+    post:
+      tags: [Webhooks]
+      summary: TOKOPEDIA_LIKE delivery regardless of registration route
+      description: >-
+        Verify Authorization as hex HMAC-SHA256 of APP_KEY + RAW_BODY using APP_SECRET.
+        APP_KEY/APP_SECRET belong to the oldest ACTIVE shop credential, ordered by created_at then id,
+        selected anew on every attempt. APP_KEY is its client_id. Revocation selects the next active
+        credential; with none active, signing fails before an HTTP request. Creating a newer credential
+        does not rotate the key. The optional callback registration secret is unused.
+        Verify raw bytes before parsing, check body timestamp freshness, and deduplicate on tts_notification_id.
+        No X-Marketplace or X-Shopee headers are sent. Data contains canonical simulator fields/statuses.
+        A 2xx acknowledges durable acceptance; other responses/network failures retry at 30s, 2m, 10m, 30m.
+        Duplicates and replays retain notification identity; events may arrive out of order.
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string }, description: Raw hex HMAC with no Bearer prefix. }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, tts_notification_id, shop_id, timestamp, data]
+              properties:
+                type: { type: integer, enum: [1, 4, 15], description: '1 order status; 4 package/shipment; 15 product.' }
+                tts_notification_id: { type: string }
+                shop_id: { type: string }
+                timestamp: { type: integer, format: int64, description: Unix seconds of this attempt. }
+                data: { type: object, additionalProperties: true }
+            example: { type: 1, tts_notification_id: evt_example, shop_id: shop_example, timestamp: 1788566400, data: { order_id: ord_example, status: PAID } }
+      responses: { '204': { description: Event durably accepted or already accepted }, '400': { description: Receiver rejected payload; simulator retries } }
 components:
   securitySchemes:
     ControlPlaneBearer:
@@ -369,10 +426,6 @@ components:
     PageLimit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
     Cursor: { name: cursor, in: query, schema: { type: string }, description: Opaque cursor returned in pagination.next_cursor; keep the same sort and direction. }
     Direction: { name: direction, in: query, schema: { type: string, enum: [ASC, DESC], default: DESC } }
-    WebhookEvent: { name: X-Marketplace-Event, in: header, required: true, schema: { type: string }, description: Durable event type, such as order.created. }
-    WebhookEventID: { name: X-Marketplace-Event-Id, in: header, required: true, schema: { type: string }, description: Stable event id; consumers should use it as their idempotency key. }
-    WebhookTimestamp: { name: X-Marketplace-Timestamp, in: header, required: true, schema: { type: string, description: Unix seconds used for the webhook signature. } }
-    WebhookSignature: { name: X-Marketplace-Signature, in: header, required: true, schema: { type: string }, description: Hex HMAC-SHA256 of TIMESTAMP + '.' + raw body. }
   headers:
     RateLimitLimit: { description: Configured requests allowed in the current minute for this credential., schema: { type: integer } }
     RateLimitRemaining: { description: Remaining requests in the current minute. Zero on a 429 response., schema: { type: integer, minimum: 0 } }
@@ -581,12 +634,17 @@ components:
         url: { type: string, format: uri }
         enabled: { type: boolean }
         subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled] } }
-        secret: { type: string, writeOnly: true, description: Returned only once when the simulator generated it. }
+        secret: { type: string, writeOnly: true, description: Returned once when generated. Verifies Shopee delivery only; unused for Tokopedia which uses its oldest ACTIVE app credential. }
     WebhookList:
       type: object
       required: [data]
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/WebhookRegistration' } }
+        delivery_contract:
+          type: object
+          properties:
+            provider_profile: { type: string, enum: [SHOPEE_LIKE, TOKOPEDIA_LIKE] }
+            signing_client_id: { type: string, description: Oldest ACTIVE credential Client ID; empty when none. Used for Tokopedia deliveries only. }
     Error:
       type: object
       properties: { error: { type: object, properties: { code: { type: string }, message: { type: string } } } }

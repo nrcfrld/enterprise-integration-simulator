@@ -19,6 +19,54 @@ describe("DeveloperPortal navigation", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it("makes receiver verification reachable from Webhooks navigation", async () => {
+    const user = userEvent.setup();
+    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+    await user.click(screen.getByRole("button", { name: "Webhooks" }));
+    expect(screen.getByRole("heading", { name: "Receive and verify webhook deliveries" })).toBeVisible();
+    expect(screen.getByText("EVENT + TIMESTAMP + RAW_BODY")).toBeVisible();
+    expect(screen.getByText("APP_KEY + RAW_BODY")).toBeVisible();
+    expect(screen.getByText(/oldest ACTIVE credential/, { selector: "p" })).toBeVisible();
+    await user.click(screen.getByText("Raw-body receiver example (Node.js / Bun)"));
+    expect(screen.getByText("timingSafeEqual", { selector: "span.token.function" })).toBeVisible();
+  });
+
+  it("opens a returned Shopee order by its API ID and sends the detail request", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: "", message: "success", response: { order_list: [
+          { order_id: "ord_first", order_sn: "SIM-FIRST" },
+          { order_id: "ord_selected", order_sn: "SIM-DISPLAY-ONLY" },
+        ] },
+      }), { status: 200, statusText: "OK" }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: "", response: { order_id: "ord_selected", order_sn: "SIM-DISPLAY-ONLY", order_status: "UNPAID" },
+      }), { status: 200, statusText: "OK" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+
+    await user.click(screen.getByRole("button", { name: "Start the order workflow" }));
+    expect(screen.getByText(/Copy order_id from response.order_list into/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Client ID"), "partner_1");
+    await user.type(screen.getByLabelText(/Client secret/), "secret_1");
+    await user.click(screen.getByRole("button", { name: "Send signed request" }));
+    await user.click(await screen.findByRole("button", { name: "Use this order: SIM-DISPLAY-ONLY" }));
+
+    expect(screen.getByLabelText(/Order ID/)).toHaveValue("ord_selected");
+    expect(screen.getByText(/order_sn is the display order number and cannot be used/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Client ID")).toHaveValue("partner_1");
+    await user.click(screen.getByRole("button", { name: "Send signed request" }));
+    expect(await screen.findByText("200 OK")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [requestURL, options] = fetchMock.mock.calls[1] as [URL, RequestInit];
+    expect(requestURL.pathname).toBe("/api/shopee/v1/orders/ord_selected");
+    expect(options).toEqual(expect.objectContaining({
+      method: "GET",
+      headers: expect.objectContaining({ "X-Shopee-Partner-Id": "partner_1", "X-Shopee-Signature": expect.any(String) }),
+    }));
+  });
+
   it("opens every documentation section from the side navigation", async () => {
     const user = userEvent.setup();
     render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);

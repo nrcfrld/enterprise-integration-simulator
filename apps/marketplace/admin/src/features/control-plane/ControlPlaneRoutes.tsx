@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { CONTROL_PATHS, type ControlPage } from "@/app/navigation";
 import { API_BASE_URL } from "@/shared/api/controlPlaneClient";
 import type {
+  Shop,
   ControlPlaneData,
   ControlRole,
   DetailRequest,
@@ -14,6 +15,7 @@ import { Scenario } from "./components/Scenario";
 import { WebhookSettings } from "./components/WebhookSettings";
 
 interface ControlPlaneRoutesProps {
+  selectedShop?: Shop;
   data: ControlPlaneData | null;
   shopID: string;
   token: string | null | undefined;
@@ -32,6 +34,7 @@ interface ControlPlaneRoutesProps {
 
 export function ControlPlaneRoutes({
   data,
+  selectedShop,
   shopID,
   token,
   role,
@@ -89,7 +92,7 @@ export function ControlPlaneRoutes({
       />
       <Route
         path={CONTROL_PATHS.Documentation}
-        element={<DeveloperPortal api={API_BASE_URL} onNavigate={onNavigate} />}
+        element={<DeveloperPortal shop={selectedShop} api={API_BASE_URL} onNavigate={onNavigate} />}
       />
       <Route
         path={CONTROL_PATHS.Scenarios}
@@ -120,7 +123,7 @@ export function ControlPlaneRoutes({
       <Route
         path={CONTROL_PATHS.Webhooks}
         element={
-          <WebhookSettings
+          <WebhookSettings shop={selectedShop}
             data={data}
             shopID={shopID}
             token={token}
