@@ -41,7 +41,7 @@ describe("resource-specific detail views", () => {
 
   it("renders product, package, and delivery records", () => {
     const { rerender } = render(
-      <ProductDetail data={{ name: "Travel Bag", sku: "SKU-1", status: "ACTIVE", stock: 7, category: "Bags", description: "Cabin bag", price: 125000 }} />,
+      <ProductDetail {...detailProps({ name: "Travel Bag", sku: "SKU-1", status: "ACTIVE", stock: 7, category: "Bags", description: "Cabin bag", price: 125000 })} />,
     );
     expect(screen.getByText("Travel Bag")).toBeVisible();
     expect(screen.getByText("Cabin bag")).toBeVisible();
@@ -59,6 +59,21 @@ describe("resource-specific detail views", () => {
     expect(screen.getByText("unavailable")).toBeVisible();
   });
 
+  it("shows warehouse ledger quantities and opens the stock editor from product detail", async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    render(<ProductDetail {...detailProps({ id: "product_1", stock: 8, warehouse_inventory: [
+      { warehouse_id: "warehouse_1", name: "Main", code: "WH-1", status: "ACTIVE", priority: 10, on_hand_quantity: 10, reserved_quantity: 2, available_quantity: 8 },
+      { warehouse_id: "warehouse_2", name: "Offline", code: "WH-2", status: "INACTIVE", priority: 20, on_hand_quantity: 0, reserved_quantity: 0, available_quantity: 0 },
+    ] })} onOpen={onOpen} />);
+    expect(screen.getByRole("columnheader", { name: "On hand" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Reserved" })).toBeVisible();
+    expect(screen.getByText("INACTIVE")).toBeVisible();
+    expect(screen.getByRole("row", { name: /Main/ })).toHaveTextContent("ACTIVE101028");
+    await user.click(screen.getByRole("button", { name: /Main · WH-1/ }));
+    expect(onOpen).toHaveBeenCalledWith({ type: "warehouse", id: "warehouse_1" });
+  });
+
   it("runs order and event actions and reports validation errors", async () => {
     const prompt = vi.spyOn(window, "prompt");
     const user = userEvent.setup();
@@ -68,7 +83,7 @@ describe("resource-specific detail views", () => {
           id: "order_1",
           status: "PAID",
           payment: { status: "PAID", reference: "PAY-1" },
-          operations: { provider_profile: "SHOPEE_LIKE", payment_status: "PAID" },
+          operations: { provider_profile: "SHOPEE_LIKE", payment_status: "PAID", available_actions: ["process"] },
           customer_data: { name: "Budi", phone: "0800" },
           shipping_address: { address_line: "Jl. Mawar", city: "Bandung", postal_code: "40111" },
           items: [{ id: "item_1", sku: "SKU-1", product_name: "Bag", quantity: 1, price: 100 }],
@@ -79,7 +94,7 @@ describe("resource-specific detail views", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Process" }));
+    await user.click(screen.getByRole("button", { name: "Simulate seller processing" }));
     await user.click(screen.getByRole("button", { name: "Replay" }));
     await user.click(screen.getByRole("button", { name: "Duplicate" }));
     prompt.mockReturnValueOnce("0");

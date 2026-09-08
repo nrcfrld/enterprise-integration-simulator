@@ -70,7 +70,7 @@ describe("ControlPlaneApp critical session and seed flows", () => {
       await screen.findByRole("button", { name: "Reset to seed" }),
     );
 
-    expect(confirmMock).toHaveBeenCalledWith("Reset this shop to its seed data?");
+    expect(confirmMock).toHaveBeenCalledWith(expect.stringContaining("Reset Test shop (shop_1) to sample data?"));
     await waitFor(() =>
       expect(requestMock).toHaveBeenCalledWith(
         "/control/v1/shops/shop_1/reset",
@@ -215,7 +215,8 @@ describe("ControlPlaneApp critical session and seed flows", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "+ New credential" }));
+    const newCredentialButton = await screen.findByRole("button", { name: "+ New credential" });
+    await user.click(newCredentialButton);
     await user.click(screen.getByRole("button", { name: /^Create/ }));
     const dialog = await screen.findByRole("dialog", { name: "Credential created" });
     expect(dialog).toHaveTextContent("client_once");
@@ -224,8 +225,9 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(requestMock.mock.calls.filter(([path]) => path === "/control/v1/shops").length).toBeGreaterThan(1);
 
-    await user.click(screen.getByRole("button", { name: "I saved these credentials" }));
+    await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Credential created" })).not.toBeInTheDocument();
+    await waitFor(() => expect(newCredentialButton).toHaveFocus());
   });
   it("ignores a late shop A response after shop B loads", async () => {
     let resolveA!: (data: unknown) => void;
@@ -293,4 +295,68 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     expect(screen.queryByRole("heading", { name: "Create product" })).not.toBeInTheDocument();
   });
 
+});
+
+describe("H4 and H7 setup and refresh journeys", () => {
+  beforeEach(() => {
+    localStorage.setItem("marketplace-session", JSON.stringify(session));
+    requestMock.mockReset();
+  });
+
+  it("selects a newly created shop even when it is not on the selector's first page", async () => {
+    const createdShop = { ...shop, id: "shop_new", name: "New learner shop" };
+    requestMock.mockImplementation((path: string, _token: string, options?: { method?: string }) => {
+      if (path === "/control/v1/shops" && options?.method === "POST") return Promise.resolve(createdShop);
+      if (path.startsWith("/control/v1/shops")) return Promise.resolve({ data: [shop] });
+      if (path === "/control/v1/maintenance") return Promise.resolve({ enabled: false });
+      return Promise.resolve({ shops: 2 });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/products"]}><ControlPlaneApp /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText("Current shop")).toHaveValue("shop_1"));
+    await user.click(screen.getByRole("link", { name: "Manage shops" }));
+    await user.click(await screen.findByRole("button", { name: "+ New shop" }));
+    await user.type(screen.getByRole("textbox", { name: "Shop name" }), createdShop.name);
+    await user.click(screen.getByRole("button", { name: "Create →" }));
+    await waitFor(() => expect(screen.getByLabelText("Current shop")).toHaveValue("shop_new"));
+    expect(await screen.findByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+    expect(screen.getByRole("option", { name: createdShop.name })).toBeInTheDocument();
+    await waitFor(() => expect(requestMock).toHaveBeenCalledWith("/control/v1/dashboard?shop_id=shop_new", "session-token"));
+  });
+
+  it("opens the returned order immediately after a single-order simulation", async () => {
+    requestMock.mockImplementation((path: string, _token: string, options?: { method?: string }) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
+      if (path.endsWith("/orders") && options?.method === "POST") return Promise.resolve({ id: "order_created" });
+      if (path === "/control/v1/orders/order_created") return Promise.resolve({ id: "order_created", order_number: "NEW-ORDER", events: [], deliveries: [] });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/orders"]}><ControlPlaneApp /></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: "+ Simulate order" }));
+    await user.click(screen.getByRole("button", { name: "Create →" }));
+    expect(await screen.findByRole("heading", { name: "NEW-ORDER" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "order details" })).toBeVisible();
+  });
+
+  it("retains the list during a failed refresh and lets the learner retry", async () => {
+    let productLoads = 0;
+    requestMock.mockImplementation((path: string) => {
+      if (path === "/control/v1/shops") return Promise.resolve({ data: [shop] });
+      if (path.includes("/products")) {
+        if (++productLoads === 2) return Promise.reject(new Error("Temporary outage"));
+        return Promise.resolve({ data: [{ id: "product_1", name: "Existing product" }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/products"]}><ControlPlaneApp /></MemoryRouter>);
+    expect(await screen.findByText("Existing product")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Refresh failed; showing previously loaded data. Temporary outage");
+    expect(screen.getByText("Existing product")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Retry loading" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(productLoads).toBe(3);
+  });
 });

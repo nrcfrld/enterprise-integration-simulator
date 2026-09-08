@@ -116,7 +116,7 @@ func shopeeSubscriptionEvents(event string) []string {
 	case "order_status_update":
 		return []string{"order.created", "order.paid", "order.payment_failed", "order.payment_expired", "order.processing", "order.ready_to_ship", "order.completed", "order.cancelled", "order.sla_expired"}
 	case "logistics_status_update":
-		return []string{"order.shipped", "order.in_delivery", "order.delivered"}
+		return []string{"order.shipped", "order.in_delivery", "order.delivered", "shipment.delivery_failed", "shipment.returning", "shipment.returned"}
 	default:
 		return nil
 	}
@@ -185,17 +185,18 @@ func (s *Server) webhookListResponse(c *gin.Context, shop string) {
 	s.controlListResponse(c, data, gin.H{"delivery_contract": gin.H{"provider_profile": provider, "signing_client_id": signingClientID}})
 }
 
-// controlListResponse gives every control-plane collection the same page/limit
-// contract. This keeps the dashboard responsive while preserving existing list
-// consumers that only read the data field.
+// controlListResponse gives control-plane collections and the shared webhook
+// list the same page/limit contract while preserving consumers of data.
 func (s *Server) controlListResponse(c *gin.Context, data []gin.H, metadata ...gin.H) {
-	limit := 20
-	if parsed, err := strconv.Atoi(c.DefaultQuery("limit", "20")); err == nil && parsed > 0 && parsed <= 100 {
-		limit = parsed
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit < 1 || limit > 100 {
+		c.JSON(http.StatusBadRequest, errorBody("INVALID_REQUEST", "limit must be between 1 and 100"))
+		return
 	}
-	pageNumber := 1
-	if parsed, err := strconv.Atoi(c.DefaultQuery("page", "1")); err == nil && parsed > 0 {
-		pageNumber = parsed
+	pageNumber, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || pageNumber < 1 {
+		c.JSON(http.StatusBadRequest, errorBody("INVALID_REQUEST", "page must be a positive integer"))
+		return
 	}
 	total := len(data)
 	totalPages := max(1, (total+limit-1)/limit)

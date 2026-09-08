@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@/test/setup";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { DetailPanel } from "../DetailPanel";
@@ -23,8 +23,12 @@ it("shows all packages and follows package → shipment → warehouse with a ret
   await user.click(await screen.findByRole("button", { name: "Open shipment TRACK-B" }));
   expect(await screen.findByRole("button", { name: "Open package pkg_b" })).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Open warehouse Main · WH-1" }));
-  expect(await screen.findByRole("dialog", { name: "warehouse details" })).toBeVisible();
+  const warehouseDialog = await screen.findByRole("dialog", { name: "warehouse details" });
+  expect(warehouseDialog).toBeVisible();
+  expect(within(warehouseDialog).getByRole("heading", { name: "Main", level: 2 })).toHaveFocus();
   await user.click(screen.getByRole("button", { name: "Back to previous resource" }));
-  expect(await screen.findByRole("dialog", { name: "shipment details" })).toBeVisible();
+  const shipmentDialog = await screen.findByRole("dialog", { name: "shipment details" });
+  expect(shipmentDialog).toBeVisible();
+  expect(within(shipmentDialog).getByRole("heading", { name: "TRACK-B", level: 2 })).toHaveFocus();
   expect(request).toHaveBeenCalledWith("/control/v1/shipments/shp_b", "token");
 });

@@ -4,6 +4,7 @@ import type { SeedResult } from "@/shared/types/controlPlane";
 
 interface UseSeedShopOptions {
   shopID: string;
+  shopName?: string;
   token: string | null | undefined;
   onRefresh: () => Promise<void>;
   onNotice: (message: string) => void;
@@ -12,6 +13,7 @@ interface UseSeedShopOptions {
 
 export function useSeedShop({
   shopID,
+  shopName,
   token,
   onRefresh,
   onNotice,
@@ -20,7 +22,7 @@ export function useSeedShop({
   const [isSeeding, setIsSeeding] = useState(false);
 
   const resetShop = async () => {
-    if (!shopID || !window.confirm("Reset this shop to its seed data?")) return;
+    if (!shopID || isSeeding || !window.confirm(`Reset ${shopName || "shop"} (${shopID}) to sample data?\n\nPermanently deletes credentials, webhook registrations and delivery history, orders, packages, shipments, events, products and inventory. Existing API credentials stop working.\n\nCreates 100 products, 50 completed historical orders, an unusable sample credential and a disabled example webhook. Warehouse definitions and scenario settings remain. Create and save a new credential, then configure your receiver again. This cannot be undone.`)) return;
     setIsSeeding(true);
     try {
       const result = await controlPlaneRequest<SeedResult>(
@@ -30,7 +32,7 @@ export function useSeedShop({
       );
       await onRefresh();
       onNotice(
-        `Seed complete: ${result.products_seeded} products and ${result.orders_seeded} orders. Create a credential from Credentials when you need a new one-time secret.`,
+        `Seed complete: ${result.products_seeded} products and ${result.orders_seeded} orders. Previous credentials and webhook history were deleted. Create and save a new credential, revoke the unusable sample credential, and configure your receiver again.`,
       );
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : "Request failed";

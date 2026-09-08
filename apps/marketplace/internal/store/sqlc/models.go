@@ -226,14 +226,23 @@ type WebhookDelivery struct {
 }
 
 type WebhookDeliveryAttempt struct {
-	ID              string
-	DeliveryID      string
-	Attempt         int32
-	RequestHeaders  []byte
-	ResponseStatus  pgtype.Int4
-	ResponseHeaders []byte
-	ResponseBody    pgtype.Text
-	DurationMs      int32
-	Status          string
-	CreatedAt       pgtype.Timestamptz
+	ID                    string
+	DeliveryID            string
+	Attempt               int32
+	RequestHeaders        []byte
+	ResponseStatus        pgtype.Int4
+	ResponseHeaders       []byte
+	ResponseBody          pgtype.Text
+	DurationMs            int32
+	Status                string
+	CreatedAt             pgtype.Timestamptz
+	RequestBody           pgtype.Text
+	RequestUrl            pgtype.Text
+	ProviderProfile       pgtype.Text
+	SigningClientID       pgtype.Text
+	StartedAt             pgtype.Timestamptz
+	HttpAttempted         pgtype.Bool
+	FailureCode           pgtype.Text
+	FailureReason         pgtype.Text
+	ResponseBodyTruncated pgtype.Bool
 }

@@ -13,7 +13,7 @@ func ShopeeEvent(event string) string {
 	switch event {
 	case "product.created", "product.updated", "product.deleted":
 		return "item_update"
-	case "order.shipped", "order.in_delivery", "order.delivered":
+	case "order.shipped", "order.in_delivery", "order.delivered", "shipment.delivery_failed", "shipment.returning", "shipment.returned":
 		return "logistics_status_update"
 	default:
 		return "order_status_update"

@@ -44,7 +44,20 @@ func (s *Server) getControlProduct(c *gin.Context) {
 		s.controlProductError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, controlProductResponse(product))
+	out := controlProductResponse(product)
+	inventory, err := s.productInventory(c, shopID, product.ID)
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not load product inventory"))
+		return
+	}
+	trail, err := s.resourceEvents(c, shopID, product.ID)
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not load product events"))
+		return
+	}
+	out["warehouse_inventory"] = inventory
+	out["events"] = trail
+	c.JSON(http.StatusOK, out)
 }
 
 func (s *Server) updateControlProduct(c *gin.Context) {

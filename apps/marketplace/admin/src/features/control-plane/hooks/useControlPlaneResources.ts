@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PAGEABLE_CONTROL_PAGES, type ControlPage } from "@/app/navigation";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
@@ -16,6 +17,7 @@ function pageEndpoint(page: ControlPage, shopID: string): string | undefined {
     Credentials: shopID ? `/control/v1/shops/${shopID}/credentials` : undefined,
     Webhooks: shopID ? `/control/v1/shops/${shopID}/webhooks` : undefined,
     Deliveries: shopID ? `/control/v1/shops/${shopID}/deliveries` : undefined,
+    Events: shopID ? `/control/v1/shops/${shopID}/events` : undefined,
     Scenarios: shopID ? `/control/v1/shops/${shopID}/scenario` : undefined,
     Documentation: undefined,
   })[page];
@@ -28,16 +30,23 @@ export function useControlPlaneResources(
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopID, setShopID] = useState("");
   const [providerFilter, setProviderFilter] = useState("ALL");
-  const [resource, setResource] = useState<{ scope: string; data: ControlPlaneData | null; loading: boolean; error: string } | null>(null);
+  const [resource, setResource] = useState<{ scope: string; data: ControlPlaneData | null; loading: boolean; error: string; updatedAt?: number } | null>(null);
   const [shopsLoaded, setShopsLoaded] = useState(false);
   const [shopsError, setShopsError] = useState("");
   const requestVersion = useRef(0);
   const shopsVersion = useRef(0);
   const activeToken = useRef(token);
   const [listPage, setListPage] = useState(1);
+  const [searchParams] = useSearchParams();
+  const eventFilters = new URLSearchParams();
+  for (const key of ["resource_type", "aggregate_id", "event_type"]) {
+    const value = searchParams.get(key);
+    if (value) eventFilters.set(key, value);
+  }
+  const eventQuery = page === "Events" ? eventFilters.toString() : "";
   const endpoint = pageEndpoint(page, shopID);
   const route = endpoint && PAGEABLE_CONTROL_PAGES.has(page)
-    ? `${endpoint}?page=${listPage}&limit=20`
+    ? `${endpoint}?page=${listPage}&limit=20${eventQuery ? `&${eventQuery}` : ""}`
     : endpoint;
 
   const scope = `${token ?? ""}:${route ?? ""}`;
@@ -60,7 +69,7 @@ export function useControlPlaneResources(
       const result = await controlPlaneRequest<ListResponse<Shop>>("/control/v1/shops", token);
       if (version !== shopsVersion.current || activeToken.current !== token) return;
       setShopsLoaded(true);
-      setShops(result.data);
+      setShops(current => [...result.data, ...current.filter(shop => !result.data.some(item => item.id === shop.id))]);
       setShopsError("");
       setShopID((current) => current || result.data[0]?.id || "");
     } catch (error) {
@@ -74,15 +83,21 @@ export function useControlPlaneResources(
   const refresh = useCallback(async () => {
     if (!token || !route || activeScope.current !== scope) return;
     const version = ++requestVersion.current;
-    setResource({ scope, data: null, loading: true, error: "" });
+    setResource((current) => ({
+      scope,
+      data: current?.scope === scope ? current.data : null,
+      updatedAt: current?.scope === scope ? current.updatedAt : undefined,
+      loading: true,
+      error: "",
+    }));
     try {
       const data = await controlPlaneRequest<ControlPlaneData>(route, token);
       if (activeScope.current === scope && version === requestVersion.current) {
-        setResource({ scope, data, loading: false, error: "" });
+        setResource({ scope, data, loading: false, error: "", updatedAt: Date.now() });
       }
     } catch (error) {
       if (activeScope.current === scope && version === requestVersion.current) {
-        setResource({ scope, data: null, loading: false, error: error instanceof Error ? error.message : "Request failed" });
+        setResource(current => ({ scope, data: current?.scope === scope ? current.data : null, updatedAt: current?.scope === scope ? current.updatedAt : undefined, loading: false, error: error instanceof Error ? error.message : "Request failed" }));
       }
     }
   }, [route, scope, token]);
@@ -90,7 +105,7 @@ export function useControlPlaneResources(
   useEffect(() => { void refreshShops(); }, [refreshShops]);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  useEffect(() => setListPage(1), [page, shopID]);
+  useEffect(() => setListPage(1), [page, shopID, eventQuery]);
 
   const visibleShops = useMemo(
     () => page === "Orders" && providerFilter !== "ALL"
@@ -114,12 +129,19 @@ export function useControlPlaneResources(
 
   return {
     data: resource?.scope === scope ? resource.data : null,
-    loading: Boolean(token && ((!shopsLoaded && page !== "Documentation") || (route && (resource?.scope !== scope || resource.loading)))),
+    loading: Boolean(token && ((!shopsLoaded && page !== "Documentation") || (route && (resource?.scope !== scope || (resource.loading && !resource.data))))),
     error: resource?.scope === scope ? resource.error : "",
+    refreshing: resource?.scope === scope && resource.loading,
+    updatedAt: resource?.scope === scope ? resource.updatedAt : undefined,
     shopsError,
     shops,
     shopID,
     setShopID,
+    selectCreatedShop: (shop: Shop) => {
+      setShops(current => [...current.filter(item => item.id !== shop.id), shop]);
+      setShopID(shop.id);
+      setProviderFilter("ALL");
+    },
     providerFilter,
     visibleShops,
     selectedShop,

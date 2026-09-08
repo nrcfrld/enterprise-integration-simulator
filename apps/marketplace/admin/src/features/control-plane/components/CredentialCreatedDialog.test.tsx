@@ -32,7 +32,7 @@ describe("CredentialCreatedDialog", () => {
     expect(await screen.findByText("Copied")).toBeVisible();
   });
 
-  it("requires explicit confirmation to close", async () => {
+  it("supports Escape and explicit confirmation to close", async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
     render(
@@ -47,6 +47,10 @@ describe("CredentialCreatedDialog", () => {
     );
 
     expect(screen.queryByText("Access token")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Credential created" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledOnce();
+    onClose.mockClear();
     await user.click(screen.getByRole("button", { name: "I saved these credentials" }));
     expect(onClose).toHaveBeenCalledOnce();
   });

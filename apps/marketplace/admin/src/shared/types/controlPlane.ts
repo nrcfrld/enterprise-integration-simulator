@@ -22,6 +22,11 @@ export interface NoticeMessage {
   text: string;
 }
 
+export interface CredentialHandoff {
+  shop: Shop;
+  credential: CreatedCredential;
+}
+
 export interface CreatedCredential {
   id: string;
   client_id: string;

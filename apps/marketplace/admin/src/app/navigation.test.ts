@@ -10,7 +10,7 @@ describe("control-plane navigation", () => {
       ]),
     ).toEqual([
       ["Overview", ["Overview"]],
-      ["OPERATIONS", ["Orders", "Products", "Warehouses", "Packages", "Shipments"]],
+      ["OPERATIONS", ["Orders", "Products", "Warehouses & Inventory", "Packages", "Shipments"]],
       ["INTEGRATION", ["API Credentials", "Webhooks", "Webhook Deliveries"]],
       ["SIMULATION", ["Scenarios", "Event Logs"]],
       ["DEVELOPER", ["API Documentation", "Integration Guide"]],
@@ -25,8 +25,8 @@ describe("control-plane navigation", () => {
     expect(entries["Shipments"].page).toBe("Shipments");
     expect(CONTROL_PATHS[entries["Shipments"].page]).toBe("/shipments");
     expect(entries["Shipments"].showActiveState).not.toBe(false);
-    expect(CONTROL_PATHS[entries["Warehouses"].page]).toBe("/warehouses");
-    expect(CONTROL_PATHS[entries["Event Logs"].page]).toBe("/orders");
+    expect(CONTROL_PATHS[entries["Warehouses & Inventory"].page]).toBe("/warehouses");
+    expect(CONTROL_PATHS[entries["Event Logs"].page]).toBe("/events");
     expect(CONTROL_PATHS[entries["Integration Guide"].page]).toBe("/docs");
   });
 });

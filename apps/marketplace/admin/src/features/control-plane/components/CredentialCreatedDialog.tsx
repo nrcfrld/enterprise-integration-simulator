@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { CreatedCredential } from "@/shared/types/controlPlane";
+import { type RefObject, useEffect, useRef, useState } from "react";
+import type { CreatedCredential, Shop } from "@/shared/types/controlPlane";
+import { AccessibleDialog } from "./AccessibleDialog";
 
 type CopyState = "idle" | "copied" | "error";
 
@@ -58,11 +59,18 @@ function CredentialValue({ label, value }: { label: string; value: string }) {
 
 export function CredentialCreatedDialog({
   credential,
+  shop,
+  onUseInSimulator,
   onClose,
+  returnFocusRef,
 }: {
   credential: CreatedCredential;
+  shop?: Shop;
+  onUseInSimulator?: () => void;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
+  const initialFocusRef = useRef<HTMLHeadingElement>(null);
   const values = [
     ["Client ID", credential.client_id],
     ["Client secret", credential.client_secret],
@@ -70,34 +78,36 @@ export function CredentialCreatedDialog({
   ] as const;
 
   return (
-    <div className="modal modal-open credential-dialog-backdrop">
-      <section
-        className="modal-box credential-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="credential-dialog-title"
-        aria-describedby="credential-dialog-description"
-      >
+    <AccessibleDialog
+      ariaDescribedby="credential-dialog-description"
+      ariaLabelledby="credential-dialog-title"
+      backdropClassName="modal modal-open credential-dialog-backdrop"
+      className="modal-box credential-dialog"
+      initialFocusRef={initialFocusRef}
+      onClose={onClose}
+      returnFocusRef={returnFocusRef}
+    >
         <header className="credential-dialog-heading">
           <span className="credential-dialog-icon"><SuccessIcon /></span>
           <div>
-            <h2 id="credential-dialog-title">Credential created</h2>
+            <h2 id="credential-dialog-title" ref={initialFocusRef} tabIndex={-1}>Credential created</h2>
             <p id="credential-dialog-description">Copy these values now. The secret and access token cannot be shown again.</p>
           </div>
         </header>
 
+        {shop && <p>Shop: <b>{shop.name}</b> · {shop.provider_profile} · <code>{shop.id}</code></p>}
         <div className="credential-values">
           {values.map(([label, value]) => <CredentialValue key={label} label={label} value={value} />)}
         </div>
 
         <p className="credential-security-note">
-          Store these values in a password manager or secret vault. The access token is required only for Tokopedia-like requests.
+          Use in simulator transfers these values only in memory and returns to your request. Save a separate copy in a password manager or secret vault. The access token is required only for Tokopedia-like requests.
         </p>
 
         <footer className="credential-dialog-actions">
-          <button type="button" className="btn btn-primary" onClick={onClose} autoFocus>I saved these credentials</button>
+          {onUseInSimulator && <button type="button" className="btn btn-primary" onClick={onUseInSimulator}>Use in simulator</button>}
+          <button type="button" className="btn btn-primary" onClick={onClose}>I saved these credentials</button>
         </footer>
-      </section>
-    </div>
+    </AccessibleDialog>
   );
 }

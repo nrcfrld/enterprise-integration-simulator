@@ -9,6 +9,7 @@ export const CONTROL_PAGES = [
   "Packages",
   "Shipments",
   "Deliveries",
+  "Events",
   "Scenarios",
   "Documentation",
   "Users",
@@ -27,6 +28,7 @@ export const CONTROL_PATHS: Record<ControlPage, string> = {
   Packages: "/packages",
   Shipments: "/shipments",
   Deliveries: "/deliveries",
+  Events: "/events",
   Scenarios: "/scenarios",
   Documentation: "/docs",
   Users: "/users",
@@ -59,7 +61,7 @@ export const CONTROL_NAVIGATION: readonly ControlNavigationSection[] = [
     items: [
       { label: "Orders", page: "Orders" },
       { label: "Products", page: "Products" },
-      { label: "Warehouses", page: "Warehouses" },
+      { label: "Warehouses & Inventory", page: "Warehouses" },
       { label: "Packages", page: "Packages" },
       { label: "Shipments", page: "Shipments" },
     ],
@@ -78,9 +80,7 @@ export const CONTROL_NAVIGATION: readonly ControlNavigationSection[] = [
       { label: "Scenarios", page: "Scenarios" },
       {
         label: "Event Logs",
-        page: "Orders",
-        description: "Inspect an order's event trail from its detail view.",
-        showActiveState: false,
+        page: "Events",
       },
     ],
   },
@@ -111,5 +111,6 @@ export const PAGEABLE_CONTROL_PAGES = new Set<ControlPage>([
   "Shipments",
   "Credentials",
   "Deliveries",
+  "Events",
   "Users",
 ]);

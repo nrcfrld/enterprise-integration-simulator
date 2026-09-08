@@ -1660,6 +1660,16 @@ header h1,
 .reference-callout { display: grid; grid-template-columns: 6rem 1fr; gap: 1rem; margin: 0 0 2rem; padding: 1.1rem 1.2rem; border: 1px solid #c9d7c8; background: #e8f0e5; }
 .reference-callout b { color: #376243; font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; }
 .reference-callout p { margin: 0; color: #405747; font-size: 0.84rem; line-height: 1.55; }
+.webhook-verification.reference-callout { box-sizing: border-box; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; width: 100%; overflow: hidden; }
+.webhook-verification-intro { display: grid; gap: 0.45rem; max-width: 62rem; }
+.webhook-verification-intro h3,
+.webhook-verification-contracts h4 { margin: 0; color: var(--color-neutral, #17221f); }
+.webhook-verification-contracts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 0.8rem; min-width: 0; }
+.webhook-verification-contracts article { min-width: 0; padding: 1rem; border: 1px solid #d7e1d5; border-radius: 0.45rem; background: rgb(255 255 255 / 62%); }
+.webhook-verification-contracts article p + p { margin-top: 0.7rem; }
+.webhook-verification b { color: inherit; font-size: inherit; letter-spacing: inherit; text-transform: none; }
+.webhook-verification code { overflow-wrap: anywhere; word-break: break-word; }
+.webhook-verification-note { padding-top: 0.9rem; border-top: 1px solid #d7e1d5; }
 .reference-note { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 1rem; max-width: 55rem; margin-bottom: 2.8rem; padding: 1rem 1.1rem; border: 1px solid #c9d7c8; background: #e8f0e5; }
 .reference-note b { color: #376243; font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; }
 .reference-note p { margin: 0; color: #405747; font-size: 0.84rem; line-height: 1.55; }
@@ -4235,3 +4245,6 @@ button.link-button {
     align-items: center;
   }
 }
+
+.event-option > span { min-width: 0; overflow-wrap: anywhere; }
+.event-option small { display: block; margin-top: 0.4rem; font-family: "Manrope", sans-serif; font-size: 0.75rem; font-weight: 400; line-height: 1.5; }

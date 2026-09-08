@@ -6,14 +6,14 @@ Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
 ## Latest audit — Marketplace dashboard usability and Developer Experience
 
-**C1–C4 and H1–H2 are FIXED and verified; 17 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 13 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
+**C1–C4, H1–H10, and H15 are FIXED and verified; 8 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 4 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
 
 The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/general/UI-IMPROVEMENTS.md) contains the problem, junior-developer impact, affected feature, concrete recommendation, and source evidence for every finding. It also includes the ten-step developer journey, documentation/implementation parity inventory, missing simulator capabilities, terminology mapping, underexposed backend functionality, obsolete UI, and a prioritized implementation plan.
 
 | Priority | Open findings |
 | --- | --- |
 | Critical | None open. C1–C4 are fixed; implementation and verification are recorded below. |
-| High Priority | **H3:** remaining filter/pagination/response documentation mismatches. H1/H2 package workflow and relationship navigation are fixed. **H4–H7:** setup/reset and shop discovery, provider/credential handoff, lifecycle/actor/payment clarity, and loading/empty/error/asynchronous states. **H8–H11:** incomplete delivery diagnostics, event discovery/subscription coverage, inventory discoverability, and end-to-end learning/receiver guidance. **H12–H15:** request export/response fidelity, simulator input/default/retry controls, truncated paginated selectors/webhooks, and keyboard dialog behavior. |
+| High Priority | **H11:** a complete end-to-end learning exercise. **H12–H14:** request export/response fidelity, simulator input/default/retry controls, and truncated paginated selectors/webhooks. |
 | Nice to Have | **N1:** task-specific list columns/counts/dates. **N2:** scenario exercises, consistent language, and reset. **N3:** durable documentation/detail links and distinct guide destinations. **N4:** optional account-registration placement and discoverable Admin user management. |
 
 ### Audit validation and boundaries
@@ -26,16 +26,68 @@ The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/gene
 
 ### Proposed remediation order
 
-1. C1–C4 completed. Correct the misleading time-filter contract in H3.
-2. Make shop setup, credentials, first requests, pagination, and state feedback dependable (H4/H5/H7/H14).
-3. H1/H2 package workflow/traversal completed. Finish lifecycle/inventory learning (H6/H10).
-4. Complete receiver setup, event coverage, and delivery diagnosis (H8/H9/H11, with C2's corrected contracts).
-5. Finish semantic documentation parity and simulator request/retry fidelity (H3/H12/H13).
-6. Apply H15 alongside touched dialogs, then N1–N4. Validate each fix before changing its status; defer broad visual redesign.
+1. C1–C4 and H3 completed.
+2. H4/H7 setup and state feedback completed. H5 credential handoff completed; finish pagination (H14).
+3. H1/H2 package workflow/traversal completed. H6 lifecycle learning and H10 inventory discoverability completed.
+4. H8 delivery diagnosis and H9 event coverage completed; finish the full receiver exercise (H11).
+5. H3 documentation parity completed. Finish simulator request/retry fidelity (H12/H13).
+6. H15 dialog behavior completed. Finish N1–N4. Validate each fix before changing its status; defer broad visual redesign.
 
 **Original audit Product & DX Review:** reviewed Domain, Backend, OpenAPI, Developer Portal, API Request Simulator, Examples, Admin/Control Plane, and Tests together. That audit updated only this implementation report and the audit artifact; the subsequent C1–C4 implementations and verification are recorded below.
 
-## Latest remediation — H1/H2 explicit packages and fulfillment relationships (2026-09-05)
+## Latest remediation — H9/H10 events and inventory discovery (2026-09-09)
+
+**H9 and H10 FIXED.** Earlier uncommitted work was preserved. The remaining audit findings are H11–H14 and N1–N4.
+
+- **H9:** Real shop Event Logs with resource/type filters before pagination, canonical payload inspection, replay/duplicate/delay, and resource/delivery links. Product and shipment details expose trails; order trails include linked shipment failures/returns and deliveries. Admin/portal/simulator share all 18 event names, trigger guidance and provider mapping. Shopee logistics and Tokopedia order subscription expansion now include the missing failure/expiry/return events. Existing subscription selections are preserved; the guide explains how to reconfigure them.
+- **H10:** Explicit Warehouses & Inventory navigation, stable product stock/status columns, per-product warehouse ledgers and stock-editor links, and clear order/warehouse/product-edit help. Portal and warehouse simulator explain on-hand/reserved/available accounting, largest-priority/single-warehouse allocation, tie-breaking, a worked multi-line example, and physical count replacement.
+
+| Verification | Result |
+| --- | --- |
+| Frontend suite using bundled Node runtime | PASS — 152 tests across 40 files. Includes catalog parity, event filters/paging, late previous-shop response isolation, event replay and delivery links, subscription choices, stock columns, and warehouse editor navigation. Bun runs ended prematurely without complete summaries; Node completed the full suite. |
+| Frontend typecheck, ESLint, production build | PASS |
+| Go package tests, vet, golangci-lint | PASS — no static-check issues. |
+| Isolated race-enabled integration/worker suites | Worker PASS (44.801s). Full integration run passed all behavior checks except one PostgreSQL startup timeout in the existing idempotency test; focused retry of that test plus both H9/H10 suites PASS (18.492s). |
+| OpenAPI generation | PASS — event feed, product/shipments’ event trails, warehouse projections and full shared subscription enums documented; bindings regenerated. |
+| UI mechanical detector | PASS — no findings in new event/inventory surfaces. |
+| Docker Compose / browser E2E | NOT RUN. Existing running services were not rebuilt or migrated. |
+
+**Product & DX Review:** Domain accounting and event emission were checked against the source of truth; no canonical lifecycle or inventory rules changed. Backend projections/provider subscription coverage, OpenAPI, Admin, Developer Portal, API Simulator guidance, repository workflow examples, and regression tests were updated together. No new public event API is introduced: Event Logs is an authenticated control-plane inspection tool. Public warehouse APIs remain read-only. Existing event selections are not silently broadened. Product archive history remains available in the event feed even when its resource detail is no longer available; normal shipment milestones are found on the linked order. A complete external consumer exercise, exact request export and deeper pagination work remain separately open.
+
+## Prior remediation — H5/H6/H8 context, lifecycle guidance and delivery diagnostics (2026-09-09)
+
+**H5, H6 and H8 FIXED.** Existing uncommitted H3/H4/H7/H15 changes were preserved. At that checkpoint, H9–H14 and N1–N4 remained open; H9/H10 are resolved in the latest remediation above.
+
+- **H5:** Provider context throughout console/portal, matching provider defaults and quick starts, in-memory one-time credential handoff back to the current edited request, direct return from Credentials, provider mismatch prevention and honest ownership/lost-key guidance. Portal state lives for the authenticated selected shop across console visits and is cleared on shop switch/reset/sign-out/reload. No secret is placed in browser storage or URLs.
+- **H6:** Domain-derived action eligibility/cancellation options, authoritative payment state and canonical/provider status labels, separate payment/customer/merchant/carrier instruction, explicit cancellation actor and reason, and a portal lifecycle/actor/mapping guide. Backend mutations retain locked validation; legacy empty control cancellation requests retain SELLER/OUT_OF_STOCK for compatibility.
+- **H8:** Migration 015 stores immutable attempt destination, exact signed body, provider, signing identity, timestamp, HTTP-attempted marker, structured failures and response truncation. Signing failures become visible bounded retries. Delivery inspection joins source event/registration/attempt evidence with related-resource navigation and a local historical signature check. Legacy missing snapshots remain explicitly unavailable; successful retries clear the current list diagnosis while preserving failed attempts.
+
+| Verification | Result |
+| --- | --- |
+| Frontend suite | PASS — 146 tests across 37 files, including credential round trips with preserved request body, provider mismatch/clearing, legal actions/cancellation/payment authority, and both providers’ local snapshot verification. |
+| Frontend typecheck, ESLint, production build | PASS |
+| Go package tests, domain race tests, formatting/vet, golangci-lint | PASS — no static-check issues. |
+| Full isolated race-enabled integration/worker suites | PASS — integration 96.481s; worker 38.462s. Covers migration, lifecycle, provider signatures/retries, cancellation retention and diagnostic snapshots. |
+| Final delivery-list recovery regression | PASS — successful retry does not retain an obsolete failure diagnosis; earlier attempts remain inspectable. |
+| OpenAPI and sqlc generation | PASS — control order/action/delivery contracts documented and bindings regenerated. |
+| UI mechanical detector | PASS — no findings in changed context/lifecycle/diagnostic components. |
+| Docker Compose / browser E2E | NOT RUN. Running services were not rebuilt or migrated. |
+
+**Product & DX Review:** Domain policy projection, Backend/worker, migration, OpenAPI, Admin, Developer Portal, API Simulator context/handoff, examples/guides and tests were updated together. Public provider endpoints and signing formulas remain unchanged. New diagnostic snapshots require migration 015 and updated API/worker services; older records remain readable but cannot gain historical bodies retroactively. Header evidence covers application headers rather than transport-generated HTTP headers; response bodies explicitly report truncation. Historical verification proves integrity only, not freshness or downstream processing. Broad per-operation draft history, event catalog completion, inventory teaching and the complete persisted integration exercise remain separate open findings.
+
+## Prior remediation — H4/H7 setup and asynchronous feedback (2026-09-08)
+
+**H4 and H7 FIXED.** Manage shops is directly reachable next to the selector; a newly created shop is selected and opens its Dashboard even outside the first selector page. Actual configuration checks are separated from explicitly untracked signed-request and receiver-processing verification. Metrics state their global scope. Sample reset is separated from catalog management and names the shop, irreversible losses, retained warehouse/scenario definitions and required credential/receiver recovery.
+
+Lists now distinguish shop selection from resource-specific empty states. Archive/revoke/retry and order/event actions show pending and recoverable errors. Resource lists and details have Refresh and last-successful-update timestamps, retain data on background failures and offer read retry. Pending/awaiting-creation delivery views perform at most twelve sequential checks five seconds apart, stop on completion/error/navigation, and restart manually. Single-order simulation opens the returned order; delivery summaries link to attempts. Health text makes only claims supported by the actual API read and separates maintenance state from health.
+
+H3/H15 status above is carried forward from their existing remediation notes in the audit; their pre-existing changes were preserved. This remediation does not claim H5/H6/H8–H14 or the Nice to Have findings are fixed.
+
+**Verification:** Full frontend suite passed (138 tests across 34 files with `bun run test --maxWorkers=4`); typecheck, lint and production build passed. New tests cover new-shop selection, created-order handoff, state-derived configuration, reset consequences/cancellation, pending/failed mutation recovery, refresh failure recovery and retained data, and polling limits/manual restart/slow requests/scope cleanup. A later verification rerun hit a five-second timeout in an existing portal credential-switching test; all five portal tests passed when rerun alone. The final shop-context guard also passed the 13 app journey tests. The UI mechanical detector returned no findings. Docker Compose and browser E2E were not run, per the requested boundary.
+
+**Product & DX Review:** Admin/Control Plane, frontend tests, integration guidance, audit and implementation report were updated. Domain reset semantics, backend response IDs/setup counts/delivery states, and OpenAPI were checked as the source of truth and required no changes for H4/H7. Portal/Simulator entry actions and provider-specific first-request instructions were clarified in the runbook and repository guide; public endpoint contracts and request examples did not change. Credential transfer, complete integration exercises and deeper delivery diagnostics remain separately scoped findings.
+
+## Prior remediation — H1/H2 explicit packages and fulfillment relationships (2026-09-05)
 
 **H1 and H2 FIXED.** Both shipment simulators offer **Ship an existing package** and **Automatically package remaining items**, with synchronized JSON, package_id help/examples and preserved raw-body signing. Successful Shopee allocation offers a shipment handoff carrying returned order/package IDs and retaining credentials. The Admin allocation form selects eligible orders across pages and real order lines, displays allocation totals, prevents excess quantities through input limits plus backend validation, and exposes the returned package ID. Tokopedia's explicit package flow is documented through Admin because there is no public Tokopedia allocation endpoint.
 
@@ -497,7 +549,7 @@ Implemented in the current increment:
 
 ## Remaining gaps / known limitations
 
-The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **17 open Product & DX findings (C1–C4 and H1–H2 fixed)** recorded in the 2026-09-05 audit above.
+The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **8 open Product & DX findings (C1–C4, H1–H10, and H15 fixed)** recorded in the 2026-09-05 audit above.
 
 Operational notes, not PRD gaps:
 

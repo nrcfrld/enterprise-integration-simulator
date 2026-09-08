@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@/test/setup";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DetailPanel } from "./DetailPanel";
@@ -57,11 +57,21 @@ describe("DetailPanel component states and actions", () => {
 
     expect(screen.getByRole("dialog", { name: "order details" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Loading…" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Loading…" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Close details" }));
     expect(baseProps.onClose).toHaveBeenCalledTimes(1);
 
     resolveRequest?.(orderDetail);
     expect(await screen.findByRole("heading", { name: "ORD-001" })).toBeVisible();
+  });
+
+  it("closes details with Escape", async () => {
+    requestMock.mockResolvedValue(orderDetail);
+    const user = userEvent.setup();
+    render(<DetailPanel {...baseProps} detail={{ type: "order", id: "order_1" }} />);
+
+    await user.keyboard("{Escape}");
+    expect(baseProps.onClose).toHaveBeenCalledOnce();
   });
 
   it("shows a detail loading failure as an alert", async () => {
@@ -137,4 +147,34 @@ describe("DetailPanel component states and actions", () => {
     );
     expect(requestMock).toHaveBeenCalledTimes(2);
   });
+});
+
+it("recovers an initial load failure and keeps details visible on refresh failure", async () => {
+  requestMock.mockReset().mockRejectedValueOnce(new Error("Temporary failure")).mockResolvedValueOnce(orderDetail).mockRejectedValueOnce(new Error("Refresh unavailable"));
+  const user = userEvent.setup();
+  render(<DetailPanel {...baseProps} detail={{ type: "order", id: "order_1" }} />);
+  await user.click(await screen.findByRole("button", { name: "Retry loading details" }));
+  expect(await screen.findByRole("heading", { name: "ORD-001" })).toBeVisible();
+  expect(screen.getByText(/No deliveries yet/)).toHaveTextContent("Creation is asynchronous");
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Refresh unavailable");
+  expect(screen.getByRole("heading", { name: "ORD-001" })).toBeVisible();
+  expect(screen.getByText(/Last updated/)).toBeVisible();
+});
+
+
+it("refreshes a pending delivery to success and stops checking terminal delivery state", async () => {
+  vi.useFakeTimers();
+  try {
+    requestMock.mockReset().mockResolvedValueOnce({ id: "delivery_1", status: "PENDING", attempts: [] }).mockResolvedValue({ id: "delivery_1", status: "DELIVERED", attempts: [{ id: "attempt_1", attempt: 1, status: "DELIVERED", response_status: 200, duration_ms: 10 }] });
+    const view = render(<DetailPanel {...baseProps} detail={{ type: "delivery", id: "delivery_1" }} />);
+    await act(async () => {});
+    expect(screen.getByText(/Checking delivery status/)).toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText(/200/)).toBeVisible();
+    expect(screen.queryByText(/Checking delivery status/)).not.toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    view.unmount();
+  } finally { vi.useRealTimers(); }
 });

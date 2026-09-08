@@ -29,6 +29,7 @@ func (s *Server) registerControlRoutes(router *gin.Engine) {
 	// Reset is scoped by mustAccessShop inside the handler: administrators may
 	// reset any shop, while operators may reset only a shop they own.
 	secured.POST("/shops/:id/reset", s.resetShop)
+	secured.GET("/shops/:id/events", s.shopEvents)
 	secured.GET("/shops/:id/products", s.shopProducts)
 	secured.POST("/shops/:id/products", s.createControlProduct)
 	secured.GET("/shops/:id/products/:productID", s.getControlProduct)

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import type { ControlPage } from "@/app/navigation";
 import { RelatedResource } from "./details/RelatedResource";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
@@ -25,6 +27,7 @@ type ResourcePageName =
 
 interface ResourcePageProps {
   page: ResourcePageName;
+  onNavigate?: (page: ControlPage) => void;
   data: ControlPlaneData | null;
   shopID: string;
   token: string | null | undefined;
@@ -41,6 +44,7 @@ interface ResourcePageProps {
 
 export function ResourcePage({
   page,
+  onNavigate,
   data,
   shopID,
   token,
@@ -54,6 +58,8 @@ export function ResourcePage({
   listPage,
   onPageChange,
 }: ResourcePageProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
   const rows = Array.isArray(data?.data) ? data.data : [];
   const actions: Partial<Record<ResourcePageName, readonly [FormKind, string] | null>> = {
     Products: ["product", "New product"],
@@ -64,21 +70,43 @@ export function ResourcePage({
     Users: role === "ADMIN" ? ["user", "New user"] : null,
   };
   const action = actions[page];
-  const retry = async (id: string) => {
-    await request<unknown>(`/control/v1/deliveries/${id}/retry`, token, {
-      method: "POST",
-    });
-    await onRefresh();
-    onNotice("Delivery queued for retry");
+  const mutate = async (path: string, method: string, notice: string) => {
+    if (pending) return;
+    setPending(true);
+    setError("");
+    try {
+      await request<unknown>(path, token, { method });
+      await onRefresh();
+      onNotice(notice);
+    } catch (reason) {
+      setError(`${notice.replace(/ (queued for retry|archived|revoked)$/, " action")} failed: ${reason instanceof Error ? reason.message : "Request failed"}. Try the action again after resolving the error.`);
+    } finally { setPending(false); }
   };
-  const archiveProduct = async (product: ResourceRecord) => {
-    if (!window.confirm(`Archive ${product.name}? Existing order history will be preserved.`)) return;
-    await request<unknown>(`/control/v1/shops/${shopID}/products/${product.id}`, token, { method: "DELETE" });
-    await onRefresh();
-    onNotice("Product archived");
+  const retry = (id: string) => mutate(`/control/v1/deliveries/${id}/retry`, "POST", "Delivery queued for retry");
+  const archiveProduct = (product: ResourceRecord) => {
+    if (pending || !window.confirm(`Archive ${product.name}? Existing order history will be preserved.`)) return;
+    return mutate(`/control/v1/shops/${shopID}/products/${product.id}`, "DELETE", "Product archived");
+  };
+  if (!shopID && page !== "Users") return <section className="empty">
+    <h2>Select a shop to view {page.toLowerCase()}</h2>
+    <p>Use Current shop above or create a shop to begin.</p>
+    <button onClick={() => onForm({ kind: "shop" })}>Create shop</button>
+    {onNavigate && <button onClick={() => onNavigate("Shops")}>Manage shops</button>}
+  </section>;
+  const emptyHelp: Record<ResourcePageName, string> = {
+    Products: "No products yet. Add a product with warehouse stock to simulate an order.",
+    Warehouses: "No warehouses yet. Add a warehouse to hold inventory and fulfill orders.",
+    Orders: "No orders yet. Simulate an order after adding products and stock.",
+    Credentials: "No credentials yet. Create one and save its one-time secret to sign API requests.",
+    Packages: "No packages yet. Allocate items from a READY_TO_SHIP order, or let a public shipment request allocate them automatically.",
+    Shipments: "No shipments yet. Create one through the provider API Simulator for a READY_TO_SHIP order or explicit package.",
+    Deliveries: "No deliveries yet. Enable a webhook subscribed to your event, then simulate an order or replay an event. Delivery creation is asynchronous; refresh to check again.",
+    Users: "No users on this page. Administrators can create an operator account.",
   };
   return (
     <>
+      {error && <p role="alert" className="error alert alert-error">{error}</p>}
+      {pending && <p role="status">Saving action…</p>}
       <div className="page-hint alert alert-info">
         {page === "Orders"
           ? "Orders trigger the event timeline. Inspect one to see every resulting webhook delivery."
@@ -90,6 +118,8 @@ export function ResourcePage({
             ? "Credentials are for the external integrator; the secret is visible only when it is created."
             : "Manage records for the selected shop."}
       </div>
+      {page === "Products" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Warehouses")}>Manage warehouse inventory</button>}
+      {page === "Credentials" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Documentation")}>Return to request simulator</button>}
       <div className="table-toolbar">
         {action && (
           <button className="btn btn-primary" onClick={() => onForm({ kind: action[0] })}>
@@ -111,7 +141,7 @@ export function ResourcePage({
             <thead>
               <tr>
                 {columns(rows[0], page).map((key) => (
-                  <th key={key}>{key.replaceAll("_", " ")}</th>
+                  <th key={key}>{key === "stock" ? "available stock" : key.replaceAll("_", " ")}</th>
                 ))}
                 <th>Actions</th>
               </tr>
@@ -120,7 +150,7 @@ export function ResourcePage({
               {rows.map((row) => (
                 <tr key={row.id}>
                   {columns(rows[0], page).map((key) => (
-                    <td key={key} data-label={key.replaceAll("_", " ")}>
+                    <td key={key} data-label={key === "stock" ? "available stock" : key.replaceAll("_", " ")}>
                       {(page === "Packages" || page === "Shipments") && key === "order_number" ? <RelatedResource type="order" id={String(row.order_id || "")} label={String(row.order_number || row.order_id || "")} onOpen={onDetail} />
                         : (page === "Packages" || page === "Shipments") && key === "warehouse_name" ? <RelatedResource type="warehouse" id={String(row.warehouse_id || "")} label={String(row.warehouse_name || "")} onOpen={onDetail} />
                         : page === "Shipments" && key === "package_id" ? <RelatedResource type="package" id={String(row.package_id || "")} onOpen={onDetail} /> : String(row[key] ?? "—")}
@@ -131,7 +161,7 @@ export function ResourcePage({
                       <>
                         <button className="btn btn-ghost btn-sm" onClick={() => onDetail({ type: "product", id: row.id, shopID })}>View product</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => onForm({ kind: "product", initial: row })}>Edit product</button>
-                        <button className="danger btn btn-error btn-soft btn-sm" onClick={() => archiveProduct(row)}>Archive</button>
+                        <button className="danger btn btn-error btn-soft btn-sm" disabled={pending} onClick={() => void archiveProduct(row)}>Archive</button>
                       </>
                     )}
                     {page === "Orders" && (
@@ -170,20 +200,13 @@ export function ResourcePage({
                         >
                           Attempts
                         </button>
-                        {row.webhook_deleted ? <span>Webhook deleted · history retained</span> : <button onClick={() => retry(row.id)}>Retry</button>}
+                        {row.webhook_deleted ? <span>Webhook deleted · history retained</span> : <button disabled={pending} onClick={() => void retry(row.id)}>Retry</button>}
                       </>
                     )}
                     {page === "Credentials" && row.status === "ACTIVE" && (
                       <button
-                        onClick={async () => {
-                          await request<unknown>(
-                            `/control/v1/credentials/${row.id}/revoke`,
-                            token,
-                            { method: "POST" },
-                          );
-                          await onRefresh();
-                          onNotice("Credential revoked");
-                        }}
+                        disabled={pending}
+                        onClick={() => void mutate(`/control/v1/credentials/${row.id}/revoke`, "POST", "Credential revoked")}
                       >
                         Revoke
                       </button>
@@ -194,7 +217,11 @@ export function ResourcePage({
             </tbody>
           </table>
         ) : (
-          <p className="empty">Choose a shop or create a record to begin.</p>
+          <div className="empty"><p>{emptyHelp[page]}</p>
+            {onNavigate && page === "Shipments" && <button onClick={() => onNavigate("Documentation")}>Open API Simulator</button>}
+            {onNavigate && page === "Deliveries" && <button onClick={() => onNavigate("Webhooks")}>Configure webhooks</button>}
+            {onNavigate && page === "Packages" && <button onClick={() => onNavigate("Orders")}>View orders</button>}
+          </div>
         )}
       </div>
       <Pagination pagination={data?.pagination} page={listPage} onChange={onPageChange} />
@@ -230,6 +257,7 @@ export function Pagination({ pagination, page, onChange }: PaginationProps) {
   );
 }
 function columns(row: Record<string, unknown>, page: string) {
+  if (page === "Products") return ["sku", "name", "category", "price", "status", "stock"];
   if (page === "Warehouses") return ["code", "name", "status", "priority", "product_count", "available_quantity"];
   if (page === "Deliveries") return ["event_type", "endpoint", "status", "attempt_count", "next_attempt_at", "failure_reason"];
   if (page === "Shipments") return ["order_number", "package_id", "warehouse_name", "tracking_number", "status", "created_at"];

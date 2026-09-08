@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type { DetailRequest } from "@/shared/types/controlPlane";
 import type { DetailData } from "../components/details/types";
@@ -26,26 +26,35 @@ export function useDetailData(
 ) {
   const [data, setData] = useState<DetailData | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number>();
+  const version = useRef(0);
+  const active = useRef(false);
   const path = detailPath(detail);
+  useLayoutEffect(() => {
+    active.current = true;
+    version.current++;
+    return () => { active.current = false; };
+  }, [path, token]);
   const reload = useCallback(async () => {
-    setData(await controlPlaneRequest<DetailData>(path, token));
+    const current = ++version.current;
+    setRefreshing(true);
+    setLoadError("");
+    try {
+      const result = await controlPlaneRequest<DetailData>(path, token);
+      if (active.current && current === version.current) {
+        setData(result);
+        setUpdatedAt(Date.now());
+      }
+    } catch (reason) {
+      if (active.current && current === version.current) setLoadError(reason instanceof Error ? reason.message : "Request failed");
+      throw reason;
+    } finally {
+      if (active.current && current === version.current) setRefreshing(false);
+    }
   }, [path, token]);
-
-  useEffect(() => {
-    let active = true;
-    setData(null);
-    setError("");
-    controlPlaneRequest<DetailData>(path, token)
-      .then((result) => {
-        if (active) setData(result);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Request failed");
-      });
-    return () => {
-      active = false;
-    };
-  }, [path, token]);
-
-  return { data, error, setError, reload };
+  const refresh = useCallback(async () => { try { await reload(); } catch { /* Render the load error; keep the last successful response. */ } }, [reload]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  return { data, error: error || loadError, setError, reload, refresh, refreshing, updatedAt };
 }

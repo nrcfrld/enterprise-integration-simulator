@@ -26,6 +26,7 @@ describe("control-plane routes", () => {
       "Shipments",
       "Credentials",
       "Deliveries",
+      "Events",
       "Users",
     ]);
     expect(PAGEABLE_CONTROL_PAGES.has("Dashboard")).toBe(false);

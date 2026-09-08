@@ -140,7 +140,7 @@ func (s *Server) tokopediaConfigureWebhooks(c *gin.Context) {
 	for _, topic := range input.EventTypes {
 		switch topic {
 		case "ORDER_STATUS_CHANGE":
-			canonical = append(canonical, "order.created", "order.paid", "order.processing", "order.ready_to_ship", "order.completed", "order.cancelled")
+			canonical = append(canonical, "order.created", "order.paid", "order.processing", "order.ready_to_ship", "order.completed", "order.cancelled", "order.payment_failed", "order.payment_expired", "order.sla_expired")
 		case "PACKAGE_UPDATE":
 			canonical = append(canonical, "order.shipped", "order.in_delivery", "order.delivered", "shipment.delivery_failed", "shipment.returning", "shipment.returned")
 		case "PRODUCT_INFORMATION_CHANGE":

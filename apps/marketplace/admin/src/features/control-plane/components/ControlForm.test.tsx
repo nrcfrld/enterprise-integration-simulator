@@ -182,7 +182,7 @@ describe("ControlForm critical mutations", () => {
 
     await user.click(screen.getByRole("button", { name: "Custom order" }));
     const option = await screen.findByRole("option", { name: /Travel Bag/ });
-    await user.selectOptions(screen.getByRole("combobox"), option);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Product for item 1" }), option);
     await user.type(screen.getByLabelText("Customer name"), "Budi Santoso");
     await user.type(screen.getByLabelText("Customer phone"), "08123456789");
     await user.type(screen.getByLabelText("Address line"), "Jl. Mawar 10");
@@ -262,6 +262,7 @@ describe("ControlForm critical mutations", () => {
     );
     await user.type(screen.getByLabelText("Webhook secret (optional)"), "secret-123");
     await user.click(screen.getByLabelText("product.updated"));
+    await user.click(screen.getByLabelText("shipment.returned"));
     await user.click(screen.getByRole("button", { name: "Create →" }));
 
     await waitFor(() =>
@@ -280,6 +281,10 @@ describe("ControlForm critical mutations", () => {
       enabled: true,
     });
     expect(requestBody().subscribed_events).toContain("product.updated");
+    expect(requestBody().subscribed_events).toContain("shipment.returned");
+    expect(requestBody().subscribed_events).toContain("order.payment_failed");
+    expect(requestBody().subscribed_events).toContain("order.payment_expired");
+    expect(requestBody().subscribed_events).toContain("order.sla_expired");
   });
 
   it("updates a webhook and can disable delivery", async () => {
@@ -301,6 +306,7 @@ describe("ControlForm critical mutations", () => {
 
     await user.click(screen.getByLabelText("order.created"));
     await user.click(screen.getByLabelText("product.updated"));
+    await user.click(screen.getByLabelText("shipment.returned"));
     await user.click(screen.getByLabelText("Deliver events to this endpoint"));
     await user.click(screen.getByRole("button", { name: "Save settings →" }));
 
@@ -317,7 +323,7 @@ describe("ControlForm critical mutations", () => {
     expect(requestBody()).toMatchObject({
       enabled: false,
       secret: "",
-      subscribed_events: ["product.updated"],
+      subscribed_events: ["product.updated", "shipment.returned"],
     });
   });
 
@@ -332,6 +338,16 @@ describe("ControlForm critical mutations", () => {
       "/control/v1/shops/shop_1/warehouses?limit=100",
       "session-token",
     );
+  });
+
+  it("uses a labelled dialog and returns the form close request on Escape", async () => {
+    const user = userEvent.setup();
+    render(<ControlForm {...baseProps} kind="credential" />);
+
+    expect(screen.getByRole("dialog", { name: "Create API credential" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Create API credential" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(baseProps.onClose).toHaveBeenCalledOnce();
   });
 
   it("validates custom orders before sending a mutation", async () => {

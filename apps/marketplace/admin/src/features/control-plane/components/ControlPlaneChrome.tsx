@@ -115,7 +115,8 @@ export function WorkspaceHeader({
             ))}
           </select>
         </label>
-        {page === "Orders" && selectedShop && (
+        <Link className="btn btn-ghost btn-sm" to={CONTROL_PATHS.Shops}>Manage shops</Link>
+        {selectedShop && (
           <span className={`provider-badge badge badge-secondary ${selectedShop.provider_profile.toLowerCase()}`}>
             {providerLabel(selectedShop.provider_profile)}
           </span>

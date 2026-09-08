@@ -102,6 +102,8 @@ export function WarehouseDetail({
         </section>
       </div>
       <h3>Inventory</h3>
+      <p>Available = on hand − reserved. Saving on-hand quantity replaces the physical count; it does not add a delta. For example, to add 5 to 10 on hand, enter 15. The count cannot be less than reserved stock.</p>
+      <p>Only ACTIVE warehouses receive new orders. Larger priority wins among warehouses that can fulfill every order line; ties use warehouse code alphabetically.</p>
       {data.inventory?.length ? (
         <div className="table-wrap">
           <table className="records-table">

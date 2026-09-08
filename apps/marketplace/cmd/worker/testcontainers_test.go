@@ -558,8 +558,13 @@ func TestContainerWorkerDeliversTokopediaLikeWebhookContract(t *testing.T) {
 	if _, err := env.DB.Exec(ctx, `UPDATE webhook_deliveries SET status='PENDING',leased_until=now()+interval '30 seconds' WHERE id='del_toko_hook'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err == nil || !strings.Contains(err.Error(), "requires an active app credential") {
-		t.Fatalf("missing credential: %v", err)
+	if err := w.handleDelivery(ctx, asynq.NewTask(deliveryTask, payload)); err != nil {
+		t.Fatalf("record missing credential: %v", err)
+	}
+	var code string
+	var attempted bool
+	if err := env.DB.QueryRow(ctx, `SELECT failure_code,http_attempted FROM webhook_delivery_attempts WHERE delivery_id='del_toko_hook' ORDER BY attempt DESC LIMIT 1`).Scan(&code, &attempted); err != nil || code != "SIGNING_ERROR" || attempted {
+		t.Fatalf("missing credential diagnostic: %s %t %v", code, attempted, err)
 	}
 
 }

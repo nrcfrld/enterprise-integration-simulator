@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 
 const actionsByStatus: Record<string, ReadonlyArray<readonly [string, string]>> = {
@@ -32,6 +33,7 @@ export function ShipmentActions({
   onError,
   showFinalState = false,
 }: ShipmentActionsProps) {
+  const [pending, setPending] = useState(false);
   const actions = status ? actionsByStatus[status] : undefined;
 
   if (!shipmentID) return null;
@@ -42,6 +44,7 @@ export function ShipmentActions({
   }
 
   const transition = async (action: string) => {
+    if (pending) return;
     onError("");
     let reason = "";
     if (action === "delivery_failed") {
@@ -54,6 +57,7 @@ export function ShipmentActions({
       }
     }
 
+    setPending(true);
     try {
       await controlPlaneRequest<unknown>(
         `/control/v1/shipments/${shipmentID}/actions/${action}`,
@@ -68,16 +72,16 @@ export function ShipmentActions({
       onNotice(`Shipment ${action} complete`);
     } catch (error: unknown) {
       onError(error instanceof Error ? error.message : "Request failed");
-    }
+    } finally { setPending(false); }
   };
 
   return (
-    <div className="action-grid">
+    <section aria-label="Carrier simulation"><p>Carrier simulation: update this shipment’s physical movement. These are console actions, not merchant API calls.</p><div className="action-grid">
       {actions.map(([action, label]) => (
-        <button key={action} onClick={() => void transition(action)}>
+        <button key={action} disabled={pending} onClick={() => void transition(action)}>
           {label}
         </button>
       ))}
-    </div>
+    </div></section>
   );
 }

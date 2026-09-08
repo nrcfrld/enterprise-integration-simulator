@@ -5,8 +5,9 @@ interface CredentialResponse {
   client_secret: string;
 }
 
-test("login, seed data, race inventory, create credential, and send a signed request", async ({ page }) => {
+test("login, seed data, race inventory, create credential, and send a signed request", async ({ context, page }) => {
   test.setTimeout(90_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 
   await page.goto("/");
   await page.getByLabel("Email").fill("admin@example.test");
@@ -43,7 +44,21 @@ test("login, seed data, race inventory, create credential, and send a signed req
   await expect(page.locator(".app-notice")).toContainText("1 created and 2 rejected");
 
   await page.getByRole("link", { name: "API Credentials" }).click();
-  await page.getByRole("button", { name: "+ New credential" }).click();
+  const newCredentialButton = page.getByRole("button", { name: "+ New credential" });
+  await newCredentialButton.click();
+  const createCredentialDialog = page.getByRole("dialog", { name: "Create API credential" });
+  await expect(createCredentialDialog).toBeVisible();
+  await expect(createCredentialDialog.getByRole("heading", { name: "Create API credential" })).toBeFocused();
+  await expect(page.locator("#root")).toHaveAttribute("inert", "");
+  await page.keyboard.press("Shift+Tab");
+  await expect(createCredentialDialog.getByRole("button", { name: /^Create/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(createCredentialDialog.getByRole("button", { name: "Close form" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(createCredentialDialog).toBeHidden();
+  await expect(newCredentialButton).toBeFocused();
+
+  await newCredentialButton.click();
   const credentialResponse = page.waitForResponse(
     (response) => response.url().includes("/credentials")
       && response.request().method() === "POST"
@@ -56,7 +71,12 @@ test("login, seed data, race inventory, create credential, and send a signed req
   const credentialDialog = page.getByRole("dialog", { name: "Credential created" });
   await expect(credentialDialog).toContainText(credential.client_id);
   await expect(credentialDialog).toContainText(credential.client_secret);
-  await page.getByRole("button", { name: "I saved these credentials" }).click();
+  await expect(credentialDialog.getByRole("heading", { name: "Credential created" })).toBeFocused();
+  await credentialDialog.getByRole("button", { name: "Copy Client secret" }).click();
+  await expect(credentialDialog).toContainText("Copied");
+  await page.keyboard.press("Escape");
+  await expect(credentialDialog).toBeHidden();
+  await expect(newCredentialButton).toBeFocused();
 
   await page.getByRole("link", { name: "API Documentation" }).click();
   await page.getByRole("button", { name: "Request simulator", exact: true }).click();

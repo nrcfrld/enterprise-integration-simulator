@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { CONTROL_PATHS, type ControlPage } from "@/app/navigation";
-import { API_BASE_URL } from "@/shared/api/controlPlaneClient";
 import type {
   Shop,
   ControlPlaneData,
@@ -8,8 +7,8 @@ import type {
   DetailRequest,
   FormRequest,
 } from "@/shared/types/controlPlane";
-import { DeveloperPortal } from "../developer-portal/DeveloperPortal";
 import { Dashboard, Shops } from "./components/DashboardPages";
+import { EventsPage } from "./components/EventsPage";
 import { ResourcePage } from "./components/ResourcePage";
 import { Scenario } from "./components/Scenario";
 import { WebhookSettings } from "./components/WebhookSettings";
@@ -55,6 +54,7 @@ export function ControlPlaneRoutes({
     token,
     role,
     onForm,
+    onNavigate,
     onDetail,
     onRefresh,
     onNotice,
@@ -92,7 +92,7 @@ export function ControlPlaneRoutes({
       />
       <Route
         path={CONTROL_PATHS.Documentation}
-        element={<DeveloperPortal shop={selectedShop} api={API_BASE_URL} onNavigate={onNavigate} />}
+        element={null}
       />
       <Route
         path={CONTROL_PATHS.Scenarios}
@@ -133,6 +133,7 @@ export function ControlPlaneRoutes({
           />
         }
       />
+      <Route path={CONTROL_PATHS.Events} element={<EventsPage {...resourceProps} listPage={listPage} onPageChange={onPageChange} />} />
       {resourcePages.map((resource) => (
         <Route
           key={resource}

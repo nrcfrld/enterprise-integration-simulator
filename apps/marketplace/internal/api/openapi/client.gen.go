@@ -22,6 +22,61 @@ const (
 	ControlPlaneBearerScopes = "ControlPlaneBearer.Scopes"
 )
 
+// Defines values for ControlDeliveryAttemptFailureCode.
+const (
+	FORCEDFAILURE     ControlDeliveryAttemptFailureCode = "FORCED_FAILURE"
+	HTTPSTATUS        ControlDeliveryAttemptFailureCode = "HTTP_STATUS"
+	NETWORKERROR      ControlDeliveryAttemptFailureCode = "NETWORK_ERROR"
+	REQUESTERROR      ControlDeliveryAttemptFailureCode = "REQUEST_ERROR"
+	RESPONSEREADERROR ControlDeliveryAttemptFailureCode = "RESPONSE_READ_ERROR"
+	SIGNINGERROR      ControlDeliveryAttemptFailureCode = "SIGNING_ERROR"
+	TIMEOUT           ControlDeliveryAttemptFailureCode = "TIMEOUT"
+)
+
+// Defines values for ControlDeliveryAttemptStatus.
+const (
+	FAILURE ControlDeliveryAttemptStatus = "FAILURE"
+	SUCCESS ControlDeliveryAttemptStatus = "SUCCESS"
+)
+
+// Defines values for ControlDeliveryDetailStatus.
+const (
+	ControlDeliveryDetailStatusCANCELLED ControlDeliveryDetailStatus = "CANCELLED"
+	ControlDeliveryDetailStatusDELIVERED ControlDeliveryDetailStatus = "DELIVERED"
+	ControlDeliveryDetailStatusFAILED    ControlDeliveryDetailStatus = "FAILED"
+	ControlDeliveryDetailStatusPENDING   ControlDeliveryDetailStatus = "PENDING"
+)
+
+// Defines values for ControlEventAggregateType.
+const (
+	ControlEventAggregateTypeOrder    ControlEventAggregateType = "order"
+	ControlEventAggregateTypeProduct  ControlEventAggregateType = "product"
+	ControlEventAggregateTypeShipment ControlEventAggregateType = "shipment"
+)
+
+// Defines values for ControlOrderDetailOperationsAvailableActions.
+const (
+	Complete      ControlOrderDetailOperationsAvailableActions = "complete"
+	Pay           ControlOrderDetailOperationsAvailableActions = "pay"
+	PaymentFailed ControlOrderDetailOperationsAvailableActions = "payment_failed"
+	Process       ControlOrderDetailOperationsAvailableActions = "process"
+	ReadyToShip   ControlOrderDetailOperationsAvailableActions = "ready_to_ship"
+)
+
+// Defines values for ControlOrderDetailOperationsCancellationOptionsActor.
+const (
+	ControlOrderDetailOperationsCancellationOptionsActorCUSTOMER ControlOrderDetailOperationsCancellationOptionsActor = "CUSTOMER"
+	ControlOrderDetailOperationsCancellationOptionsActorSELLER   ControlOrderDetailOperationsCancellationOptionsActor = "SELLER"
+)
+
+// Defines values for ControlOrderDetailOperationsPaymentStatus.
+const (
+	ControlOrderDetailOperationsPaymentStatusEXPIRED ControlOrderDetailOperationsPaymentStatus = "EXPIRED"
+	ControlOrderDetailOperationsPaymentStatusFAILED  ControlOrderDetailOperationsPaymentStatus = "FAILED"
+	ControlOrderDetailOperationsPaymentStatusPAID    ControlOrderDetailOperationsPaymentStatus = "PAID"
+	ControlOrderDetailOperationsPaymentStatusPENDING ControlOrderDetailOperationsPaymentStatus = "PENDING"
+)
+
 // Defines values for ControlPlaneSessionUserRole.
 const (
 	OPERATOR ControlPlaneSessionUserRole = "OPERATOR"
@@ -45,6 +100,38 @@ const (
 	ControlProductPatchStatusINACTIVE ControlProductPatchStatus = "INACTIVE"
 )
 
+// Defines values for ControlProductWarehouseStatus.
+const (
+	ControlProductWarehouseStatusACTIVE   ControlProductWarehouseStatus = "ACTIVE"
+	ControlProductWarehouseStatusINACTIVE ControlProductWarehouseStatus = "INACTIVE"
+)
+
+// Defines values for CreatedShipmentPickupType.
+const (
+	CreatedShipmentPickupTypePICKUP CreatedShipmentPickupType = "PICKUP"
+)
+
+// Defines values for CreatedShipmentStatus.
+const (
+	CreatedShipmentStatusCREATED CreatedShipmentStatus = "CREATED"
+)
+
+// Defines values for ProviderShipmentPickupType.
+const (
+	ProviderShipmentPickupTypePICKUP ProviderShipmentPickupType = "PICKUP"
+)
+
+// Defines values for ProviderShipmentStatus.
+const (
+	ProviderShipmentStatusCREATED        ProviderShipmentStatus = "CREATED"
+	ProviderShipmentStatusDELIVERED      ProviderShipmentStatus = "DELIVERED"
+	ProviderShipmentStatusDELIVERYFAILED ProviderShipmentStatus = "DELIVERY_FAILED"
+	ProviderShipmentStatusINDELIVERY     ProviderShipmentStatus = "IN_DELIVERY"
+	ProviderShipmentStatusRETURNED       ProviderShipmentStatus = "RETURNED"
+	ProviderShipmentStatusRETURNING      ProviderShipmentStatus = "RETURNING"
+	ProviderShipmentStatusSHIPPED        ProviderShipmentStatus = "SHIPPED"
+)
+
 // Defines values for ShipmentInputPickupType.
 const (
 	PICKUP ShipmentInputPickupType = "PICKUP"
@@ -64,18 +151,24 @@ const (
 
 // Defines values for WebhookRegistrationSubscribedEvents.
 const (
-	WebhookRegistrationSubscribedEventsOrderCancelled   WebhookRegistrationSubscribedEvents = "order.cancelled"
-	WebhookRegistrationSubscribedEventsOrderCompleted   WebhookRegistrationSubscribedEvents = "order.completed"
-	WebhookRegistrationSubscribedEventsOrderCreated     WebhookRegistrationSubscribedEvents = "order.created"
-	WebhookRegistrationSubscribedEventsOrderDelivered   WebhookRegistrationSubscribedEvents = "order.delivered"
-	WebhookRegistrationSubscribedEventsOrderInDelivery  WebhookRegistrationSubscribedEvents = "order.in_delivery"
-	WebhookRegistrationSubscribedEventsOrderPaid        WebhookRegistrationSubscribedEvents = "order.paid"
-	WebhookRegistrationSubscribedEventsOrderProcessing  WebhookRegistrationSubscribedEvents = "order.processing"
-	WebhookRegistrationSubscribedEventsOrderReadyToShip WebhookRegistrationSubscribedEvents = "order.ready_to_ship"
-	WebhookRegistrationSubscribedEventsOrderShipped     WebhookRegistrationSubscribedEvents = "order.shipped"
-	WebhookRegistrationSubscribedEventsProductCreated   WebhookRegistrationSubscribedEvents = "product.created"
-	WebhookRegistrationSubscribedEventsProductDeleted   WebhookRegistrationSubscribedEvents = "product.deleted"
-	WebhookRegistrationSubscribedEventsProductUpdated   WebhookRegistrationSubscribedEvents = "product.updated"
+	WebhookRegistrationSubscribedEventsOrderCancelled         WebhookRegistrationSubscribedEvents = "order.cancelled"
+	WebhookRegistrationSubscribedEventsOrderCompleted         WebhookRegistrationSubscribedEvents = "order.completed"
+	WebhookRegistrationSubscribedEventsOrderCreated           WebhookRegistrationSubscribedEvents = "order.created"
+	WebhookRegistrationSubscribedEventsOrderDelivered         WebhookRegistrationSubscribedEvents = "order.delivered"
+	WebhookRegistrationSubscribedEventsOrderInDelivery        WebhookRegistrationSubscribedEvents = "order.in_delivery"
+	WebhookRegistrationSubscribedEventsOrderPaid              WebhookRegistrationSubscribedEvents = "order.paid"
+	WebhookRegistrationSubscribedEventsOrderPaymentExpired    WebhookRegistrationSubscribedEvents = "order.payment_expired"
+	WebhookRegistrationSubscribedEventsOrderPaymentFailed     WebhookRegistrationSubscribedEvents = "order.payment_failed"
+	WebhookRegistrationSubscribedEventsOrderProcessing        WebhookRegistrationSubscribedEvents = "order.processing"
+	WebhookRegistrationSubscribedEventsOrderReadyToShip       WebhookRegistrationSubscribedEvents = "order.ready_to_ship"
+	WebhookRegistrationSubscribedEventsOrderShipped           WebhookRegistrationSubscribedEvents = "order.shipped"
+	WebhookRegistrationSubscribedEventsOrderSlaExpired        WebhookRegistrationSubscribedEvents = "order.sla_expired"
+	WebhookRegistrationSubscribedEventsProductCreated         WebhookRegistrationSubscribedEvents = "product.created"
+	WebhookRegistrationSubscribedEventsProductDeleted         WebhookRegistrationSubscribedEvents = "product.deleted"
+	WebhookRegistrationSubscribedEventsProductUpdated         WebhookRegistrationSubscribedEvents = "product.updated"
+	WebhookRegistrationSubscribedEventsShipmentDeliveryFailed WebhookRegistrationSubscribedEvents = "shipment.delivery_failed"
+	WebhookRegistrationSubscribedEventsShipmentReturned       WebhookRegistrationSubscribedEvents = "shipment.returned"
+	WebhookRegistrationSubscribedEventsShipmentReturning      WebhookRegistrationSubscribedEvents = "shipment.returning"
 )
 
 // Defines values for ShopeeCancelOrderJSONBodyCancelReason.
@@ -87,8 +180,8 @@ const (
 
 // Defines values for ShopeeListProductsParamsItemStatus.
 const (
-	ACTIVE   ShopeeListProductsParamsItemStatus = "ACTIVE"
-	INACTIVE ShopeeListProductsParamsItemStatus = "INACTIVE"
+	ShopeeListProductsParamsItemStatusACTIVE   ShopeeListProductsParamsItemStatus = "ACTIVE"
+	ShopeeListProductsParamsItemStatusINACTIVE ShopeeListProductsParamsItemStatus = "INACTIVE"
 )
 
 // Defines values for ShopeeCreateWebhookJSONBodyEventTypes.
@@ -126,22 +219,171 @@ const (
 
 // Defines values for CreateWebhookJSONBodySubscribedEvents.
 const (
-	CreateWebhookJSONBodySubscribedEventsOrderCancelled      CreateWebhookJSONBodySubscribedEvents = "order.cancelled"
-	CreateWebhookJSONBodySubscribedEventsOrderCompleted      CreateWebhookJSONBodySubscribedEvents = "order.completed"
-	CreateWebhookJSONBodySubscribedEventsOrderCreated        CreateWebhookJSONBodySubscribedEvents = "order.created"
-	CreateWebhookJSONBodySubscribedEventsOrderDelivered      CreateWebhookJSONBodySubscribedEvents = "order.delivered"
-	CreateWebhookJSONBodySubscribedEventsOrderInDelivery     CreateWebhookJSONBodySubscribedEvents = "order.in_delivery"
-	CreateWebhookJSONBodySubscribedEventsOrderPaid           CreateWebhookJSONBodySubscribedEvents = "order.paid"
-	CreateWebhookJSONBodySubscribedEventsOrderPaymentExpired CreateWebhookJSONBodySubscribedEvents = "order.payment_expired"
-	CreateWebhookJSONBodySubscribedEventsOrderPaymentFailed  CreateWebhookJSONBodySubscribedEvents = "order.payment_failed"
-	CreateWebhookJSONBodySubscribedEventsOrderProcessing     CreateWebhookJSONBodySubscribedEvents = "order.processing"
-	CreateWebhookJSONBodySubscribedEventsOrderReadyToShip    CreateWebhookJSONBodySubscribedEvents = "order.ready_to_ship"
-	CreateWebhookJSONBodySubscribedEventsOrderShipped        CreateWebhookJSONBodySubscribedEvents = "order.shipped"
-	CreateWebhookJSONBodySubscribedEventsOrderSlaExpired     CreateWebhookJSONBodySubscribedEvents = "order.sla_expired"
-	CreateWebhookJSONBodySubscribedEventsProductCreated      CreateWebhookJSONBodySubscribedEvents = "product.created"
-	CreateWebhookJSONBodySubscribedEventsProductDeleted      CreateWebhookJSONBodySubscribedEvents = "product.deleted"
-	CreateWebhookJSONBodySubscribedEventsProductUpdated      CreateWebhookJSONBodySubscribedEvents = "product.updated"
+	CreateWebhookJSONBodySubscribedEventsOrderCancelled         CreateWebhookJSONBodySubscribedEvents = "order.cancelled"
+	CreateWebhookJSONBodySubscribedEventsOrderCompleted         CreateWebhookJSONBodySubscribedEvents = "order.completed"
+	CreateWebhookJSONBodySubscribedEventsOrderCreated           CreateWebhookJSONBodySubscribedEvents = "order.created"
+	CreateWebhookJSONBodySubscribedEventsOrderDelivered         CreateWebhookJSONBodySubscribedEvents = "order.delivered"
+	CreateWebhookJSONBodySubscribedEventsOrderInDelivery        CreateWebhookJSONBodySubscribedEvents = "order.in_delivery"
+	CreateWebhookJSONBodySubscribedEventsOrderPaid              CreateWebhookJSONBodySubscribedEvents = "order.paid"
+	CreateWebhookJSONBodySubscribedEventsOrderPaymentExpired    CreateWebhookJSONBodySubscribedEvents = "order.payment_expired"
+	CreateWebhookJSONBodySubscribedEventsOrderPaymentFailed     CreateWebhookJSONBodySubscribedEvents = "order.payment_failed"
+	CreateWebhookJSONBodySubscribedEventsOrderProcessing        CreateWebhookJSONBodySubscribedEvents = "order.processing"
+	CreateWebhookJSONBodySubscribedEventsOrderReadyToShip       CreateWebhookJSONBodySubscribedEvents = "order.ready_to_ship"
+	CreateWebhookJSONBodySubscribedEventsOrderShipped           CreateWebhookJSONBodySubscribedEvents = "order.shipped"
+	CreateWebhookJSONBodySubscribedEventsOrderSlaExpired        CreateWebhookJSONBodySubscribedEvents = "order.sla_expired"
+	CreateWebhookJSONBodySubscribedEventsProductCreated         CreateWebhookJSONBodySubscribedEvents = "product.created"
+	CreateWebhookJSONBodySubscribedEventsProductDeleted         CreateWebhookJSONBodySubscribedEvents = "product.deleted"
+	CreateWebhookJSONBodySubscribedEventsProductUpdated         CreateWebhookJSONBodySubscribedEvents = "product.updated"
+	CreateWebhookJSONBodySubscribedEventsShipmentDeliveryFailed CreateWebhookJSONBodySubscribedEvents = "shipment.delivery_failed"
+	CreateWebhookJSONBodySubscribedEventsShipmentReturned       CreateWebhookJSONBodySubscribedEvents = "shipment.returned"
+	CreateWebhookJSONBodySubscribedEventsShipmentReturning      CreateWebhookJSONBodySubscribedEvents = "shipment.returning"
 )
+
+// Defines values for SimulateControlOrderActionJSONBodyActor.
+const (
+	SimulateControlOrderActionJSONBodyActorCUSTOMER SimulateControlOrderActionJSONBodyActor = "CUSTOMER"
+	SimulateControlOrderActionJSONBodyActorSELLER   SimulateControlOrderActionJSONBodyActor = "SELLER"
+)
+
+// Defines values for SimulateControlOrderActionJSONBodyReason.
+const (
+	ADDRESSISSUE        SimulateControlOrderActionJSONBodyReason = "ADDRESS_ISSUE"
+	CHANGEOFMIND        SimulateControlOrderActionJSONBodyReason = "CHANGE_OF_MIND"
+	DUPLICATEORDER      SimulateControlOrderActionJSONBodyReason = "DUPLICATE_ORDER"
+	OUTOFSTOCK          SimulateControlOrderActionJSONBodyReason = "OUT_OF_STOCK"
+	SELLERUNFULFILLABLE SimulateControlOrderActionJSONBodyReason = "SELLER_UNFULFILLABLE"
+)
+
+// Defines values for ListControlShopEventsParamsResourceType.
+const (
+	ListControlShopEventsParamsResourceTypeOrder    ListControlShopEventsParamsResourceType = "order"
+	ListControlShopEventsParamsResourceTypeProduct  ListControlShopEventsParamsResourceType = "product"
+	ListControlShopEventsParamsResourceTypeShipment ListControlShopEventsParamsResourceType = "shipment"
+)
+
+// ControlDeliveryAttempt defines model for ControlDeliveryAttempt.
+type ControlDeliveryAttempt struct {
+	Attempt         int                                `json:"attempt"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	DurationMs      int                                `json:"duration_ms"`
+	FailureCode     *ControlDeliveryAttemptFailureCode `json:"failure_code"`
+	FailureReason   *string                            `json:"failure_reason"`
+	HttpAttempted   *bool                              `json:"http_attempted"`
+	Id              string                             `json:"id"`
+	ProviderProfile *string                            `json:"provider_profile"`
+
+	// RequestBody Exact signed UTF-8 body; null for legacy or signing failure. Never parse/reserialize before signature verification.
+	RequestBody           *string           `json:"request_body"`
+	RequestHeaders        map[string]string `json:"request_headers"`
+	RequestUrl            *string           `json:"request_url"`
+	ResponseBody          *string           `json:"response_body,omitempty"`
+	ResponseBodyTruncated *bool             `json:"response_body_truncated"`
+	ResponseHeaders       map[string]string `json:"response_headers"`
+	ResponseStatus        *int              `json:"response_status"`
+
+	// SigningClientId Tokopedia app key used for this attempt; no secret.
+	SigningClientId *string                      `json:"signing_client_id"`
+	StartedAt       *time.Time                   `json:"started_at"`
+	Status          ControlDeliveryAttemptStatus `json:"status"`
+}
+
+// ControlDeliveryAttemptFailureCode defines model for ControlDeliveryAttempt.FailureCode.
+type ControlDeliveryAttemptFailureCode string
+
+// ControlDeliveryAttemptStatus defines model for ControlDeliveryAttempt.Status.
+type ControlDeliveryAttemptStatus string
+
+// ControlDeliveryDetail defines model for ControlDeliveryDetail.
+type ControlDeliveryDetail struct {
+	AttemptCount int                      `json:"attempt_count"`
+	Attempts     []ControlDeliveryAttempt `json:"attempts"`
+	Event        struct {
+		AggregateId string `json:"aggregate_id"`
+
+		// AggregateType Resource family derived from the event name.
+		AggregateType string    `json:"aggregate_type"`
+		EventType     string    `json:"event_type"`
+		Id            string    `json:"id"`
+		OccurredAt    time.Time `json:"occurred_at"`
+
+		// Payload Canonical domain payload; not the provider HTTP envelope.
+		Payload map[string]interface{} `json:"payload"`
+	} `json:"event"`
+	EventId         string                      `json:"event_id"`
+	Id              string                      `json:"id"`
+	ProviderProfile string                      `json:"provider_profile"`
+	ShopId          string                      `json:"shop_id"`
+	Status          ControlDeliveryDetailStatus `json:"status"`
+	Webhook         struct {
+		Deleted bool   `json:"deleted"`
+		Enabled bool   `json:"enabled"`
+		Id      string `json:"id"`
+
+		// Url Current registration URL; use attempt.request_url for historical evidence.
+		Url string `json:"url"`
+	} `json:"webhook"`
+	WebhookDeleted bool `json:"webhook_deleted"`
+}
+
+// ControlDeliveryDetailStatus defines model for ControlDeliveryDetail.Status.
+type ControlDeliveryDetailStatus string
+
+// ControlEvent defines model for ControlEvent.
+type ControlEvent struct {
+	AggregateId   string                    `json:"aggregate_id"`
+	AggregateType ControlEventAggregateType `json:"aggregate_type"`
+	Deliveries    *[]struct {
+		AttemptCount int    `json:"attempt_count"`
+		EventId      string `json:"event_id"`
+		Id           string `json:"id"`
+		Status       string `json:"status"`
+	} `json:"deliveries,omitempty"`
+	EventType  string    `json:"event_type"`
+	Id         string    `json:"id"`
+	OccurredAt time.Time `json:"occurred_at"`
+
+	// Payload Stored canonical domain payload.
+	Payload map[string]interface{} `json:"payload"`
+}
+
+// ControlEventAggregateType defines model for ControlEvent.AggregateType.
+type ControlEventAggregateType string
+
+// ControlOrderDetail defines model for ControlOrderDetail.
+type ControlOrderDetail struct {
+	Events     *[]ControlEvent               `json:"events,omitempty"`
+	Id         string                        `json:"id"`
+	Operations ControlOrderDetail_Operations `json:"operations"`
+	ShopId     string                        `json:"shop_id"`
+
+	// Status Canonical order status.
+	Status               string                 `json:"status"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// ControlOrderDetailOperationsAvailableActions defines model for ControlOrderDetail.Operations.AvailableActions.
+type ControlOrderDetailOperationsAvailableActions string
+
+// ControlOrderDetailOperationsCancellationOptionsActor defines model for ControlOrderDetail.Operations.CancellationOptions.Actor.
+type ControlOrderDetailOperationsCancellationOptionsActor string
+
+// ControlOrderDetailOperationsPaymentStatus defines model for ControlOrderDetail.Operations.PaymentStatus.
+type ControlOrderDetailOperationsPaymentStatus string
+
+// ControlOrderDetail_Operations defines model for ControlOrderDetail.Operations.
+type ControlOrderDetail_Operations struct {
+	AvailableActions    []ControlOrderDetailOperationsAvailableActions `json:"available_actions"`
+	CancellationOptions []struct {
+		Actor   ControlOrderDetailOperationsCancellationOptionsActor `json:"actor"`
+		Reasons []string                                             `json:"reasons"`
+	} `json:"cancellation_options"`
+	PaymentStatus   ControlOrderDetailOperationsPaymentStatus `json:"payment_status"`
+	ProviderProfile string                                    `json:"provider_profile"`
+
+	// ProviderStatus Shopee retains canonical status. Tokopedia maps PAID to ON_HOLD
+	ProviderStatus       string                 `json:"provider_status"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
 
 // ControlPlaneSession defines model for ControlPlaneSession.
 type ControlPlaneSession struct {
@@ -168,7 +410,7 @@ type ControlProduct struct {
 	Sku         string               `json:"sku"`
 	Status      ControlProductStatus `json:"status"`
 
-	// Stock Aggregate available quantity across warehouses.
+	// Stock Aggregate available quantity (on hand minus reserved) across all warehouses
 	Stock int `json:"stock"`
 }
 
@@ -203,6 +445,42 @@ type ControlProductPatch struct {
 // ControlProductPatchStatus defines model for ControlProductPatch.Status.
 type ControlProductPatchStatus string
 
+// ControlProductWarehouse defines model for ControlProductWarehouse.
+type ControlProductWarehouse struct {
+	// AvailableQuantity On hand minus reserved.
+	AvailableQuantity int    `json:"available_quantity"`
+	Code              string `json:"code"`
+	Name              string `json:"name"`
+	OnHandQuantity    int    `json:"on_hand_quantity"`
+
+	// Priority Larger values win among eligible ACTIVE warehouses; ties use code alphabetically.
+	Priority         int                           `json:"priority"`
+	ReservedQuantity int                           `json:"reserved_quantity"`
+	Status           ControlProductWarehouseStatus `json:"status"`
+	WarehouseId      string                        `json:"warehouse_id"`
+}
+
+// ControlProductWarehouseStatus defines model for ControlProductWarehouse.Status.
+type ControlProductWarehouseStatus string
+
+// CreatedShipment defines model for CreatedShipment.
+type CreatedShipment struct {
+	Id               string                    `json:"id"`
+	OrderId          string                    `json:"order_id"`
+	PackageId        string                    `json:"package_id"`
+	PickupType       CreatedShipmentPickupType `json:"pickup_type"`
+	ShippingProvider string                    `json:"shipping_provider"`
+	Status           CreatedShipmentStatus     `json:"status"`
+	TrackingNumber   string                    `json:"tracking_number"`
+	WarehouseId      string                    `json:"warehouse_id"`
+}
+
+// CreatedShipmentPickupType defines model for CreatedShipment.PickupType.
+type CreatedShipmentPickupType string
+
+// CreatedShipmentStatus defines model for CreatedShipment.Status.
+type CreatedShipmentStatus string
+
 // Error defines model for Error.
 type Error struct {
 	Error *struct {
@@ -219,6 +497,64 @@ type PackageInput struct {
 	} `json:"items"`
 }
 
+// PagePagination defines model for PagePagination.
+type PagePagination struct {
+	HasNext     bool `json:"has_next"`
+	HasPrevious bool `json:"has_previous"`
+	Limit       int  `json:"limit"`
+	Page        int  `json:"page"`
+	Total       int  `json:"total"`
+	TotalPages  int  `json:"total_pages"`
+}
+
+// ProviderOrderItem defines model for ProviderOrderItem.
+type ProviderOrderItem struct {
+	AllocatedQuantity int     `json:"allocated_quantity"`
+	Id                string  `json:"id"`
+	Price             int64   `json:"price"`
+	ProductId         *string `json:"product_id"`
+	ProductName       string  `json:"product_name"`
+	Quantity          int     `json:"quantity"`
+	RemainingQuantity int     `json:"remaining_quantity"`
+	Sku               string  `json:"sku"`
+	Subtotal          int64   `json:"subtotal"`
+}
+
+// ProviderPackage defines model for ProviderPackage.
+type ProviderPackage struct {
+	CreateTime int64  `json:"create_time"`
+	PackageId  string `json:"package_id"`
+
+	// PackageNumber Compatibility alias of package_id.
+	PackageNumber string `json:"package_number"`
+	PackageStatus string `json:"package_status"`
+	UpdateTime    int64  `json:"update_time"`
+}
+
+// ProviderShipment defines model for ProviderShipment.
+type ProviderShipment struct {
+	CreatedAt             time.Time                  `json:"created_at"`
+	DeliveredAt           *time.Time                 `json:"delivered_at"`
+	DeliveryFailureReason *string                    `json:"delivery_failure_reason"`
+	FailedAt              *time.Time                 `json:"failed_at"`
+	Id                    string                     `json:"id"`
+	OrderId               string                     `json:"order_id"`
+	PackageId             string                     `json:"package_id"`
+	PickupType            ProviderShipmentPickupType `json:"pickup_type"`
+	ReturnedAt            *time.Time                 `json:"returned_at"`
+	ReturningAt           *time.Time                 `json:"returning_at"`
+	ShippedAt             *time.Time                 `json:"shipped_at"`
+	ShippingProvider      string                     `json:"shipping_provider"`
+	Status                ProviderShipmentStatus     `json:"status"`
+	TrackingNumber        string                     `json:"tracking_number"`
+}
+
+// ProviderShipmentPickupType defines model for ProviderShipment.PickupType.
+type ProviderShipmentPickupType string
+
+// ProviderShipmentStatus defines model for ProviderShipment.Status.
+type ProviderShipmentStatus string
+
 // ShipmentInput defines model for ShipmentInput.
 type ShipmentInput struct {
 	// PackageId Existing package allocated for this order with no shipment yet. Omit to create a new package for remaining unallocated quantities; omission fails when none remain. Create every package shipment before progressing shipment movement.
@@ -230,6 +566,71 @@ type ShipmentInput struct {
 // ShipmentInputPickupType defines model for ShipmentInput.PickupType.
 type ShipmentInputPickupType string
 
+// ShopeeOrderDetail defines model for ShopeeOrderDetail.
+type ShopeeOrderDetail struct {
+	Buyer            map[string]interface{} `json:"buyer"`
+	CreateTime       int64                  `json:"create_time"`
+	ItemList         []ProviderOrderItem    `json:"item_list"`
+	OrderId          string                 `json:"order_id"`
+	OrderSn          string                 `json:"order_sn"`
+	OrderStatus      string                 `json:"order_status"`
+	PackageList      []ProviderPackage      `json:"package_list"`
+	RecipientAddress map[string]interface{} `json:"recipient_address"`
+	ShipmentList     []ProviderShipment     `json:"shipment_list"`
+	TotalAmount      int64                  `json:"total_amount"`
+	UpdateTime       int64                  `json:"update_time"`
+}
+
+// ShopeeOrderDetailEnvelope defines model for ShopeeOrderDetailEnvelope.
+type ShopeeOrderDetailEnvelope struct {
+	Error     string            `json:"error"`
+	Message   string            `json:"message"`
+	RequestId string            `json:"request_id"`
+	Response  ShopeeOrderDetail `json:"response"`
+}
+
+// ShopeeShipmentCreatedEnvelope defines model for ShopeeShipmentCreatedEnvelope.
+type ShopeeShipmentCreatedEnvelope struct {
+	Error     string `json:"error"`
+	Message   string `json:"message"`
+	RequestId string `json:"request_id"`
+	Response  struct {
+		Shipment CreatedShipment `json:"shipment"`
+	} `json:"response"`
+}
+
+// TokopediaOrderDetail defines model for TokopediaOrderDetail.
+type TokopediaOrderDetail struct {
+	CreateTime    int64               `json:"create_time"`
+	LineItems     []ProviderOrderItem `json:"line_items"`
+	OrderId       string              `json:"order_id"`
+	OrderNumber   string              `json:"order_number"`
+	OrderStatus   string              `json:"order_status"`
+	PackageList   []ProviderPackage   `json:"package_list"`
+	PaymentStatus string              `json:"payment_status"`
+	ShipmentList  []ProviderShipment  `json:"shipment_list"`
+	TotalAmount   int64               `json:"total_amount"`
+	UpdateTime    int64               `json:"update_time"`
+}
+
+// TokopediaOrderDetailEnvelope defines model for TokopediaOrderDetailEnvelope.
+type TokopediaOrderDetailEnvelope struct {
+	Code      int                  `json:"code"`
+	Data      TokopediaOrderDetail `json:"data"`
+	Message   string               `json:"message"`
+	RequestId string               `json:"request_id"`
+}
+
+// TokopediaShipmentCreatedEnvelope defines model for TokopediaShipmentCreatedEnvelope.
+type TokopediaShipmentCreatedEnvelope struct {
+	Code int `json:"code"`
+	Data struct {
+		Shipment CreatedShipment `json:"shipment"`
+	} `json:"data"`
+	Message   string `json:"message"`
+	RequestId string `json:"request_id"`
+}
+
 // Warehouse defines model for Warehouse.
 type Warehouse struct {
 	// Address Dispatch address configured for this fulfillment origin. The compatibility default warehouse may have an empty address until an operator sets it in the control plane.
@@ -239,10 +640,12 @@ type Warehouse struct {
 	Id        string                `json:"id"`
 	Inventory *[]WarehouseInventory `json:"inventory,omitempty"`
 	Name      string                `json:"name"`
-	Priority  int                   `json:"priority"`
-	ShopId    string                `json:"shop_id"`
-	Status    WarehouseStatus       `json:"status"`
-	UpdatedAt time.Time             `json:"updated_at"`
+
+	// Priority Larger values win among eligible ACTIVE warehouses; ties use code alphabetically.
+	Priority  int             `json:"priority"`
+	ShopId    string          `json:"shop_id"`
+	Status    WarehouseStatus `json:"status"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 // Warehouse_Address Dispatch address configured for this fulfillment origin. The compatibility default warehouse may have an empty address until an operator sets it in the control plane.
@@ -273,7 +676,7 @@ type WarehouseInventoryInput struct {
 	WarehouseId    string `json:"warehouse_id"`
 }
 
-// WarehouseList defines model for WarehouseList.
+// WarehouseList Complete shop-scoped warehouse collection. This operation is intentionally unpaginated.
 type WarehouseList struct {
 	Data []Warehouse `json:"data"`
 }
@@ -281,12 +684,13 @@ type WarehouseList struct {
 // WebhookList defines model for WebhookList.
 type WebhookList struct {
 	Data             []WebhookRegistration `json:"data"`
-	DeliveryContract *struct {
-		ProviderProfile *WebhookListDeliveryContractProviderProfile `json:"provider_profile,omitempty"`
+	DeliveryContract struct {
+		ProviderProfile WebhookListDeliveryContractProviderProfile `json:"provider_profile"`
 
 		// SigningClientId Oldest ACTIVE credential Client ID; empty when none. Used for Tokopedia deliveries only.
-		SigningClientId *string `json:"signing_client_id,omitempty"`
-	} `json:"delivery_contract,omitempty"`
+		SigningClientId string `json:"signing_client_id"`
+	} `json:"delivery_contract"`
+	Pagination PagePagination `json:"pagination"`
 }
 
 // WebhookListDeliveryContractProviderProfile defines model for WebhookList.DeliveryContract.ProviderProfile.
@@ -294,8 +698,10 @@ type WebhookListDeliveryContractProviderProfile string
 
 // WebhookRegistration defines model for WebhookRegistration.
 type WebhookRegistration struct {
-	Enabled bool   `json:"enabled"`
-	Id      string `json:"id"`
+	// CreatedAt Present in list responses.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	Enabled   bool       `json:"enabled"`
+	Id        string     `json:"id"`
 
 	// Secret Returned once when generated. Verifies Shopee delivery only; unused for Tokopedia which uses its oldest ACTIVE app credential.
 	Secret           *string                               `json:"secret,omitempty"`
@@ -349,7 +755,7 @@ type RateLimited = Error
 // RateLimitedWarehouse defines model for RateLimitedWarehouse.
 type RateLimitedWarehouse = Warehouse
 
-// RateLimitedWarehouseList defines model for RateLimitedWarehouseList.
+// RateLimitedWarehouseList Complete shop-scoped warehouse collection. This operation is intentionally unpaginated.
 type RateLimitedWarehouseList = WarehouseList
 
 // RateLimitedWebhookList defines model for RateLimitedWebhookList.
@@ -365,6 +771,9 @@ type ShopeeError struct {
 	RequestId string `json:"request_id"`
 }
 
+// ShopeeOrderDetailResponse defines model for ShopeeOrderDetailResponse.
+type ShopeeOrderDetailResponse = ShopeeOrderDetailEnvelope
+
 // ShopeeResponse defines model for ShopeeResponse.
 type ShopeeResponse struct {
 	Error     string                 `json:"error"`
@@ -372,6 +781,9 @@ type ShopeeResponse struct {
 	RequestId string                 `json:"request_id"`
 	Response  map[string]interface{} `json:"response"`
 }
+
+// ShopeeShipmentCreatedResponse defines model for ShopeeShipmentCreatedResponse.
+type ShopeeShipmentCreatedResponse = ShopeeShipmentCreatedEnvelope
 
 // TokopediaError defines model for TokopediaError.
 type TokopediaError struct {
@@ -381,6 +793,9 @@ type TokopediaError struct {
 	RequestId string                 `json:"request_id"`
 }
 
+// TokopediaOrderDetailResponse defines model for TokopediaOrderDetailResponse.
+type TokopediaOrderDetailResponse = TokopediaOrderDetailEnvelope
+
 // TokopediaResponse defines model for TokopediaResponse.
 type TokopediaResponse struct {
 	Code      int                    `json:"code"`
@@ -389,17 +804,20 @@ type TokopediaResponse struct {
 	RequestId string                 `json:"request_id"`
 }
 
+// TokopediaShipmentCreatedResponse defines model for TokopediaShipmentCreatedResponse.
+type TokopediaShipmentCreatedResponse = TokopediaShipmentCreatedEnvelope
+
 // ShopeeListOrdersParams defines parameters for ShopeeListOrders.
 type ShopeeListOrdersParams struct {
 	PageNo      *int    `form:"page_no,omitempty" json:"page_no,omitempty"`
 	PageSize    *int    `form:"page_size,omitempty" json:"page_size,omitempty"`
 	OrderStatus *string `form:"order_status,omitempty" json:"order_status,omitempty"`
 
-	// TimeFrom Unix seconds
-	TimeFrom *int `form:"time_from,omitempty" json:"time_from,omitempty"`
+	// TimeFrom Inclusive lower bound for order create_time in Unix seconds; update_time is not filtered.
+	TimeFrom *int64 `form:"time_from,omitempty" json:"time_from,omitempty"`
 
-	// TimeTo Unix seconds
-	TimeTo *int `form:"time_to,omitempty" json:"time_to,omitempty"`
+	// TimeTo Inclusive upper bound for order create_time in Unix seconds; update_time is not filtered.
+	TimeTo *int64 `form:"time_to,omitempty" json:"time_to,omitempty"`
 
 	// XShopeePartnerId Credential client ID used as the provider partner ID.
 	XShopeePartnerId ShopeePartnerID `json:"X-Shopee-Partner-Id"`
@@ -734,6 +1152,8 @@ type GetWarehouseParams struct {
 
 // ListWebhooksParams defines parameters for ListWebhooks.
 type ListWebhooksParams struct {
+	Page       *int      `form:"page,omitempty" json:"page,omitempty"`
+	Limit      *int      `form:"limit,omitempty" json:"limit,omitempty"`
 	XClientId  ClientID  `json:"X-Client-Id"`
 	XTimestamp Timestamp `json:"X-Timestamp"`
 	XSignature Signature `json:"X-Signature"`
@@ -775,6 +1195,35 @@ type RegisterControlPlaneOperatorJSONBody struct {
 	Password string              `json:"password"`
 }
 
+// SimulateControlOrderActionJSONBody defines parameters for SimulateControlOrderAction.
+type SimulateControlOrderActionJSONBody struct {
+	// Actor Required together with reason for explicit cancellation.
+	Actor *SimulateControlOrderActionJSONBodyActor `json:"actor,omitempty"`
+
+	// Reason First three reasons belong to CUSTOMER; last two belong to SELLER.
+	Reason *SimulateControlOrderActionJSONBodyReason `json:"reason,omitempty"`
+}
+
+// SimulateControlOrderActionJSONBodyActor defines parameters for SimulateControlOrderAction.
+type SimulateControlOrderActionJSONBodyActor string
+
+// SimulateControlOrderActionJSONBodyReason defines parameters for SimulateControlOrderAction.
+type SimulateControlOrderActionJSONBodyReason string
+
+// ListControlShopEventsParams defines parameters for ListControlShopEvents.
+type ListControlShopEventsParams struct {
+	Page         *int                                     `form:"page,omitempty" json:"page,omitempty"`
+	Limit        *int                                     `form:"limit,omitempty" json:"limit,omitempty"`
+	ResourceType *ListControlShopEventsParamsResourceType `form:"resource_type,omitempty" json:"resource_type,omitempty"`
+	AggregateId  *string                                  `form:"aggregate_id,omitempty" json:"aggregate_id,omitempty"`
+
+	// EventType Exact canonical event name.
+	EventType *string `form:"event_type,omitempty" json:"event_type,omitempty"`
+}
+
+// ListControlShopEventsParamsResourceType defines parameters for ListControlShopEvents.
+type ListControlShopEventsParamsResourceType string
+
 // ShopeeCancelOrderJSONRequestBody defines body for ShopeeCancelOrder for application/json ContentType.
 type ShopeeCancelOrderJSONRequestBody ShopeeCancelOrderJSONBody
 
@@ -808,11 +1257,252 @@ type CreateWebhookJSONRequestBody CreateWebhookJSONBody
 // RegisterControlPlaneOperatorJSONRequestBody defines body for RegisterControlPlaneOperator for application/json ContentType.
 type RegisterControlPlaneOperatorJSONRequestBody RegisterControlPlaneOperatorJSONBody
 
+// SimulateControlOrderActionJSONRequestBody defines body for SimulateControlOrderAction for application/json ContentType.
+type SimulateControlOrderActionJSONRequestBody SimulateControlOrderActionJSONBody
+
 // CreateControlProductJSONRequestBody defines body for CreateControlProduct for application/json ContentType.
 type CreateControlProductJSONRequestBody = ControlProductInput
 
 // UpdateControlProductJSONRequestBody defines body for UpdateControlProduct for application/json ContentType.
 type UpdateControlProductJSONRequestBody = ControlProductPatch
+
+// Getter for additional properties for ControlOrderDetail. Returns the specified
+// element and whether it was found
+func (a ControlOrderDetail) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for ControlOrderDetail
+func (a *ControlOrderDetail) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for ControlOrderDetail to handle AdditionalProperties
+func (a *ControlOrderDetail) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["events"]; found {
+		err = json.Unmarshal(raw, &a.Events)
+		if err != nil {
+			return fmt.Errorf("error reading 'events': %w", err)
+		}
+		delete(object, "events")
+	}
+
+	if raw, found := object["id"]; found {
+		err = json.Unmarshal(raw, &a.Id)
+		if err != nil {
+			return fmt.Errorf("error reading 'id': %w", err)
+		}
+		delete(object, "id")
+	}
+
+	if raw, found := object["operations"]; found {
+		err = json.Unmarshal(raw, &a.Operations)
+		if err != nil {
+			return fmt.Errorf("error reading 'operations': %w", err)
+		}
+		delete(object, "operations")
+	}
+
+	if raw, found := object["shop_id"]; found {
+		err = json.Unmarshal(raw, &a.ShopId)
+		if err != nil {
+			return fmt.Errorf("error reading 'shop_id': %w", err)
+		}
+		delete(object, "shop_id")
+	}
+
+	if raw, found := object["status"]; found {
+		err = json.Unmarshal(raw, &a.Status)
+		if err != nil {
+			return fmt.Errorf("error reading 'status': %w", err)
+		}
+		delete(object, "status")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for ControlOrderDetail to handle AdditionalProperties
+func (a ControlOrderDetail) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Events != nil {
+		object["events"], err = json.Marshal(a.Events)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'events': %w", err)
+		}
+	}
+
+	object["id"], err = json.Marshal(a.Id)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'id': %w", err)
+	}
+
+	object["operations"], err = json.Marshal(a.Operations)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'operations': %w", err)
+	}
+
+	object["shop_id"], err = json.Marshal(a.ShopId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'shop_id': %w", err)
+	}
+
+	object["status"], err = json.Marshal(a.Status)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'status': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for ControlOrderDetail_Operations. Returns the specified
+// element and whether it was found
+func (a ControlOrderDetail_Operations) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for ControlOrderDetail_Operations
+func (a *ControlOrderDetail_Operations) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for ControlOrderDetail_Operations to handle AdditionalProperties
+func (a *ControlOrderDetail_Operations) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["available_actions"]; found {
+		err = json.Unmarshal(raw, &a.AvailableActions)
+		if err != nil {
+			return fmt.Errorf("error reading 'available_actions': %w", err)
+		}
+		delete(object, "available_actions")
+	}
+
+	if raw, found := object["cancellation_options"]; found {
+		err = json.Unmarshal(raw, &a.CancellationOptions)
+		if err != nil {
+			return fmt.Errorf("error reading 'cancellation_options': %w", err)
+		}
+		delete(object, "cancellation_options")
+	}
+
+	if raw, found := object["payment_status"]; found {
+		err = json.Unmarshal(raw, &a.PaymentStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'payment_status': %w", err)
+		}
+		delete(object, "payment_status")
+	}
+
+	if raw, found := object["provider_profile"]; found {
+		err = json.Unmarshal(raw, &a.ProviderProfile)
+		if err != nil {
+			return fmt.Errorf("error reading 'provider_profile': %w", err)
+		}
+		delete(object, "provider_profile")
+	}
+
+	if raw, found := object["provider_status"]; found {
+		err = json.Unmarshal(raw, &a.ProviderStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'provider_status': %w", err)
+		}
+		delete(object, "provider_status")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for ControlOrderDetail_Operations to handle AdditionalProperties
+func (a ControlOrderDetail_Operations) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["available_actions"], err = json.Marshal(a.AvailableActions)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'available_actions': %w", err)
+	}
+
+	object["cancellation_options"], err = json.Marshal(a.CancellationOptions)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'cancellation_options': %w", err)
+	}
+
+	object["payment_status"], err = json.Marshal(a.PaymentStatus)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'payment_status': %w", err)
+	}
+
+	object["provider_profile"], err = json.Marshal(a.ProviderProfile)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'provider_profile': %w", err)
+	}
+
+	object["provider_status"], err = json.Marshal(a.ProviderStatus)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'provider_status': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // Getter for additional properties for Warehouse_Address. Returns the specified
 // element and whether it was found
@@ -1084,6 +1774,23 @@ type ClientInterface interface {
 	RegisterControlPlaneOperatorWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RegisterControlPlaneOperator(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlDelivery request
+	GetControlDelivery(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlOrder request
+	GetControlOrder(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SimulateControlOrderActionWithBody request with any body
+	SimulateControlOrderActionWithBody(ctx context.Context, id string, action string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SimulateControlOrderAction(ctx context.Context, id string, action string, body SimulateControlOrderActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlShipment request
+	GetControlShipment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListControlShopEvents request
+	ListControlShopEvents(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListControlProducts request
 	ListControlProducts(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1545,6 +2252,78 @@ func (c *Client) RegisterControlPlaneOperatorWithBody(ctx context.Context, conte
 
 func (c *Client) RegisterControlPlaneOperator(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRegisterControlPlaneOperatorRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlDelivery(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlDeliveryRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlOrder(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlOrderRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SimulateControlOrderActionWithBody(ctx context.Context, id string, action string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSimulateControlOrderActionRequestWithBody(c.Server, id, action, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SimulateControlOrderAction(ctx context.Context, id string, action string, body SimulateControlOrderActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSimulateControlOrderActionRequest(c.Server, id, action, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlShipment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlShipmentRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListControlShopEvents(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlShopEventsRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3644,6 +4423,44 @@ func NewListWebhooksRequest(server string, params *ListWebhooksParams) (*http.Re
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -3873,6 +4690,282 @@ func NewRegisterControlPlaneOperatorRequestWithBody(server string, contentType s
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetControlDeliveryRequest generates requests for GetControlDelivery
+func NewGetControlDeliveryRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/deliveries/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetControlOrderRequest generates requests for GetControlOrder
+func NewGetControlOrderRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/orders/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSimulateControlOrderActionRequest calls the generic SimulateControlOrderAction builder with application/json body
+func NewSimulateControlOrderActionRequest(server string, id string, action string, body SimulateControlOrderActionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSimulateControlOrderActionRequestWithBody(server, id, action, "application/json", bodyReader)
+}
+
+// NewSimulateControlOrderActionRequestWithBody generates requests for SimulateControlOrderAction with any type of body
+func NewSimulateControlOrderActionRequestWithBody(server string, id string, action string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "action", runtime.ParamLocationPath, action)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/orders/%s/actions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetControlShipmentRequest generates requests for GetControlShipment
+func NewGetControlShipmentRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shipments/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListControlShopEventsRequest generates requests for ListControlShopEvents
+func NewListControlShopEventsRequest(server string, id string, params *ListControlShopEventsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/events", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ResourceType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "resource_type", runtime.ParamLocationQuery, *params.ResourceType); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.AggregateId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "aggregate_id", runtime.ParamLocationQuery, *params.AggregateId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EventType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "event_type", runtime.ParamLocationQuery, *params.EventType); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4291,6 +5384,23 @@ type ClientWithResponsesInterface interface {
 
 	RegisterControlPlaneOperatorWithResponse(ctx context.Context, body RegisterControlPlaneOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterControlPlaneOperatorResponse, error)
 
+	// GetControlDeliveryWithResponse request
+	GetControlDeliveryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlDeliveryResponse, error)
+
+	// GetControlOrderWithResponse request
+	GetControlOrderWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlOrderResponse, error)
+
+	// SimulateControlOrderActionWithBodyWithResponse request with any body
+	SimulateControlOrderActionWithBodyWithResponse(ctx context.Context, id string, action string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SimulateControlOrderActionResponse, error)
+
+	SimulateControlOrderActionWithResponse(ctx context.Context, id string, action string, body SimulateControlOrderActionJSONRequestBody, reqEditors ...RequestEditorFn) (*SimulateControlOrderActionResponse, error)
+
+	// GetControlShipmentWithResponse request
+	GetControlShipmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlShipmentResponse, error)
+
+	// ListControlShopEventsWithResponse request
+	ListControlShopEventsWithResponse(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*ListControlShopEventsResponse, error)
+
 	// ListControlProductsWithResponse request
 	ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error)
 
@@ -4346,7 +5456,7 @@ func (r ShopeeListOrdersResponse) StatusCode() int {
 type ShopeeGetOrderResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ShopeeResponse
+	JSON200      *ShopeeOrderDetailResponse
 	JSON401      *ShopeeError
 	JSON404      *ShopeeError
 }
@@ -4474,7 +5584,7 @@ func (r ShopeeProcessOrderResponse) StatusCode() int {
 type ShopeeCreateShipmentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ShopeeResponse
+	JSON200      *ShopeeShipmentCreatedResponse
 	JSON400      *ShopeeError
 	JSON401      *ShopeeError
 	JSON409      *ShopeeError
@@ -4622,7 +5732,7 @@ func (r TokopediaSearchOrdersResponse) StatusCode() int {
 type TokopediaGetOrderResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *TokopediaResponse
+	JSON200      *TokopediaOrderDetailResponse
 	JSON400      *TokopediaError
 	JSON429      *TokopediaError
 }
@@ -4727,7 +5837,7 @@ func (r TokopediaPackOrderResponse) StatusCode() int {
 type TokopediaCreateShipmentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *TokopediaResponse
+	JSON200      *TokopediaShipmentCreatedResponse
 	JSON400      *TokopediaError
 	JSON401      *TokopediaError
 	JSON409      *TokopediaError
@@ -4881,6 +5991,7 @@ type ListWebhooksResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *RateLimitedWebhookList
+	JSON400      *Error
 	JSON401      *Error
 	JSON429      *RateLimited
 	JSON503      *Maintenance
@@ -4981,6 +6092,140 @@ func (r RegisterControlPlaneOperatorResponse) StatusCode() int {
 	return 0
 }
 
+type GetControlDeliveryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlDeliveryDetail
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlDeliveryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlDeliveryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetControlOrderResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlOrderDetail
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlOrderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlOrderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SimulateControlOrderActionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r SimulateControlOrderActionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SimulateControlOrderActionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetControlShipmentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Events               []ControlEvent         `json:"events"`
+		Id                   string                 `json:"id"`
+		OrderId              string                 `json:"order_id"`
+		PackageId            string                 `json:"package_id"`
+		ShopId               string                 `json:"shop_id"`
+		Status               string                 `json:"status"`
+		Warehouse            map[string]interface{} `json:"warehouse"`
+		AdditionalProperties map[string]interface{} `json:"-"`
+	}
+	JSON403 *Error
+	JSON404 *Error
+	JSON500 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlShipmentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlShipmentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListControlShopEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Data       []ControlEvent `json:"data"`
+		Pagination PagePagination `json:"pagination"`
+	}
+	JSON400 *Error
+	JSON403 *Error
+	JSON500 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlShopEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlShopEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListControlProductsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5058,11 +6303,26 @@ func (r ArchiveControlProductResponse) StatusCode() int {
 type GetControlProductResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ControlProduct
-	JSON401      *Error
-	JSON403      *Error
-	JSON404      *Error
+	JSON200      *struct {
+		Category    string                     `json:"category"`
+		Description string                     `json:"description"`
+		Events      *[]ControlEvent            `json:"events,omitempty"`
+		Id          string                     `json:"id"`
+		Name        string                     `json:"name"`
+		Price       int64                      `json:"price"`
+		ShopId      string                     `json:"shop_id"`
+		Sku         string                     `json:"sku"`
+		Status      GetControlProduct200Status `json:"status"`
+
+		// Stock Aggregate available quantity (on hand minus reserved) across all warehouses
+		Stock              int                        `json:"stock"`
+		WarehouseInventory *[]ControlProductWarehouse `json:"warehouse_inventory,omitempty"`
+	}
+	JSON403 *Error
+	JSON404 *Error
+	JSON500 *Error
 }
+type GetControlProduct200Status string
 
 // Status returns HTTPResponse.Status
 func (r GetControlProductResponse) Status() string {
@@ -5471,6 +6731,59 @@ func (c *ClientWithResponses) RegisterControlPlaneOperatorWithResponse(ctx conte
 	return ParseRegisterControlPlaneOperatorResponse(rsp)
 }
 
+// GetControlDeliveryWithResponse request returning *GetControlDeliveryResponse
+func (c *ClientWithResponses) GetControlDeliveryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlDeliveryResponse, error) {
+	rsp, err := c.GetControlDelivery(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlDeliveryResponse(rsp)
+}
+
+// GetControlOrderWithResponse request returning *GetControlOrderResponse
+func (c *ClientWithResponses) GetControlOrderWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlOrderResponse, error) {
+	rsp, err := c.GetControlOrder(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlOrderResponse(rsp)
+}
+
+// SimulateControlOrderActionWithBodyWithResponse request with arbitrary body returning *SimulateControlOrderActionResponse
+func (c *ClientWithResponses) SimulateControlOrderActionWithBodyWithResponse(ctx context.Context, id string, action string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SimulateControlOrderActionResponse, error) {
+	rsp, err := c.SimulateControlOrderActionWithBody(ctx, id, action, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSimulateControlOrderActionResponse(rsp)
+}
+
+func (c *ClientWithResponses) SimulateControlOrderActionWithResponse(ctx context.Context, id string, action string, body SimulateControlOrderActionJSONRequestBody, reqEditors ...RequestEditorFn) (*SimulateControlOrderActionResponse, error) {
+	rsp, err := c.SimulateControlOrderAction(ctx, id, action, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSimulateControlOrderActionResponse(rsp)
+}
+
+// GetControlShipmentWithResponse request returning *GetControlShipmentResponse
+func (c *ClientWithResponses) GetControlShipmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlShipmentResponse, error) {
+	rsp, err := c.GetControlShipment(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlShipmentResponse(rsp)
+}
+
+// ListControlShopEventsWithResponse request returning *ListControlShopEventsResponse
+func (c *ClientWithResponses) ListControlShopEventsWithResponse(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*ListControlShopEventsResponse, error) {
+	rsp, err := c.ListControlShopEvents(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlShopEventsResponse(rsp)
+}
+
 // ListControlProductsWithResponse request returning *ListControlProductsResponse
 func (c *ClientWithResponses) ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error) {
 	rsp, err := c.ListControlProducts(ctx, id, reqEditors...)
@@ -5619,7 +6932,7 @@ func ParseShopeeGetOrderResponse(rsp *http.Response) (*ShopeeGetOrderResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ShopeeResponse
+		var dest ShopeeOrderDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -5875,7 +7188,7 @@ func ParseShopeeCreateShipmentResponse(rsp *http.Response) (*ShopeeCreateShipmen
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ShopeeResponse
+		var dest ShopeeShipmentCreatedResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -6143,7 +7456,7 @@ func ParseTokopediaGetOrderResponse(rsp *http.Response) (*TokopediaGetOrderRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TokopediaResponse
+		var dest TokopediaOrderDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -6366,7 +7679,7 @@ func ParseTokopediaCreateShipmentResponse(rsp *http.Response) (*TokopediaCreateS
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TokopediaResponse
+		var dest TokopediaShipmentCreatedResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -6675,6 +7988,13 @@ func ParseListWebhooksResponse(rsp *http.Response) (*ListWebhooksResponse, error
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -6870,6 +8190,232 @@ func ParseRegisterControlPlaneOperatorResponse(rsp *http.Response) (*RegisterCon
 	return response, nil
 }
 
+// ParseGetControlDeliveryResponse parses an HTTP response from a GetControlDeliveryWithResponse call
+func ParseGetControlDeliveryResponse(rsp *http.Response) (*GetControlDeliveryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlDeliveryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlDeliveryDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetControlOrderResponse parses an HTTP response from a GetControlOrderWithResponse call
+func ParseGetControlOrderResponse(rsp *http.Response) (*GetControlOrderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlOrderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlOrderDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSimulateControlOrderActionResponse parses an HTTP response from a SimulateControlOrderActionWithResponse call
+func ParseSimulateControlOrderActionResponse(rsp *http.Response) (*SimulateControlOrderActionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SimulateControlOrderActionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetControlShipmentResponse parses an HTTP response from a GetControlShipmentWithResponse call
+func ParseGetControlShipmentResponse(rsp *http.Response) (*GetControlShipmentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlShipmentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Events               []ControlEvent         `json:"events"`
+			Id                   string                 `json:"id"`
+			OrderId              string                 `json:"order_id"`
+			PackageId            string                 `json:"package_id"`
+			ShopId               string                 `json:"shop_id"`
+			Status               string                 `json:"status"`
+			Warehouse            map[string]interface{} `json:"warehouse"`
+			AdditionalProperties map[string]interface{} `json:"-"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListControlShopEventsResponse parses an HTTP response from a ListControlShopEventsWithResponse call
+func ParseListControlShopEventsResponse(rsp *http.Response) (*ListControlShopEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlShopEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data       []ControlEvent `json:"data"`
+			Pagination PagePagination `json:"pagination"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListControlProductsResponse parses an HTTP response from a ListControlProductsWithResponse call
 func ParseListControlProductsResponse(rsp *http.Response) (*ListControlProductsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -7019,18 +8565,25 @@ func ParseGetControlProductResponse(rsp *http.Response) (*GetControlProductRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ControlProduct
+		var dest struct {
+			Category    string                     `json:"category"`
+			Description string                     `json:"description"`
+			Events      *[]ControlEvent            `json:"events,omitempty"`
+			Id          string                     `json:"id"`
+			Name        string                     `json:"name"`
+			Price       int64                      `json:"price"`
+			ShopId      string                     `json:"shop_id"`
+			Sku         string                     `json:"sku"`
+			Status      GetControlProduct200Status `json:"status"`
+
+			// Stock Aggregate available quantity (on hand minus reserved) across all warehouses
+			Stock              int                        `json:"stock"`
+			WarehouseInventory *[]ControlProductWarehouse `json:"warehouse_inventory,omitempty"`
+		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
 		var dest Error
@@ -7045,6 +8598,13 @@ func ParseGetControlProductResponse(rsp *http.Response) (*GetControlProductRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 

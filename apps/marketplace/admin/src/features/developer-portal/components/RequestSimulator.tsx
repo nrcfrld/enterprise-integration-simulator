@@ -1,3 +1,6 @@
+import { EventCatalog } from "./EventCatalog";
+import { InventoryGuide } from "./InventoryGuide";
+import type { ProviderProfile } from "@/shared/types/controlPlane";
 import { ShipmentMode } from "./ShipmentMode";
 import { WebhookVerification } from "./WebhookVerification";
 import { useMemo, useState, type FormEvent } from "react";
@@ -34,6 +37,8 @@ const responseHeaders = (contract: PortalEndpoint["contract"], response: Respons
 };
 
 interface RequestSimulatorProps {
+  blockedReason?: string;
+  shopProvider?: ProviderProfile;
   endpoint: PortalEndpoint;
   api: string;
   credentials: IntegrationCredentials;
@@ -43,7 +48,7 @@ interface RequestSimulatorProps {
   onSelectOrder?: (orderID: string) => void;
 }
 
-export function RequestSimulator({ endpoint, api, credentials, initialPathParams, onSelectOrder, initialPackageID, onSelectPackage }: RequestSimulatorProps) {
+export function RequestSimulator({ blockedReason, shopProvider, endpoint, api, credentials, initialPathParams, onSelectOrder, initialPackageID, onSelectPackage }: RequestSimulatorProps) {
   const mutation = endpoint.idempotent === true;
   const hasBody = endpoint.body !== undefined;
   const [pathParams, setPathParams] = useState<Record<string, string>>(() => ({ ...fieldsToValues(endpoint.pathParams, false), ...initialPathParams }));
@@ -75,6 +80,7 @@ export function RequestSimulator({ endpoint, api, credentials, initialPathParams
 
   const run = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (blockedReason) return;
     if (!credentials.clientID.trim() || !credentials.secret.trim()) {
       setState({ ...initialState, status: "error", error: "Paste the Client ID and client secret in Step 1 before sending a request." });
       return;
@@ -160,16 +166,19 @@ export function RequestSimulator({ endpoint, api, credentials, initialPathParams
   }
   return (
     <section className="request-simulator">
-      {endpoint.group === "Webhooks" && <WebhookVerification provider={endpoint.contract === "shopee" ? "SHOPEE_LIKE" : endpoint.contract === "tokopedia" ? "TOKOPEDIA_LIKE" : undefined} />}
+      {endpoint.group === "Webhooks" && <WebhookVerification provider={shopProvider ?? (endpoint.contract === "shopee" ? "SHOPEE_LIKE" : endpoint.contract === "tokopedia" ? "TOKOPEDIA_LIKE" : undefined)} />}
+      {blockedReason && <p role="alert">{blockedReason}</p>}
       <div className="simulator-heading"><div><h3>Build and send the request</h3><p>{endpoint.summary}</p></div><span className="contract-badge">{contractLabel(endpoint.contract)}</span></div>
       <div className="request-url"><span>{api}</span><code>{requestPath}</code></div>
+      {endpoint.group === "Webhooks" && <EventCatalog />}
+      {endpoint.group === "Warehouses" && <details><summary>How warehouse inventory works</summary><InventoryGuide /></details>}
       <form onSubmit={(event) => void run(event)}>
         {endpoint.pathParams?.map((field) => <label key={field.name}>{field.label}<input value={pathParams[field.name]} onChange={(event) => setPathParams({ ...pathParams, [field.name]: event.target.value })} placeholder="Paste an id from a list response" /><small>{field.help}</small></label>)}
         {endpoint.query && endpoint.query.length > 0 && <fieldset><legend>Optional query parameters</legend><div className="query-fields">{endpoint.query.map((field) => <label key={field.name}>{field.label}<input value={query[field.name]} onChange={(event) => setQuery({ ...query, [field.name]: event.target.value })} placeholder={field.name} /><small>{field.help}</small></label>)}</div></fieldset>}
         {endpoint.id.endsWith("-create-shipment") && <ShipmentMode body={body} onChange={setBody} />}
         {hasBody && <label>JSON request body<textarea value={body} onChange={(event) => setBody(event.target.value)} rows={10} spellCheck="false" /><small>The exact edited bytes are included in the request signature.</small></label>}
         {mutation && <label>Idempotency key<input value={idempotencyKey} onChange={(event) => setIdempotencyKey(event.target.value)} spellCheck="false" /><small>Keep this exact key if you retry this same logical operation.</small></label>}
-        <div className="simulator-actions"><button type="submit" disabled={state.status === "loading"}>{state.status === "loading" ? "Sending signed request…" : "Send signed request"}</button><button type="button" className="quiet" onClick={reset}>Reset request</button></div>
+        <div className="simulator-actions"><button type="submit" disabled={state.status === "loading" || Boolean(blockedReason)}>{state.status === "loading" ? "Sending signed request…" : "Send signed request"}</button><button type="button" className="quiet" onClick={reset}>Reset request</button></div>
       </form>
       <div className="expected-result"><b>What success looks like</b><p>{endpoint.outcome}</p></div>
       <details className="example-error"><summary>See a common error for this operation</summary><CodeSnippet value={endpoint.errorResponse} language="json" /></details>

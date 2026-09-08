@@ -55,6 +55,38 @@ Rate-limited responses use HTTP `429` and expose `X-RateLimit-Limit`, `X-RateLim
 
 ## First integration
 
+Use **Manage shops** beside **Current shop** to create or select a shop. A newly
+created shop becomes the current selection and opens its Dashboard. Dashboard
+counts cover **all accessible shops**; configuration checks describe only the
+selected shop. They record catalog/credential/webhook configuration, not proof
+that you saved a secret, signed a request, or processed a callback.
+
+For a first request, open the API Simulator, choose the selected shop's provider,
+and use credentials you saved when creating them. Test Shopee's
+`GET /api/shopee/v1/orders` or Tokopedia's
+`POST /api/tokopedia/v202309/orders/search`. A successful response verifies this
+request; the dashboard does not persist completion of this learning exercise.
+
+The optional **Reset shop to sample data** action (also **Reset to seed** in
+Products) permanently deletes credentials, webhook registrations and delivery
+history, orders/packages/shipments/events, products and warehouse inventory.
+It creates 100 products, 50 completed historical orders, a sample credential
+whose secret is unavailable, and a disabled example webhook. Warehouse
+definitions and scenario settings remain. The confirmation names the affected
+shop. To keep existing data, add products instead. After reset, create and save
+a new credential, revoke the unusable sample credential, and configure your
+receiver again. Historical orders do not demonstrate successful delivery.
+
+Resource lists and details expose **Refresh** and the last successful update
+time. Delivery lists and order/delivery details check asynchronous work every
+five seconds, up to twelve sequential checks while deliveries are pending (or
+while waiting for delivery creation). Checking stops on completion, error,
+navigation, or that limit. Use Refresh to start another check window for longer
+delays. A failed refresh leaves previous data visible with an error; initial
+load failures offer retry. "No deliveries yet" is not proof of a missing webhook.
+Single-order simulation opens the created order, whose delivery links open its
+attempts. Verify your receiver's durable processing separately from HTTP success.
+
 1. Select/create the intended shop. If you want seed fixtures, use Reset to seed **before** creating credentials and webhooks; reset deletes earlier setup and history.
 2. Create an API credential and start the [provider-specific receiver](webhook-guide.md#runnable-receiver). The shop profile selects outbound verification even when you register through the shared API. Tokopedia uses the oldest ACTIVE app credential shown in Admin Webhooks; its callback secret is unused.
 3. Sign `POST /api/v1/webhooks` and register a worker-reachable endpoint for `order.created`, `order.paid`, `order.ready_to_ship`, and `order.shipped`. For Shopee, save the registration secret and configure the receiver with it before triggering an event. Registrations reject unsupported event types; product lifecycle subscriptions include `product.created`, `product.updated`, and `product.deleted`.
@@ -64,12 +96,15 @@ Rate-limited responses use HTTP `429` and expose `X-RateLimit-Limit`, `X-RateLim
 
 Products are provider-specific at the public boundary. Shopee-like uses `GET /api/shopee/v1/products?page_no=&page_size=` with `item_*` fields and partner signing; Tokopedia-like uses `POST /api/tokopedia/v202309/products/search` with `data.products`, opaque page tokens, app-key signing, and an access token. Use each provider’s product detail endpoint for one product. Catalogue creation, updates, stock, and archive remain Admin Control Plane operations so warehouse inventory and product events stay atomic.
 
-Pagination is provider-specific. Shared warehouse and webhook lists currently
-return the complete shop-scoped collection. Shopee-like product and order lists
-use `page_no` plus `page_size`: product responses expose `has_next_page`, while
-order responses expose `more`. Tokopedia-like searches use an opaque
-`page_token`; send the returned `next_page_token` unchanged while `has_more` is
-true.
+Pagination is resource- and provider-specific. The shared warehouse list returns
+the complete shop-scoped collection and has no pagination object. The shared
+webhook list uses `page` and `limit` (default `20`, maximum `100`) and returns
+`pagination.page`, `pagination.limit`, `pagination.total`,
+`pagination.total_pages`, `pagination.has_previous`, and `pagination.has_next`.
+Shopee-like product and order lists use `page_no` plus `page_size`:
+product responses expose `has_next_page`, while order responses expose `more`.
+Tokopedia-like searches use an opaque `page_token`; send the returned
+`next_page_token` unchanged while `has_more` is true.
 
 ## SHOPEE_LIKE provider contract
 
@@ -86,8 +121,10 @@ The path excludes query parameters and the method is deliberately not part of
 this contract. Generic headers will be rejected at this boundary.
 
 The order list is `GET /api/shopee/v1/orders?page_no=1&page_size=20`, with
-`order_status`, `time_from`, and `time_to` filters. It returns `order_id`, `order_sn`,
-`order_status`, Unix timestamps, and an envelope such as:
+`order_status`, `time_from`, and `time_to` filters. `time_from` and `time_to` are
+inclusive Unix-second bounds on `create_time`; they do not filter `update_time`.
+It returns `order_id`, `order_sn`, `order_status`, both timestamps, and an
+envelope such as:
 
 ```json
 {"error":"","message":"success","request_id":"req_…","response":{"order_list":[],"more":false}}
@@ -153,11 +190,11 @@ Orders follow one enforced path:
 
 `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`.
 
-Only the simulator verifies payment (`UNPAID → PAID`) and completes delivery. There is no Generic public order API. A `SHOPEE_LIKE` credential uses `POST /api/shopee/v1/orders/:id/ship-order`, `ready-to-ship`, `cancel`, `packages`, and `shipments`; its package request supports partial item allocations. A `TOKOPEDIA_LIKE` credential uses `POST /api/tokopedia/v202309/orders/:id/pack`, `handover`, `cancel`, and `shipments` with its query-signing/access-token contract. Both shipment endpoints require `READY_TO_SHIP`, a non-empty `shipping_provider`, and exactly `pickup_type: "PICKUP"`. They create one `CREATED` shipment per eligible package; responses expose the full `shipments` collection and keep the first `shipment` field for compatibility. Use the provider order-detail endpoint to inspect all packages and shipments. There is deliberately no public endpoint for arbitrary order-status changes.
+Only the simulator verifies payment (`UNPAID → PAID`) and completes delivery. There is no Generic public order API. A `SHOPEE_LIKE` credential uses `POST /api/shopee/v1/orders/:id/ship-order`, `ready-to-ship`, `cancel`, `packages`, and `shipments`; its package request supports partial item allocations. A `TOKOPEDIA_LIKE` credential uses `POST /api/tokopedia/v202309/orders/:id/pack`, `handover`, `cancel`, and `shipments` with its query-signing/access-token contract. Both shipment endpoints require canonical `READY_TO_SHIP`, a non-empty `shipping_provider`, and exactly `pickup_type: "PICKUP"`. A create response contains the single new object at Shopee `response.shipment` or Tokopedia `data.shipment`; it includes `id`, `package_id`, `warehouse_id`, `order_id`, `tracking_number`, `shipping_provider`, `pickup_type`, and `status`. Use the provider order-detail `shipment_list` to inspect all shipments. There is deliberately no public endpoint for arbitrary order-status changes.
 
 ## Warehouses and inventory
 
-Every shop starts with `WH-DEFAULT` and may have additional control-plane-managed warehouses. A warehouse is a fulfillment origin: give each operational warehouse its dispatch address, then set its allocation priority. `WH-DEFAULT` exists for compatibility and starts without an address; edit it in the Admin Control Plane before using it as a real dispatch origin. At order creation, the simulator selects the highest-priority **active** warehouse that can fulfill every requested item. The selected warehouse appears in the order's `fulfillment` object, is copied to each v1 package, and is returned as `warehouse_id` when a shipment is created.
+Every shop starts with `WH-DEFAULT` and may have additional control-plane-managed warehouses. A warehouse is a fulfillment origin: give each operational warehouse its dispatch address, then set its allocation priority. `WH-DEFAULT` exists for compatibility and starts without an address; edit it in the Admin Control Plane before using it as a real dispatch origin. At order creation, the simulator selects the highest-priority **active** warehouse that can fulfill every requested item. The selected warehouse is visible in Admin Order Detail, is copied to each package, and is returned as `warehouse_id` when a shipment is created. Provider order-detail projections do not include a separate warehouse or `fulfillment` object.
 
 Use signed `GET /api/v1/warehouses` to discover the shop's fulfillment origins and dispatch addresses, and signed `GET /api/v1/warehouses/:id` to inspect per-product `on_hand_quantity`, `reserved_quantity`, and `available_quantity`. These endpoints are read-only for an external developer; create or edit warehouses and adjust their inventory in the Admin Control Plane.
 
@@ -190,3 +227,96 @@ One warehouse supplies an order in this simulator. Packages split its order-line
 Replace the example ID. In the simulator, **Ship an existing package** exposes this field; **Automatically package remaining items** omits it. Omission creates a new package for unallocated quantities and fails if everything is already allocated. Create all package shipments before progressing shipment movement. Creation returns one shipment; order detail's `shipment_list` contains all shipments.
 
 For a two-unit line, allocate two packages of one unit each and create a shipment for each package. In Admin Order Detail, inspect both packages, their quantities and shipment statuses. Follow Package → Shipment → Warehouse links and use **Back to previous resource** to return. Delivering only one shipment leaves the order unfinished; progress both shipments to delivery. The existing partial-package lifecycle rules remain authoritative.
+
+## Keeping provider and credential context (Admin learning workflow)
+
+The console shows the selected shop and provider on every resource screen. The
+Developer Portal carries that context and defaults to that provider's catalogue
+request. Its order quick start uses Shopee GET orders or Tokopedia POST
+orders/search as appropriate. Shared warehouse/webhook operations use the same
+shop credential with the shared signing algorithm.
+
+From a request, open Credentials, create a credential and choose **Use in
+simulator** in its one-time dialog. The dialog names the shop/provider; the
+handoff returns to the current request with Client ID, secret and, for Tokopedia,
+access token. **Return to request simulator** also returns from Credentials
+without replacing the request. Typed request data and credentials survive these
+console visits for the same shop, in memory only. They are never put in URLs,
+local storage or session storage. Clear credential, change shops, reset the
+shop, sign out or reload to erase the credential. Changing provider operations
+still starts a new request; per-operation draft history is a separate feature.
+
+A known provider mismatch disables sending until you select the matching
+provider or change shops. Arbitrarily pasted credential ownership is explicitly
+unverified; the backend is authoritative. Lost or seeded secrets cannot be
+recovered: revoke the unusable credential, create and save a new one, and use
+the handoff. For Tokopedia callbacks, remember the oldest active app credential
+signs deliveries, which may differ from the newest request credential.
+
+## Order status, payment status, and actors
+
+Order Detail uses `operations.payment_status` as authoritative: PENDING, PAID,
+FAILED, or EXPIRED. The compatibility `payment.status` is only a paid-at check
+(UNPAID/PAID) and cannot describe failure/expiry. Payment success commits the
+inventory reservation; physical shipment movement consumes stock. Failed or
+expired payment cancels the order and releases reservations.
+
+| Canonical / Shopee order status | Tokopedia API order_status | Next actor / work |
+| --- | --- | --- |
+| UNPAID | UNPAID | Payment simulation (only pending, unexpired payments can succeed) |
+| PAID | ON_HOLD | Merchant: Shopee ship-order / Tokopedia pack |
+| PROCESSING | AWAITING_SHIPMENT | Merchant: Shopee ready-to-ship / Tokopedia handover |
+| READY_TO_SHIP | AWAITING_COLLECTION | Merchant: allocate packages and create shipments |
+| SHIPPED / IN_DELIVERY | IN_TRANSIT | Carrier simulation on each shipment |
+| DELIVERED | DELIVERED | Customer confirmation simulation to COMPLETED |
+| COMPLETED | COMPLETED | Terminal |
+| CANCELLED / RETURNED | CANCEL | Terminal; inspect cancellation or return history |
+
+Pack is processing and handover is readiness; neither creates a shipment.
+Create all package shipments before carrier movement. IN_TRANSIT and CANCEL
+are many-to-one projections, so do not infer a single canonical status from them.
+Both providers' webhook payload data retains canonical statuses when present;
+the numeric Tokopedia topic is an event category, not the order status. Fetch
+current provider details after accepting a webhook before deciding what to do.
+
+Admin presents legal actions from `operations.available_actions` and
+`cancellation_options`, derived from domain policy. The server revalidates each
+mutation under its order lock. Customer cancellation reasons are CHANGE_OF_MIND,
+DUPLICATE_ORDER, ADDRESS_ISSUE; seller reasons are OUT_OF_STOCK and
+SELLER_UNFULFILLABLE. Shopee customers may cancel UNPAID/PAID, sellers
+PAID/PROCESSING. Tokopedia allows either actor through READY_TO_SHIP. The public
+cancel endpoints represent CUSTOMER; Admin explicitly submits the chosen actor
+and reason. Legacy empty Admin cancel requests retain SELLER/OUT_OF_STOCK.
+SYSTEM cancellations come from payment failure, payment expiry or seller-deadline
+simulation. The deadline worker updates asynchronously; read and mutation state
+can differ, so refresh after a rejected action.
+
+## Inventory discovery and allocation example
+
+Use **Warehouses & Inventory → View inventory** to adjust physical counts. Products
+always show status and available stock; **View product → Inventory by warehouse**
+shows each warehouse's on-hand, reserved, available, status, and priority, with a
+link to its editor. Edit product changes catalog fields; stock is managed at the
+warehouse. Public warehouse calls remain read-only and are available in the API
+Request Simulator with example ledger values.
+
+Available = on hand − reserved. Creating an order increases reserved quantity and
+reduces available stock without changing on hand. Payment keeps the reservation.
+Cancellation or payment expiry releases unshipped reservations. Shipping a package
+reduces both on hand and reserved, so available is not deducted twice. Completing
+return to sender does not automatically restock inventory; inspect returned goods
+before changing the physical count.
+
+The allocator uses one ACTIVE warehouse for every order line. Highest priority wins
+among eligible warehouses; ties use warehouse code alphabetically. Aggregate product
+stock includes inactive warehouses and cannot prove that allocation will succeed.
+
+For example, A (priority 20) has 5 mugs and 0 plates available; B (priority 10) has
+2 mugs and 3 plates. An order for 2 mugs and 1 plate selects B. An order for 4 mugs
+and 1 plate fails, despite aggregate availability of 7 mugs and 3 plates, because
+neither warehouse can fulfill both lines. Add inventory to one eligible warehouse
+or reduce the order quantities before retrying.
+
+The on-hand editor **replaces the physical count**, rather than adding a delta.
+With 10 on hand and 2 reserved, entering 15 produces 13 available. To add 5 units,
+enter 15, not 5. The new physical count cannot be below the reserved quantity.

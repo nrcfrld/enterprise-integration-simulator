@@ -206,6 +206,12 @@ func (s *Server) shipmentDetail(c *gin.Context) {
 	out["failed_at"] = failed
 	out["returning_at"] = returning
 	out["returned_at"] = returned
+	trail, err := s.resourceEvents(c, shop, id)
+	if err != nil {
+		c.JSON(500, errorBody("DATABASE_ERROR", "could not load shipment events"))
+		return
+	}
+	out["events"] = trail
 	c.JSON(http.StatusOK, out)
 }
 

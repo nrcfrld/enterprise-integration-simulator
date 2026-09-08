@@ -29,7 +29,8 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
     try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Could not update webhook. Try again."); }
     finally { setPending(false); }
   };
-  const hooks = (data?.data ?? []) as WebhookRegistration[];
+  const hooks = (Array.isArray(data?.data) ? data.data : []) as WebhookRegistration[];
+  const provider = data?.delivery_contract?.provider_profile ?? shop?.provider_profile;
   const remove = async (id: string) => {
     if (
       !window.confirm(
@@ -65,7 +66,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
   return (
     <>
       {error && <p role="alert">{error}</p>}
-      <WebhookVerification provider={shop?.provider_profile} signingClientID={data?.delivery_contract?.signing_client_id} />
+      {provider && <WebhookVerification provider={provider} signingClientID={data?.delivery_contract?.signing_client_id} />}
       <section className="webhook-explainer card">
         <p className="eyebrow">Registration settings</p>
         <h2>Tell the simulator where to send matching events.</h2>
@@ -109,7 +110,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
                 Subscribed order/product events
               </p>
               <div className="event-chips">
-                {hook.subscribed_events?.map((event: string) => (
+                {(Array.isArray(hook.subscribed_events) ? hook.subscribed_events : []).map((event: string) => (
                   <span key={event}>{event}</span>
                 ))}
               </div>

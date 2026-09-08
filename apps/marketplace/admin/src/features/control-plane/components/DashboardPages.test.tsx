@@ -37,7 +37,7 @@ describe("Dashboard setup and maintenance states", () => {
 
     const createShop = screen.getByRole("button", { name: "Create shop →" });
     expect(createShop).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Seed data →" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Manage products →" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Configure →" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "View orders and events →" })).toBeDisabled();
 
@@ -48,7 +48,7 @@ describe("Dashboard setup and maintenance states", () => {
   it("locks the catalog action while seed data is being prepared", () => {
     render(<Dashboard {...props} shopID="shop_1" isSeeding />);
 
-    expect(screen.getByRole("button", { name: "Seeding… →" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Resetting…" })).toBeDisabled();
   });
 
   it("loads and toggles the admin-only maintenance switch", async () => {
@@ -62,7 +62,7 @@ describe("Dashboard setup and maintenance states", () => {
     expect(toggle).toBeDisabled();
     expect(screen.getByText("Checking current status…")).toBeVisible();
     await waitFor(() => expect(toggle).toBeEnabled());
-    expect(screen.getByText("Public API available")).toBeVisible();
+    expect(screen.getByText("Maintenance disabled")).toBeVisible();
     await user.click(toggle);
 
     await waitFor(() => expect(toggle).toBeChecked());
@@ -76,13 +76,26 @@ describe("Dashboard setup and maintenance states", () => {
     );
   });
 
-  it("shows a maintenance loading error without leaving the switch blocked", async () => {
+  it("shows an unknown maintenance state and allows a read retry", async () => {
     requestMock.mockRejectedValue(new Error("Maintenance status unavailable"));
     render(<Dashboard {...props} role="ADMIN" />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Maintenance status unavailable",
     );
-    expect(screen.getByRole("checkbox", { name: "Enable maintenance mode" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Enable maintenance mode" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Retry maintenance status" })).toBeEnabled();
   });
+});
+
+it("marks actual configuration without claiming secret possession or successful integration", async () => {
+  const { container } = render(<Dashboard {...props} shopID="shop_1" data={{ shops: 2, orders: 50, setup: { ready: true, seeded: false, products: 1, credential_active: true, webhook_configured: true, webhook_enabled: true } }} />);
+  expect(container.querySelectorAll("ol > li.complete")).toHaveLength(4);
+  expect(screen.getByText("All accessible shops")).toBeVisible();
+  expect(screen.getByText("Selected shop configuration")).toBeVisible();
+  expect(screen.getByText(/Configuration is present/)).toHaveTextContent("still need verification");
+  expect(screen.getByText(/These checks are not tracked/)).toBeVisible();
+  expect(screen.queryByText("Simulator online")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Test in API Simulator" }));
+  expect(props.onNavigate).toHaveBeenCalledWith("Documentation");
 });

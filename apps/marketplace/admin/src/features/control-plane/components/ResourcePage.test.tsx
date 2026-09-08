@@ -39,6 +39,13 @@ describe("ResourcePage critical product actions", () => {
     props.onPageChange.mockClear();
   });
 
+  it("keeps available stock and status visible regardless of product field ordering", () => {
+    render(<ResourcePage {...props} data={{ data: [{ category: "Bags", created_at: "today", description: "Long description", id: "product_1", name: "Bag", price: 100, shop_id: "shop_operator", sku: "SKU-1", status: "ACTIVE", stock: 7, updated_at: "today" }] }} />);
+    expect(screen.getByRole("columnheader", { name: "available stock" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "7" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "ACTIVE" })).toBeVisible();
+  });
+
   it("runs the selected shop seed handler once", async () => {
     const user = userEvent.setup();
     render(<ResourcePage {...props} />);
@@ -58,7 +65,7 @@ describe("ResourcePage critical product actions", () => {
     render(<ResourcePage {...props} />);
 
     expect(
-      screen.getByText("Choose a shop or create a record to begin."),
+      screen.getByText("No products yet. Add a product with warehouse stock to simulate an order."),
     ).toBeVisible();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
@@ -157,4 +164,37 @@ describe("Pagination states", () => {
 
     expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
   });
+});
+
+it("offers shop setup instead of invalid resource actions without a selected shop", async () => {
+  const onForm = vi.fn();
+  render(<ResourcePage {...props} shopID="" onForm={onForm} />);
+  expect(screen.queryByRole("button", { name: "+ New product" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Create shop" }));
+  expect(onForm).toHaveBeenCalledWith({ kind: "shop" });
+});
+
+it.each([
+  ["Products", "Archive", { id: "product_1", name: "Bag" }],
+  ["Credentials", "Revoke", { id: "credential_1", status: "ACTIVE" }],
+  ["Deliveries", "Retry", { id: "delivery_1", status: "FAILED" }],
+] as const)("shows pending and failure feedback for %s mutations, allowing a retry", async (page, label, row) => {
+  let reject!: (reason: Error) => void;
+  requestMock.mockReset().mockReturnValueOnce(new Promise((_, fail) => { reject = fail; })).mockResolvedValue({});
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const onRefresh = vi.fn();
+  const user = userEvent.setup();
+  render(<ResourcePage {...props} page={page} data={{ data: [row] }} onRefresh={onRefresh} />);
+  const button = screen.getByRole("button", { name: label });
+  await user.click(button);
+  expect(button).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("Saving action");
+  reject(new Error("Service unavailable"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Service unavailable");
+  expect(button).toBeEnabled();
+  expect(onRefresh).not.toHaveBeenCalled();
+  await user.click(button);
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  confirm.mockRestore();
 });

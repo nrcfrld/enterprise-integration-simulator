@@ -158,20 +158,62 @@ func TestContainerRateLimitAndScenarioIsolation(t *testing.T) {
 	clientA, secretA := containerCreateCredential(t, test.baseURL, shopA, admin)
 	clientB, secretB := containerCreateCredential(t, test.baseURL, shopB, admin)
 
-	firstStatus, firstHeaders := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses?limit=1", clientA, secretA)
+	firstStatus, firstHeaders := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses", clientA, secretA)
 	if firstStatus != http.StatusOK || firstHeaders.Get("X-RateLimit-Limit") != "1" || firstHeaders.Get("X-RateLimit-Remaining") != "0" || firstHeaders.Get("X-RateLimit-Reset") == "" {
 		t.Fatalf("first rate-limit contract = status %d, headers %#v", firstStatus, firstHeaders)
 	}
-	secondStatus, secondHeaders := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses?limit=1", clientA, secretA)
+	secondStatus, secondHeaders := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses", clientA, secretA)
 	if secondStatus != http.StatusTooManyRequests || secondHeaders.Get("X-RateLimit-Remaining") != "0" {
 		t.Fatalf("rate limit did not reject second request: status=%d headers=%#v", secondStatus, secondHeaders)
 	}
 
 	containerJSON(t, http.MethodPut, test.baseURL+"/control/v1/shops/"+shopA+"/scenario", admin, map[string]any{"force_rate_limit": true})
-	statusA, _ := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses?limit=1", clientA, secretA)
-	statusB, _ := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses?limit=1", clientB, secretB)
+	statusA, _ := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses", clientA, secretA)
+	statusB, _ := containerSignedRequest(t, http.MethodGet, test.baseURL, "/api/v1/warehouses", clientB, secretB)
 	if statusA != http.StatusTooManyRequests || statusB != http.StatusOK {
 		t.Fatalf("scenario leaked between shops: A=%d B=%d", statusA, statusB)
+	}
+}
+
+func TestContainerSharedCollectionPaginationContracts(t *testing.T) {
+	test := startContainerServer(t, 20)
+	admin := containerLogin(t, test.baseURL, "admin@test.local", "admin-password")
+	shop := containerCreateShop(t, test.baseURL, admin, "Shared collection contracts")
+	containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shops/"+shop+"/warehouses", admin, map[string]any{
+		"code": "WH-SECOND", "name": "Second warehouse", "status": "ACTIVE", "priority": 50,
+	})
+	clientID, secret := containerCreateCredential(t, test.baseURL, shop, admin)
+	for index := 1; index <= 2; index++ {
+		status, _, body := containerSignedJSON(t, http.MethodPost, test.baseURL, "/api/v1/webhooks", clientID, secret, fmt.Sprintf("shared-page-hook-%d", index), map[string]any{
+			"url":               fmt.Sprintf("https://example.test/page-%d", index),
+			"subscribed_events": []string{"order.created"},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create webhook %d = %d %#v", index, status, body)
+		}
+	}
+
+	status, _, firstPage := containerSignedJSON(t, http.MethodGet, test.baseURL, "/api/v1/webhooks?page=1&limit=1", clientID, secret, "", nil)
+	if status != http.StatusOK || len(firstPage["data"].([]any)) != 1 {
+		t.Fatalf("first webhook page = %d %#v", status, firstPage)
+	}
+	firstPagination := firstPage["pagination"].(map[string]any)
+	if firstPagination["page"] != float64(1) || firstPagination["limit"] != float64(1) || firstPagination["total"] != float64(2) || firstPagination["has_next"] != true || firstPagination["has_previous"] != false {
+		t.Fatalf("first webhook pagination = %#v", firstPagination)
+	}
+	status, _, secondPage := containerSignedJSON(t, http.MethodGet, test.baseURL, "/api/v1/webhooks?page=2&limit=1", clientID, secret, "", nil)
+	secondPagination := secondPage["pagination"].(map[string]any)
+	if status != http.StatusOK || len(secondPage["data"].([]any)) != 1 || secondPagination["has_next"] != false || secondPagination["has_previous"] != true {
+		t.Fatalf("second webhook page = %d %#v", status, secondPage)
+	}
+	status, _, invalidPage := containerSignedJSON(t, http.MethodGet, test.baseURL, "/api/v1/webhooks?page=0&limit=1", clientID, secret, "", nil)
+	if status != http.StatusBadRequest || invalidPage["error"].(map[string]any)["code"] != "INVALID_REQUEST" {
+		t.Fatalf("invalid webhook page = %d %#v", status, invalidPage)
+	}
+
+	status, _, warehouses := containerSignedJSON(t, http.MethodGet, test.baseURL, "/api/v1/warehouses?page=2&limit=1", clientID, secret, "", nil)
+	if status != http.StatusOK || len(warehouses["data"].([]any)) != 2 || warehouses["pagination"] != nil {
+		t.Fatalf("warehouse list must remain complete and unpaginated = %d %#v", status, warehouses)
 	}
 }
 
@@ -788,7 +830,13 @@ func TestContainerShopeeLikePublicContract(t *testing.T) {
 	product := containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shops/"+shop+"/products", admin, map[string]any{"sku": "SHOPEE-1", "name": "Shopee contract item", "price": 2500, "stock": 4})
 	client, secret := containerCreateCredential(t, test.baseURL, shop, admin)
 	first := containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shops/"+shop+"/orders", admin, map[string]any{"items": []map[string]any{{"product_id": product["id"], "quantity": 1}}})
-	_ = containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shops/"+shop+"/orders", admin, map[string]any{"items": []map[string]any{{"product_id": product["id"], "quantity": 1}}})
+	second := containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shops/"+shop+"/orders", admin, map[string]any{"items": []map[string]any{{"product_id": product["id"], "quantity": 1}}})
+	cutoff := time.Now().Add(-24 * time.Hour).Truncate(time.Second)
+	oldCreated := cutoff.Add(-24 * time.Hour)
+	recentUpdate := cutoff.Add(23 * time.Hour)
+	if _, err := test.env.DB.Exec(context.Background(), `UPDATE orders SET created_at=$2,updated_at=$3 WHERE id=$1`, first["id"], oldCreated, recentUpdate); err != nil {
+		t.Fatalf("set semantic filter timestamps: %v", err)
+	}
 
 	status, headers, body := containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders?page_no=1&page_size=1", client, secret, nil)
 	if status != http.StatusOK || headers.Get("X-Shopee-Api-Call-Limit") == "" || body["error"] != "" || body["request_id"] == "" {
@@ -798,6 +846,16 @@ func TestContainerShopeeLikePublicContract(t *testing.T) {
 	list := response["order_list"].([]any)
 	if len(list) != 1 || response["more"] != true || list[0].(map[string]any)["order_sn"] == nil {
 		t.Fatalf("Shopee pagination/terminology response = %#v", response)
+	}
+	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders?order_status=UNPAID&time_from="+strconv.FormatInt(cutoff.Unix(), 10), client, secret, nil)
+	createdFrom := body["response"].(map[string]any)["order_list"].([]any)
+	if status != http.StatusOK || len(createdFrom) != 1 || createdFrom[0].(map[string]any)["order_id"] != second["id"] {
+		t.Fatalf("Shopee time_from must filter create_time = %d %#v", status, body)
+	}
+	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders?time_to="+strconv.FormatInt(cutoff.Unix(), 10), client, secret, nil)
+	createdTo := body["response"].(map[string]any)["order_list"].([]any)
+	if status != http.StatusOK || len(createdTo) != 1 || createdTo[0].(map[string]any)["order_id"] != first["id"] || createdTo[0].(map[string]any)["update_time"].(float64) <= float64(cutoff.Unix()) {
+		t.Fatalf("Shopee time_to must use create_time even when update_time is newer = %d %#v", status, body)
 	}
 	// Follow the portal's list-to-detail instruction using the returned API ID,
 	// keeping the human-readable order number distinct throughout the exercise.
@@ -869,7 +927,28 @@ func TestContainerShopeeLikePublicContract(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("Shopee shipment=%d %#v", status, shipmentBody)
 	}
-	shipmentID := shipmentBody["response"].(map[string]any)["shipment"].(map[string]any)["id"].(string)
+	createdShipment := shipmentBody["response"].(map[string]any)["shipment"].(map[string]any)
+	for _, field := range []string{"id", "package_id", "warehouse_id", "order_id", "tracking_number", "shipping_provider", "pickup_type", "status"} {
+		if createdShipment[field] == nil {
+			t.Fatalf("Shopee shipment create omitted %s: %#v", field, createdShipment)
+		}
+	}
+	shipmentID := createdShipment["id"].(string)
+	status, _, body = containerShopeeJSON(t, http.MethodGet, test.baseURL, "/api/shopee/v1/orders/"+activeID, client, secret, nil)
+	providerDetail := body["response"].(map[string]any)
+	if status != http.StatusOK || len(providerDetail["item_list"].([]any)) != 1 || len(providerDetail["package_list"].([]any)) != 1 || len(providerDetail["shipment_list"].([]any)) != 1 {
+		t.Fatalf("Shopee nested order detail = %d %#v", status, body)
+	}
+	for _, field := range []string{"allocated_quantity", "remaining_quantity", "subtotal", "product_id"} {
+		if _, ok := providerDetail["item_list"].([]any)[0].(map[string]any)[field]; !ok {
+			t.Fatalf("Shopee order item omitted %s: %#v", field, providerDetail["item_list"])
+		}
+	}
+	for _, field := range []string{"shipping_provider", "pickup_type", "created_at", "delivery_failure_reason", "failed_at", "returning_at", "returned_at"} {
+		if _, ok := providerDetail["shipment_list"].([]any)[0].(map[string]any)[field]; !ok {
+			t.Fatalf("Shopee order shipment omitted %s: %#v", field, providerDetail["shipment_list"])
+		}
+	}
 	for _, action := range []string{"ship", "in_delivery", "deliver"} {
 		containerJSON(t, http.MethodPost, test.baseURL+"/control/v1/shipments/"+shipmentID+"/actions/"+action, admin, map[string]any{})
 	}
@@ -972,7 +1051,18 @@ func TestContainerTokopediaLikeRTSAndInventoryReservation(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("create RTS shipment=%d %#v", status, shipmentBody)
 	}
-	shipmentID := shipmentBody["data"].(map[string]any)["shipment"].(map[string]any)["id"].(string)
+	createdShipment := shipmentBody["data"].(map[string]any)["shipment"].(map[string]any)
+	for _, field := range []string{"id", "package_id", "warehouse_id", "order_id", "tracking_number", "shipping_provider", "pickup_type", "status"} {
+		if createdShipment[field] == nil {
+			t.Fatalf("Tokopedia shipment create omitted %s: %#v", field, createdShipment)
+		}
+	}
+	shipmentID := createdShipment["id"].(string)
+	status, _, tokBody = containerTokopediaJSON(t, http.MethodGet, test.baseURL, "/api/tokopedia/v202309/orders/"+activeID, client, secret, accessToken, nil)
+	providerDetail := tokBody["data"].(map[string]any)
+	if status != http.StatusOK || len(providerDetail["line_items"].([]any)) != 1 || len(providerDetail["package_list"].([]any)) != 1 || len(providerDetail["shipment_list"].([]any)) != 1 {
+		t.Fatalf("Tokopedia nested order detail = %d %#v", status, tokBody)
+	}
 	for _, action := range []struct {
 		name string
 		body map[string]any

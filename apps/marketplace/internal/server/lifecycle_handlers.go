@@ -19,6 +19,7 @@ import (
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/orders"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/ratelimit"
+	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/tokopedia"
 )
 
 func (s *Server) setRateLimitHeaders(c *gin.Context, limit, remaining int, resetAt time.Time) {
@@ -89,7 +90,24 @@ func (s *Server) orderAction(c *gin.Context) {
 		return
 	}
 	if strings.EqualFold(c.Param("action"), "CANCEL") {
-		s.cancelResponse(c, shop, id, orders.Seller, "OUT_OF_STOCK")
+		var input struct {
+			Actor  string `json:"actor"`
+			Reason string `json:"reason"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
+			c.JSON(400, errorBody("INVALID_REQUEST", "cancellation requires a JSON actor and reason"))
+			return
+		}
+		// Preserve legacy empty requests; the console always submits both fields.
+		if input.Actor == "" && input.Reason == "" {
+			input.Actor, input.Reason = orders.Seller, "OUT_OF_STOCK"
+		}
+		input.Actor, input.Reason = strings.ToUpper(strings.TrimSpace(input.Actor)), strings.ToUpper(strings.TrimSpace(input.Reason))
+		if input.Actor != orders.Customer && input.Actor != orders.Seller {
+			c.JSON(400, errorBody("INVALID_REQUEST", "actor must be CUSTOMER or SELLER; simulate payment failure or wait for deadlines for SYSTEM cancellation"))
+			return
+		}
+		s.cancelResponse(c, shop, id, input.Actor, input.Reason)
 		return
 	}
 	targets := map[string]string{"PAY": orders.Paid, "PROCESS": orders.Processing, "READY_TO_SHIP": orders.ReadyToShip, "COMPLETE": orders.Completed}
@@ -414,7 +432,7 @@ func (s *Server) items(ctx context.Context, orderID string) []gin.H {
 }
 
 func (s *Server) packagesForOrder(ctx context.Context, orderID string) []gin.H {
-	rows, err := s.db.Query(ctx, `SELECT id,package_number,status,created_at,updated_at FROM packages WHERE order_id=$1 ORDER BY created_at`, orderID)
+	rows, err := s.db.Query(ctx, `SELECT id,id,status,created_at,updated_at FROM packages WHERE order_id=$1 ORDER BY created_at`, orderID)
 	if err != nil {
 		return []gin.H{}
 	}
@@ -477,14 +495,19 @@ func shipmentControlData(id, orderID, orderNumber, tracking, provider, pickupTyp
 }
 
 func (s *Server) orderOperations(ctx context.Context, orderID string) gin.H {
-	var provider, paymentStatus string
+	var provider, paymentStatus, status string
 	var paymentExpiry, paymentFailed, sellerDeadline *time.Time
 	var paymentFailure, cancellationActor, cancellationReason *string
-	err := s.db.QueryRow(ctx, `SELECT sh.provider_profile,o.payment_status,o.payment_expires_at,o.payment_failed_at,o.seller_deadline_at,o.payment_failure_reason,o.cancellation_actor,o.cancellation_reason FROM orders o JOIN shops sh ON sh.id=o.shop_id WHERE o.id=$1`, orderID).Scan(&provider, &paymentStatus, &paymentExpiry, &paymentFailed, &sellerDeadline, &paymentFailure, &cancellationActor, &cancellationReason)
+	err := s.db.QueryRow(ctx, `SELECT sh.provider_profile,o.payment_status,o.status,o.payment_expires_at,o.payment_failed_at,o.seller_deadline_at,o.payment_failure_reason,o.cancellation_actor,o.cancellation_reason FROM orders o JOIN shops sh ON sh.id=o.shop_id WHERE o.id=$1`, orderID).Scan(&provider, &paymentStatus, &status, &paymentExpiry, &paymentFailed, &sellerDeadline, &paymentFailure, &cancellationActor, &cancellationReason)
 	if err != nil {
 		return gin.H{}
 	}
-	return gin.H{"provider_profile": provider, "payment_status": paymentStatus, "payment_expires_at": paymentExpiry, "payment_failed_at": paymentFailed, "payment_failure_reason": paymentFailure, "seller_deadline_at": sellerDeadline, "cancellation_actor": cancellationActor, "cancellation_reason": cancellationReason}
+	actions, cancellations := orders.ConsoleActions(orders.LifecycleState{Status: status, Provider: provider, PaymentStatus: paymentStatus, PaymentExpires: paymentExpiry, SellerDeadline: sellerDeadline}, time.Now())
+	providerStatus := status
+	if provider == orders.TokopediaLike {
+		providerStatus = tokopedia.OrderStatus(status)
+	}
+	return gin.H{"available_actions": actions, "cancellation_options": cancellations, "provider_status": providerStatus, "provider_profile": provider, "payment_status": paymentStatus, "payment_expires_at": paymentExpiry, "payment_failed_at": paymentFailed, "payment_failure_reason": paymentFailure, "seller_deadline_at": sellerDeadline, "cancellation_actor": cancellationActor, "cancellation_reason": cancellationReason}
 }
 
 func paymentInfo(reference *string, paidAt *time.Time) gin.H {
@@ -495,24 +518,24 @@ func paymentInfo(reference *string, paidAt *time.Time) gin.H {
 }
 
 func (s *Server) events(ctx context.Context, orderID string) []gin.H {
-	rows, err := s.db.Query(ctx, `SELECT id,event_type,occurred_at,payload FROM domain_events WHERE aggregate_id=$1 ORDER BY occurred_at`, orderID)
+	rows, err := s.db.Query(ctx, `SELECT id,event_type,occurred_at,payload,aggregate_id,split_part(event_type,'.',1) FROM domain_events WHERE aggregate_id=$1 OR aggregate_id IN (SELECT id FROM shipments WHERE order_id=$1) ORDER BY occurred_at,id`, orderID)
 	if err != nil {
 		return []gin.H{}
 	}
 	defer rows.Close()
 	data := []gin.H{}
 	for rows.Next() {
-		var id, typ string
+		var id, typ, aggregate, resource string
 		var at time.Time
 		var payload []byte
-		if rows.Scan(&id, &typ, &at, &payload) == nil {
-			data = append(data, gin.H{"id": id, "event_type": typ, "occurred_at": at, "payload": json.RawMessage(payload)})
+		if rows.Scan(&id, &typ, &at, &payload, &aggregate, &resource) == nil {
+			data = append(data, gin.H{"id": id, "event_type": typ, "occurred_at": at, "payload": json.RawMessage(payload), "aggregate_id": aggregate, "aggregate_type": resource})
 		}
 	}
 	return data
 }
 func (s *Server) deliveriesForOrder(ctx context.Context, orderID string) []gin.H {
-	rows, err := s.db.Query(ctx, `SELECT d.id,d.event_id,d.status,d.attempt_count FROM webhook_deliveries d JOIN domain_events e ON e.id=d.event_id WHERE e.aggregate_id=$1 ORDER BY d.created_at`, orderID)
+	rows, err := s.db.Query(ctx, `SELECT d.id,d.event_id,d.status,d.attempt_count FROM webhook_deliveries d JOIN domain_events e ON e.id=d.event_id WHERE e.aggregate_id=$1 OR e.aggregate_id IN (SELECT id FROM shipments WHERE order_id=$1) ORDER BY d.created_at,d.id`, orderID)
 	if err != nil {
 		return []gin.H{}
 	}

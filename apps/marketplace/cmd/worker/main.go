@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -238,80 +240,81 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		return fmt.Errorf("load delivery: %w", err)
 	}
-	secret, err := platform.Decrypt(w.cfg.EncryptionKey, cipherText)
-	if err != nil {
-		return fmt.Errorf("decrypt webhook secret: %w", err)
-	}
-	timestamp := fmt.Sprintf("%d", time.Now().Unix())
-	var headers map[string]string
-	if orders.NormaliseProvider(providerProfile) == orders.TokopediaLike {
-		if appKey == "" || appSecretCipher == "" {
-			return fmt.Errorf("tokopedia-like webhook requires an active app credential")
-		}
-		appSecret, decryptErr := platform.Decrypt(w.cfg.EncryptionKey, appSecretCipher)
-		if decryptErr != nil {
-			return fmt.Errorf("decrypt Tokopedia-like app secret: %w", decryptErr)
-		}
-		payload, _ = tokopedia.WebhookBody(eventID, shopID, eventType, payload, time.Now().Unix())
-		mac := hmac.New(sha256.New, []byte(appSecret))
-		mac.Write([]byte(appKey + string(payload)))
-		signature := hex.EncodeToString(mac.Sum(nil))
-		eventType = fmt.Sprintf("%d", tokopedia.WebhookType(eventType))
-		headers = map[string]string{"Content-Type": "application/json", "Authorization": signature}
-	} else {
-		eventType, payload = webhooks.DeliveryContract(providerProfile, eventID, eventType, payload)
-		mac := hmac.New(sha256.New, []byte(secret))
-		if orders.NormaliseProvider(providerProfile) == orders.ShopeeLike {
-			mac.Write([]byte(eventType + timestamp + string(payload)))
-		} else {
-			mac.Write([]byte(timestamp + "." + string(payload)))
-		}
-		signature := hex.EncodeToString(mac.Sum(nil))
-		headers = map[string]string{"Content-Type": "application/json", "X-Marketplace-Event": eventType, "X-Marketplace-Event-Id": eventID, "X-Marketplace-Timestamp": timestamp, "X-Marketplace-Signature": signature}
-		if orders.NormaliseProvider(providerProfile) == orders.ShopeeLike {
-			headers = map[string]string{"Content-Type": "application/json", "X-Shopee-Event": eventType, "X-Shopee-Event-Id": eventID, "X-Shopee-Timestamp": timestamp, "X-Shopee-Signature": signature}
-		}
-	}
 	start := time.Now()
+	payload, headers, preparationErr := w.prepareWebhook(providerProfile, eventID, eventType, shopID, appKey, appSecretCipher, cipherText, payload, start)
 	status := 0
 	responseHeaders := map[string]string{}
 	body := ""
-	var callErr error
-	if forceFailure {
-		callErr = fmt.Errorf("webhook failure scenario active")
+	failureCode := ""
+	httpAttempted, truncated := false, false
+	callErr := preparationErr
+	if callErr != nil {
+		failureCode = "SIGNING_ERROR"
+	} else if forceFailure {
+		callErr = fmt.Errorf("webhook failure scenario active; disable Force webhook failure in Scenarios to deliver")
+		failureCode = "FORCED_FAILURE"
 	} else {
-		request, err := http.NewRequestWithContext(ctx, http.MethodPost, urlString, bytes.NewReader(payload))
-		if err != nil {
-			callErr = err
+		request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, urlString, bytes.NewReader(payload))
+		if requestErr != nil {
+			callErr, failureCode = requestErr, "REQUEST_ERROR"
 		} else {
 			for k, v := range headers {
 				request.Header.Set(k, v)
 			}
-			response, err := w.http.Do(request)
-			if err != nil {
-				callErr = err
+			httpAttempted = true
+			response, requestErr := w.http.Do(request)
+			if requestErr != nil {
+				callErr, failureCode = requestErr, "NETWORK_ERROR"
+				var timeout net.Error
+				if errors.As(requestErr, &timeout) && timeout.Timeout() {
+					failureCode = "TIMEOUT"
+				}
 			} else {
 				status = response.StatusCode
 				for k, v := range response.Header {
 					responseHeaders[k] = strings.Join(v, ",")
 				}
-				raw, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-				_ = response.Body.Close()
+				raw, readErr := io.ReadAll(io.LimitReader(response.Body, 4097))
+				closeErr := response.Body.Close()
+				truncated = len(raw) > 4096
+				if truncated {
+					raw = raw[:4096]
+				}
 				body = string(raw)
+				if readErr != nil {
+					callErr, failureCode = readErr, "RESPONSE_READ_ERROR"
+				} else if closeErr != nil {
+					callErr, failureCode = closeErr, "RESPONSE_READ_ERROR"
+				}
 				if status < 200 || status >= 300 {
-					callErr = fmt.Errorf("webhook returned %d", status)
+					callErr, failureCode = fmt.Errorf("webhook returned HTTP %d", status), "HTTP_STATUS"
 				}
 			}
 		}
 	}
 	attempt := attempts + 1
-	requestHeaders, _ := json.Marshal(headers)
-	responseHeaderJSON, _ := json.Marshal(responseHeaders)
-	attemptStatus := "SUCCESS"
-	if callErr != nil {
-		attemptStatus = "FAILURE"
+	requestHeaders, err := json.Marshal(headers)
+	if err != nil {
+		return fmt.Errorf("encode request headers: %w", err)
 	}
-	_, err = w.db.Exec(ctx, `INSERT INTO webhook_delivery_attempts(id,delivery_id,attempt,request_headers,response_status,response_headers,response_body,duration_ms,status) VALUES($1,$2,$3,$4,NULLIF($5,0),$6,$7,$8,$9)`, platform.NewID("att"), input.DeliveryID, attempt, requestHeaders, status, responseHeaderJSON, body, time.Since(start).Milliseconds(), attemptStatus)
+	responseHeaderJSON, err := json.Marshal(responseHeaders)
+	if err != nil {
+		return fmt.Errorf("encode response headers: %w", err)
+	}
+	attemptStatus, failureReason := "SUCCESS", ""
+	if callErr != nil {
+		attemptStatus, failureReason = "FAILURE", callErr.Error()
+	}
+	var requestBody *string
+	if preparationErr == nil {
+		raw := string(payload)
+		requestBody = &raw
+	}
+	signingClientID := ""
+	if providerProfile == orders.TokopediaLike {
+		signingClientID = appKey
+	}
+	_, err = w.db.Exec(ctx, `INSERT INTO webhook_delivery_attempts(id,delivery_id,attempt,request_headers,response_status,response_headers,response_body,duration_ms,status,request_body,request_url,provider_profile,signing_client_id,started_at,http_attempted,failure_code,failure_reason,response_body_truncated) VALUES($1,$2,$3,$4,NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15,NULLIF($16,''),NULLIF($17,''),$18)`, platform.NewID("att"), input.DeliveryID, attempt, requestHeaders, status, responseHeaderJSON, body, time.Since(start).Milliseconds(), attemptStatus, requestBody, urlString, providerProfile, signingClientID, start, httpAttempted, failureCode, failureReason, truncated)
 	if err != nil {
 		return fmt.Errorf("record webhook attempt: %w", err)
 	}
@@ -340,4 +343,36 @@ func (w *worker) handleDelivery(ctx context.Context, task *asynq.Task) error {
 		return fmt.Errorf("schedule webhook retry: %w", err)
 	}
 	return nil
+}
+
+// prepareWebhook returns the exact application body and signing headers used by
+// this attempt. No secret is retained in diagnostics; failed signing is recorded
+// as a preflight failure rather than an invented outbound request.
+func (w *worker) prepareWebhook(profile, eventID, eventType, shopID, appKey, appSecretCipher, cipherText string, payload []byte, at time.Time) ([]byte, map[string]string, error) {
+	timestamp := fmt.Sprintf("%d", at.Unix())
+	if orders.NormaliseProvider(profile) == orders.TokopediaLike {
+		if appKey == "" || appSecretCipher == "" {
+			return nil, map[string]string{}, fmt.Errorf("tokopedia webhook needs an active app credential; create one in Credentials and configure the receiver with its key")
+		}
+		secret, err := platform.Decrypt(w.cfg.EncryptionKey, appSecretCipher)
+		if err != nil {
+			return nil, map[string]string{}, fmt.Errorf("decrypt Tokopedia signing key: %w", err)
+		}
+		payload, _ = tokopedia.WebhookBody(eventID, shopID, eventType, payload, at.Unix())
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(appKey + string(payload)))
+		return payload, map[string]string{"Content-Type": "application/json", "Authorization": hex.EncodeToString(mac.Sum(nil))}, nil
+	}
+	secret, err := platform.Decrypt(w.cfg.EncryptionKey, cipherText)
+	if err != nil {
+		return nil, map[string]string{}, fmt.Errorf("decrypt webhook signing key: %w", err)
+	}
+	eventType, payload = webhooks.DeliveryContract(profile, eventID, eventType, payload)
+	mac := hmac.New(sha256.New, []byte(secret))
+	if orders.NormaliseProvider(profile) == orders.ShopeeLike {
+		mac.Write([]byte(eventType + timestamp + string(payload)))
+		return payload, map[string]string{"Content-Type": "application/json", "X-Shopee-Event": eventType, "X-Shopee-Event-Id": eventID, "X-Shopee-Timestamp": timestamp, "X-Shopee-Signature": hex.EncodeToString(mac.Sum(nil))}, nil
+	}
+	mac.Write([]byte(timestamp + "." + string(payload)))
+	return payload, map[string]string{"Content-Type": "application/json", "X-Marketplace-Event": eventType, "X-Marketplace-Event-Id": eventID, "X-Marketplace-Timestamp": timestamp, "X-Marketplace-Signature": hex.EncodeToString(mac.Sum(nil))}, nil
 }

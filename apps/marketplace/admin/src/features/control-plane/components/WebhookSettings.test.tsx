@@ -43,6 +43,19 @@ describe("WebhookSettings critical actions", () => {
     expect(screen.queryByRole("heading", { name: "Shopee-like deliveries" })).not.toBeInTheDocument();
   });
 
+  it("uses the delivery contract while the selected shop is still loading", () => {
+    render(<WebhookSettings {...props} data={{ ...props.data, delivery_contract: { provider_profile: "TOKOPEDIA_LIKE", signing_client_id: "client_oldest" } }} />);
+
+    expect(screen.getByRole("heading", { name: "Tokopedia-like deliveries" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Shopee-like deliveries" })).not.toBeInTheDocument();
+  });
+
+  it("does not flash both provider guides before the provider is known", () => {
+    render(<WebhookSettings {...props} />);
+
+    expect(screen.queryByLabelText("Webhook verification contract")).not.toBeInTheDocument();
+  });
+
   it("shows failed deletions without announcing success", async () => {
     requestMock.mockRejectedValueOnce(new Error("Could not delete webhook"));
     vi.spyOn(window, "confirm").mockReturnValueOnce(true);

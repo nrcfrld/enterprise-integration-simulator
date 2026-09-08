@@ -1,3 +1,4 @@
+import { EventTrail } from "./EventTrail";
 import { RelatedResource } from "./RelatedResource";
 import { ShipmentActions } from "./ShipmentActions";
 import type { DetailContentProps } from "./types";
@@ -54,6 +55,8 @@ export function ShipmentDetail({
         onError={onError}
         showFinalState
       />
+      <p>Shipment events below cover delivery failure and return to sender. Open the linked order for normal shipping milestones and the combined trail.</p>
+      <EventTrail data={data} onOpen={onOpen} token={token} onReload={onReload} onRefresh={onRefresh} onNotice={onNotice} onError={onError} title="Shipment events" />
     </>
   );
 }

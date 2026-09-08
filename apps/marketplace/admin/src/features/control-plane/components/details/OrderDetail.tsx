@@ -1,15 +1,10 @@
+import { EventTrail } from "./EventTrail";
+import { OrderActions } from "./OrderActions";
+import { useState } from "react";
+import { RelatedResource } from "./RelatedResource";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import { OrderFulfillment } from "./OrderFulfillment";
 import type { DetailContentProps } from "./types";
-
-const orderActions = [
-  ["pay", "Verify payment"],
-  ["payment_failed", "Fail payment"],
-  ["process", "Process"],
-  ["ready_to_ship", "Ready to ship"],
-  ["complete", "Complete"],
-  ["cancel", "Cancel"],
-] as const;
 
 export function OrderDetail({
   data,
@@ -20,70 +15,37 @@ export function OrderDetail({
   onNotice,
   onError,
 }: DetailContentProps) {
-  const transition = async (action: string) => {
+  const [pending, setPending] = useState(false);
+  const transition = async (action: string, body: Record<string, string> = {}) => {
+    if (pending) return;
+    setPending(true);
     onError("");
     try {
       await controlPlaneRequest<unknown>(
         `/control/v1/orders/${data.id}/actions/${action}`,
         token,
-        { method: "POST", body: JSON.stringify({}) },
+        { method: "POST", body: JSON.stringify(body) },
       );
       await onReload();
       await onRefresh();
       onNotice(`Order ${action} complete`);
     } catch (error: unknown) {
       onError(error instanceof Error ? error.message : "Request failed");
-    }
+    } finally { setPending(false); }
   };
 
-  const runEventAction = async (
-    eventID: string,
-    action: "replay" | "duplicate" | "delay",
-  ) => {
-    let body: string | undefined;
-    let notice = action === "replay"
-      ? "Event replay queued"
-      : "Duplicate webhook delivery queued";
-
-    if (action === "delay") {
-      const raw = window.prompt("Delay this event by how many seconds?", "30");
-      if (raw === null) return;
-      const delaySeconds = Number(raw);
-      if (!Number.isInteger(delaySeconds) || delaySeconds < 1) {
-        onError("Delay must be a whole number of at least one second.");
-        return;
-      }
-      body = JSON.stringify({ delay_seconds: delaySeconds });
-      notice = `Event delivery delayed by ${delaySeconds}s`;
-    }
-
-    onError("");
-    try {
-      await controlPlaneRequest<unknown>(
-        `/control/v1/events/${eventID}/${action}`,
-        token,
-        { method: "POST", ...(body ? { body } : {}) },
-      );
-      await onReload();
-      await onRefresh();
-      onNotice(notice);
-    } catch (error: unknown) {
-      onError(error instanceof Error ? error.message : "Request failed");
-    }
-  };
 
   return (
     <>
       <p>
-        Status: <b>{data.status}</b>
+        Canonical order status: <b>{data.status}</b> · Provider API status: <b>{data.operations?.provider_status ?? "Unavailable"}</b>
       </p>
       <p>
-        Payment: <b>{data.payment?.status}</b>
+        Payment status: <b>{data.operations?.payment_status ?? "Unavailable"}</b>
         {data.payment?.reference ? ` · ${data.payment.reference}` : ""}
       </p>
       <div className="page-hint">
-        <b>{data.operations?.provider_profile || "SHOPEE_LIKE"}</b> · Payment{" "}
-        {data.operations?.payment_status || "PENDING"}
+        <b>{data.operations?.provider_profile || "SHOPEE_LIKE"}</b>
         {data.operations?.payment_expires_at
           ? ` · expires ${data.operations.payment_expires_at}`
           : ""}
@@ -126,41 +88,22 @@ export function OrderDetail({
         </section>
 
       </div>
-      <div className="action-grid">
-        {orderActions.map(([action, label]) => (
-          <button key={action} onClick={() => void transition(action)}>{label}</button>
-        ))}
-      </div>
+      {pending && <p role="status">Saving order action…</p>}
+      <OrderActions data={data} pending={pending} onAction={transition} />
       <OrderFulfillment data={data} token={token} onOpen={onOpen} onReload={onReload} onRefresh={onRefresh} onNotice={onNotice} onError={onError} />
-      <h3>1. Events created by this order</h3>
-      {data.events?.length ? (
-        data.events.map((event) => (
-          <div className="timeline" key={event.id}>
-            <div>
-              <span>{event.event_type}</span>
-              <small>{event.occurred_at}</small>
-            </div>
-            <div className="timeline-actions">
-              <button onClick={() => void runEventAction(event.id, "replay")}>Replay</button>
-              <button className="quiet" onClick={() => void runEventAction(event.id, "duplicate")}>Duplicate</button>
-              <button className="quiet" onClick={() => void runEventAction(event.id, "delay")}>Delay</button>
-            </div>
-          </div>
-        ))
-      ) : (
-        <p className="empty compact">No events yet.</p>
-      )}
+      <EventTrail data={data} onOpen={onOpen} token={token} onReload={onReload} onRefresh={onRefresh} onNotice={onNotice} onError={onError} title="Events from this order and its shipments" />
       <h3>2. Deliveries produced by matching registrations</h3>
       {data.deliveries?.length ? (
         data.deliveries.map((delivery) => (
           <div className="timeline" key={delivery.id}>
             <span>{delivery.status} · {delivery.attempt_count} attempt(s)</span>
             <small>Event {delivery.event_id}</small>
+            <RelatedResource type="delivery" id={delivery.id} label="Inspect attempts" onOpen={onOpen} />
           </div>
         ))
       ) : (
         <p className="empty compact">
-          No matching webhook registration existed when these events were published.
+          No deliveries yet. Creation is asynchronous. Refresh to check again; if none appear, check that a webhook is enabled and subscribed to this event, then replay the event.
         </p>
       )}
     </>

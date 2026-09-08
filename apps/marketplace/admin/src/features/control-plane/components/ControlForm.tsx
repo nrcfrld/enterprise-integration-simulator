@@ -1,6 +1,7 @@
+import { EVENT_CATALOG, eventMapping } from "@/shared/events/catalog";
 import { PackageAllocationFields } from "./PackageAllocationFields";
 import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
   Shop,
@@ -13,18 +14,19 @@ import type {
 } from "@/shared/types/controlPlane";
 import { MassOrderFields, type MassOrderConfig } from "./MassOrderFields";
 import { runMassOrders, type MassOrderProgress } from "../lib/massOrders";
+import { AccessibleDialog } from "./AccessibleDialog";
 
 const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
   controlPlaneRequest<T>(...args);
-const webhookEvents = [
-  "order.created", "order.paid", "order.processing", "order.ready_to_ship",
-  "order.shipped", "order.in_delivery", "order.delivered", "order.completed",
-  "order.cancelled", "product.created", "product.updated", "product.deleted",
-];
+const webhookEvents = EVENT_CATALOG.map(event => event.name);
 const webhookEventGroups = [
   {
     label: "Order lifecycle",
     events: webhookEvents.filter((eventName) => eventName.startsWith("order.")),
+  },
+  {
+    label: "Shipment failures and returns",
+    events: webhookEvents.filter(eventName => eventName.startsWith("shipment.")),
   },
   {
     label: "Product updates",
@@ -64,7 +66,8 @@ interface ControlFormProps {
   shopID: string;
   token: string | null | undefined;
   onClose: () => void;
-  onSaved: (message: string, credential?: CreatedCredential) => void | Promise<void>;
+  onSaved: (message: string, credential?: CreatedCredential, created?: { kind: "shop" | "order"; id: string; shop?: Shop }) => void | Promise<void>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 interface SecretResponse extends Partial<CreatedCredential> {
@@ -76,7 +79,7 @@ function inputValue(value: unknown): string | number {
   return typeof value === "string" || typeof value === "number" ? value : "";
 }
 
-export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSaved }: ControlFormProps) {
+export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSaved, returnFocusRef }: ControlFormProps) {
   const supplied = (initial ?? {}) as Partial<FormValues>;
   const [values, setValues] = useState<FormValues>({
     status: "ACTIVE",
@@ -312,6 +315,10 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
         method,
         body: JSON.stringify(body),
       });
+      if ((kind === "shop" || kind === "order") && result.id) {
+        await onSaved(`${kind} created`, undefined, { kind, id: result.id, ...(kind === "shop" ? { shop: result as Shop } : {}) });
+        return;
+      }
       if (kind === "package") { await onSaved(`Package ${result.id} allocated for order ${values.order_id}. Use this package_id in the provider shipment request.`); return; }
       const secret = result.client_secret || (shop?.provider_profile === "TOKOPEDIA_LIKE" ? undefined : result.secret);
       if (kind === "credential") {
@@ -355,14 +362,24 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
             ? "Edit webhook registration"
             : "Register webhook destination"
           : `Create ${kind}`;
+  const titleID = `control-form-${kind}-title`;
+  const initialFocusRef = useRef<HTMLHeadingElement>(null);
   return (
-    <div className="modal-backdrop modal modal-open" role="presentation">
-      <form className="modal-card modal-box" onSubmit={submit}>
+    <AccessibleDialog
+      ariaLabelledby={titleID}
+      backdropClassName="modal-backdrop modal modal-open"
+      className="modal-card modal-box"
+      closeOnEscape={!submitting}
+      initialFocusRef={initialFocusRef}
+      onClose={onClose}
+      returnFocusRef={returnFocusRef}
+    >
+      <form onSubmit={submit}>
         {shop && kind !== "shop" && kind !== "user" && <p className="form-help">{shop.name} · {shop.provider_profile} · {shop.id}</p>}
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Control plane action</p>
-            <h2>{title}</h2>
+            <h2 id={titleID} ref={initialFocusRef} tabIndex={-1}>{title}</h2>
           </div>
           <button type="button" className="icon-button btn btn-circle btn-ghost btn-sm" aria-label="Close form" disabled={submitting} onClick={onClose}>
             ×
@@ -449,6 +466,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                   >
                     <select
                       className="select select-bordered"
+                      aria-label={`Product for item ${index + 1}`}
                       required
                       value={item.product_id}
                       disabled={productsLoading}
@@ -482,6 +500,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                       <button
                         type="button"
                         className="quiet btn btn-ghost btn-sm"
+                        aria-label={`Remove item ${index + 1}`}
                         onClick={() => removeOrderItem(index)}
                       >
                         Remove
@@ -554,6 +573,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                   <div className="inventory-allocation-row" key={`${index}-${allocation.warehouse_id}`}>
                     <select
                       className="select select-bordered"
+                      aria-label={`Warehouse for initial inventory allocation ${index + 1}`}
                       required
                       value={allocation.warehouse_id}
                       onChange={(event) => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.map((item, itemIndex) => itemIndex === index ? { ...item, warehouse_id: event.target.value } : item) }))}
@@ -575,7 +595,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                       onChange={(event) => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.map((item, itemIndex) => itemIndex === index ? { ...item, on_hand_quantity: event.target.value } : item) }))}
                     />
                     {values.warehouse_inventory.length > 1 && (
-                      <button type="button" className="quiet btn btn-ghost btn-sm" onClick={() => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
+                      <button type="button" className="quiet btn btn-ghost btn-sm" aria-label={`Remove warehouse allocation ${index + 1}`} onClick={() => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
                     )}
                   </div>
                 ))}
@@ -589,8 +609,10 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
             )}
           </fieldset>
         )}
+        {kind === "product" && initial && <p className="form-help">To change stock, open View product → Inventory by warehouse, or Warehouses &amp; Inventory → View inventory. Edit product changes catalog fields only.</p>}
+        {kind === "order" && <p className="form-help">Each order reserves all lines from one ACTIVE warehouse. Aggregate product stock can be sufficient while no single warehouse can fulfill the order. Inspect warehouse inventory if allocation fails.</p>}
         {kind === "warehouse" && (
-          <p className="form-help">This address identifies the fulfillment origin for operations. Allocation priority determines which active warehouse is considered first.</p>
+          <p className="form-help">Larger allocation priority wins; ties use warehouse code alphabetically. One ACTIVE warehouse must have enough available inventory for every order line. Stock cannot be combined across warehouses to create an order.</p>
         )}
         {kind === "webhook" && (
           <>
@@ -636,6 +658,8 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                         <input
                           className="checkbox checkbox-primary checkbox-sm"
                           type="checkbox"
+                          aria-label={eventName}
+                          aria-describedby={`event-help-${eventName}`}
                           checked={values.subscribed_events.includes(eventName)}
                           onChange={(event) =>
                             update(
@@ -648,7 +672,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                             )
                           }
                         />
-                        <span>{eventName}</span>
+                        <span>{eventName}<small id={`event-help-${eventName}`}>{eventMapping(eventName, shop?.provider_profile)} · {EVENT_CATALOG.find(event => event.name === eventName)?.trigger}</small></span>
                       </label>
                     ))}
                   </div>
@@ -733,6 +757,6 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
           </button>
         </div>
       </form>
-    </div>
+    </AccessibleDialog>
   );
 }

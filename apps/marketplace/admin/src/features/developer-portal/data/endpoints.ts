@@ -11,6 +11,10 @@ const pageNo = [
   { name: "page_no", label: "Page number", help: "Starts at 1; increment it for the next page.", initial: "1", type: "integer" },
   { name: "page_size", label: "Page size", help: "Records per page (1–100).", initial: "20", type: "integer" },
 ];
+const sharedWebhookPage = [
+  { name: "page", label: "Page number", help: "Starts at 1; increment it while pagination.has_next is true.", initial: "1", type: "integer" },
+  { name: "limit", label: "Page size", help: "Webhook registrations per page (1–100). Defaults to 20.", initial: "20", type: "integer" },
+];
 
 const shipmentBodyFields = [
   { name: "package_id", type: "string", required: false, description: "Existing package ID from allocation or order detail package_list[].package_id. Omit to create a new package for remaining unallocated quantities; omission fails when all items are allocated.", example: "pkg_example_01" },
@@ -68,21 +72,61 @@ function endpoint(value: Omit<PortalEndpoint, "errorResponse">): PortalEndpoint 
   return { ...value, errorResponse: errors[value.contract][errorKind(value)] };
 }
 
+const shopeeOrderDetailResponse = JSON.stringify({
+  error: "",
+  message: "success",
+  request_id: "req_example_01",
+  response: {
+    order_id: "ord_example_01",
+    order_sn: "SIM-EXAMPLE-01",
+    order_status: "READY_TO_SHIP",
+    total_amount: 250000,
+    buyer: { name: "Ayu" },
+    recipient_address: { address_line: "Jl. Sudirman 1", city: "Jakarta", postal_code: "10220" },
+    create_time: 1788624000,
+    update_time: 1788627600,
+    item_list: [{ id: "ori_example_01", product_id: "prd_example_01", sku: "MUG-001", product_name: "Ceramic Mug", price: 125000, quantity: 2, subtotal: 250000, allocated_quantity: 1, remaining_quantity: 1 }],
+    package_list: [{ package_id: "pkg_example_01", package_number: "pkg_example_01", package_status: "READY_TO_SHIP", create_time: 1788627000, update_time: 1788627000 }],
+    shipment_list: [{ id: "shp_example_01", package_id: "pkg_example_01", order_id: "ord_example_01", tracking_number: "GXEXAMPLE01", shipping_provider: "provider_express", pickup_type: "PICKUP", status: "CREATED", delivery_failure_reason: null, created_at: "2026-09-06T01:00:00Z", shipped_at: null, delivered_at: null, failed_at: null, returning_at: null, returned_at: null }],
+  },
+}, null, 2);
+
+const tokopediaOrderDetailResponse = JSON.stringify({
+  code: 0,
+  message: "success",
+  request_id: "req_example_01",
+  data: {
+    order_id: "ord_example_01",
+    order_number: "SIM-EXAMPLE-01",
+    order_status: "AWAITING_COLLECTION",
+    payment_status: "PAID",
+    total_amount: 250000,
+    create_time: 1788624000,
+    update_time: 1788627600,
+    line_items: [{ id: "ori_example_01", product_id: "prd_example_01", sku: "MUG-001", product_name: "Ceramic Mug", price: 125000, quantity: 2, subtotal: 250000, allocated_quantity: 1, remaining_quantity: 1 }],
+    package_list: [{ package_id: "pkg_example_01", package_number: "pkg_example_01", package_status: "READY_TO_SHIP", create_time: 1788627000, update_time: 1788627000 }],
+    shipment_list: [{ id: "shp_example_01", package_id: "pkg_example_01", order_id: "ord_example_01", tracking_number: "GXEXAMPLE01", shipping_provider: "provider_express", pickup_type: "PICKUP", status: "CREATED", delivery_failure_reason: null, created_at: "2026-09-06T01:00:00Z", shipped_at: null, delivered_at: null, failed_at: null, returning_at: null, returned_at: null }],
+  },
+}, null, 2);
+
+const createdShipment = { id: "shp_example_01", package_id: "pkg_example_01", warehouse_id: "wh_example_01", order_id: "ord_example_01", tracking_number: "GXEXAMPLE01", shipping_provider: "provider_express", pickup_type: "PICKUP", status: "CREATED" };
+
 export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "list-warehouses", group: "Warehouses", contract: "shared", method: "GET", path: "/api/v1/warehouses", title: "List fulfillment warehouses",
-    summary: "Read fulfillment origins for the credential’s shop, including the stored dispatch address. Setup and stock adjustment stay in the control plane.", outcome: "200 OK with active and inactive warehouse records.",
-    response: '{\n  "data": [{ "id": "wh_…", "code": "WH-JKT", "name": "Jakarta Fulfillment", "status": "ACTIVE", "address": { "address_line": "Jl. Raya Bekasi 10", "city": "Jakarta", "postal_code": "13910" }, "priority": 100 }]\n}',
+    summary: "Read the complete, unpaginated set of fulfillment origins for the credential’s shop, including each stored dispatch address. Setup and stock adjustment stay in the control plane.", outcome: "200 OK with every active and inactive warehouse record; this response has no pagination object.",
+    response: '{\n  "data": [{ "id": "wh_example_01", "shop_id": "shop_example_01", "code": "WH-JKT", "name": "Jakarta Fulfillment", "status": "ACTIVE", "address": { "address_line": "Jl. Raya Bekasi 10", "city": "Jakarta", "postal_code": "13910" }, "priority": 100, "created_at": "2026-09-06T00:00:00Z", "updated_at": "2026-09-06T00:00:00Z" }]\n}',
   }),
   endpoint({
     id: "get-warehouse", group: "Warehouses", contract: "shared", method: "GET", path: "/api/v1/warehouses/{id}", title: "Get warehouse inventory", pathParams: [warehouseID],
     summary: "Read on-hand, reserved, and available quantity at one fulfillment origin.", outcome: "200 OK with inventory rows.",
-    response: '{\n  "id": "wh_…",\n  "inventory": [{ "sku": "MUG-001", "on_hand_quantity": 24, "reserved_quantity": 2, "available_quantity": 22 }]\n}',
+    response: '{\n  "id": "wh_example_01",\n  "shop_id": "shop_example_01",\n  "code": "WH-JKT",\n  "name": "Jakarta Fulfillment",\n  "status": "ACTIVE",\n  "address": { "address_line": "Jl. Raya Bekasi 10", "city": "Jakarta", "postal_code": "13910" },\n  "priority": 100,\n  "created_at": "2026-09-06T00:00:00Z",\n  "updated_at": "2026-09-06T00:00:00Z",\n  "inventory": [{ "product_id": "prd_example_01", "sku": "MUG-001", "product_name": "Ceramic Mug", "on_hand_quantity": 24, "reserved_quantity": 2, "available_quantity": 22, "updated_at": "2026-09-06T00:00:00Z" }]\n}',
   }),
   endpoint({
     id: "list-webhooks", group: "Webhooks", contract: "shared", method: "GET", path: "/api/v1/webhooks", title: "List shared webhooks",
-    summary: "Read shop webhook registrations without revealing their stored secrets. Delivery format follows the shop provider, including registrations made here.", outcome: "200 OK with webhook registrations.",
-    response: '{\n  "data": [{ "id": "wh_…", "url": "https://example.com/hooks/marketplace", "enabled": true, "subscribed_events": ["order.created"] }]\n}',
+    query: sharedWebhookPage,
+    summary: "Read one page of shop webhook registrations without revealing their stored secrets. Delivery format follows the shop provider, including registrations made here.", outcome: "200 OK with data, page/limit pagination metadata, and the shop’s delivery contract.",
+    response: '{\n  "data": [{ "id": "wh_example_01", "shop_id": "shop_example_01", "url": "https://example.com/hooks/marketplace", "enabled": true, "subscribed_events": ["order.created"], "created_at": "2026-09-06T00:00:00Z" }],\n  "pagination": { "page": 1, "limit": 20, "total": 1, "total_pages": 1, "has_previous": false, "has_next": false },\n  "delivery_contract": { "provider_profile": "SHOPEE_LIKE", "signing_client_id": "client_example_01" }\n}',
   }),
   endpoint({
     id: "register-webhook", group: "Webhooks", contract: "shared", method: "POST", path: "/api/v1/webhooks", title: "Register a shared webhook", idempotent: true,
@@ -90,7 +134,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
     body: '{\n  "url": "https://example.com/hooks/marketplace",\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"]\n}',
     bodyFields: callbackBodyFields("shared"),
     outcome: "201 Created. An omitted secret is generated and returned once only.",
-    response: '{\n  "id": "wh_…",\n  "url": "https://example.com/hooks/marketplace",\n  "enabled": true,\n  "secret": "whsec_…"\n}',
+    response: '{\n  "id": "wh_example_01",\n  "shop_id": "shop_example_01",\n  "url": "https://example.com/hooks/marketplace",\n  "enabled": true,\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"],\n  "secret": "whsec_example_01"\n}',
   }),
   endpoint({
     id: "delete-webhook", group: "Webhooks", contract: "shared", method: "DELETE", path: "/api/v1/webhooks/{id}", title: "Delete a shared webhook", pathParams: [webhookID], idempotent: true,
@@ -110,14 +154,14 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "shopee-list-orders", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders", title: "List Shopee-like orders",
-    query: [...pageNo, { name: "order_status", label: "Order status", help: "Filter by one Shopee-like order status, such as READY_TO_SHIP.", type: "string" }, { name: "time_from", label: "Updated from", help: "Include orders updated at or after this Unix timestamp.", type: "integer<int64>" }, { name: "time_to", label: "Updated to", help: "Include orders updated at or before this Unix timestamp.", type: "integer<int64>" }],
+    query: [...pageNo, { name: "order_status", label: "Order status", help: "Filter by one Shopee-like order status, such as READY_TO_SHIP.", type: "string" }, { name: "time_from", label: "Created from", help: "Include orders created at or after this Unix timestamp (inclusive). This does not filter update_time.", type: "integer<int64>" }, { name: "time_to", label: "Created to", help: "Include orders created at or before this Unix timestamp (inclusive). This does not filter update_time.", type: "integer<int64>" }],
     summary: "Start here before an order detail or action request. Copy order_id from response.order_list into {id}; order_sn is the display order number.", outcome: "200 OK with Shopee-like orders.",
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "order_list": [{ "order_id": "ord_example_01", "order_sn": "SIM-EXAMPLE-01", "order_status": "PAID", "total_amount": 125000 }], "page_no": 1, "page_size": 20, "total_count": 1, "more": false }\n}',
+    response: '{\n  "error": "",\n  "message": "success",\n  "request_id": "req_example_01",\n  "response": { "order_list": [{ "order_id": "ord_example_01", "order_sn": "SIM-EXAMPLE-01", "order_status": "PAID", "total_amount": 125000, "create_time": 1788624000, "update_time": 1788627600 }], "page_no": 1, "page_size": 20, "total_count": 1, "more": false }\n}',
   }),
   endpoint({
     id: "shopee-get-order", group: "Orders", contract: "shopee", method: "GET", path: "/api/shopee/v1/orders/{id}", title: "Get a Shopee-like order", pathParams: [shopeeOrderID],
     summary: "Inspect item_list[].id for allocation and package_list[].package_id for shipment creation. Read shipment_list for all shipments.", outcome: "200 OK with order detail.",
-    response: "{\n  \"error\": \"\",\n  \"message\": \"success\",\n  \"response\": {\n    \"order_id\": \"ord_example_01\",\n    \"order_sn\": \"SIM-EXAMPLE-01\",\n    \"order_status\": \"READY_TO_SHIP\",\n    \"item_list\": [\n      {\n        \"id\": \"ori_example_01\",\n        \"sku\": \"MUG-001\",\n        \"product_name\": \"Ceramic Mug\",\n        \"quantity\": 2,\n        \"allocated_quantity\": 1,\n        \"remaining_quantity\": 1,\n        \"price\": 125000\n      }\n    ],\n    \"package_list\": [\n      {\n        \"package_id\": \"pkg_example_01\",\n        \"package_number\": \"PKG-EXAMPLE-01\",\n        \"package_status\": \"READY_TO_SHIP\"\n      }\n    ],\n    \"shipment_list\": [\n      {\n        \"id\": \"shp_example_01\",\n        \"package_id\": \"pkg_example_01\",\n        \"order_id\": \"ord_example_01\",\n        \"status\": \"CREATED\",\n        \"tracking_number\": \"GXEXAMPLE01\"\n      }\n    ]\n  }\n}",
+    response: shopeeOrderDetailResponse,
   }),
   endpoint({
     id: "shopee-cancel-order", group: "Orders", contract: "shopee", method: "POST", path: "/api/shopee/v1/orders/{id}/cancel", title: "Customer-cancel a Shopee-like order", pathParams: [shopeeOrderID], idempotent: true,
@@ -151,7 +195,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
     summary: "A shipment adds tracking and pickup details to a READY_TO_SHIP order or allocated package.",
     body: '{\n  "package_id": "pkg_example_01",\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment and tracking number.",
     bodyFields: shipmentBodyFields,
-    response: '{\n  "error": "",\n  "message": "success",\n  "response": { "shipment": { "id": "shp_…", "tracking_number": "GX…", "status": "CREATED" } }\n}',
+    response: JSON.stringify({ error: "", message: "success", request_id: "req_example_01", response: { shipment: createdShipment } }, null, 2),
   }),
   endpoint({
     id: "shopee-list-webhooks", group: "Webhooks", contract: "shopee", method: "GET", path: "/api/shopee/v1/webhooks", title: "List Shopee-like callbacks",
@@ -194,7 +238,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "tokopedia-get-order", group: "Orders", contract: "tokopedia", method: "GET", path: "/api/tokopedia/v202309/orders/{id}", title: "Get a Tokopedia-like order", pathParams: [orderID],
     summary: "Inspect line_items[].id and package_list[].package_id before shipment creation. Read shipment_list for all shipments. Allocate explicit packages through Admin Packages; Tokopedia has no public package-allocation endpoint.", outcome: "200 OK with order detail.",
-    response: "{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"order_id\": \"ord_example_01\",\n    \"order_number\": \"SIM-EXAMPLE-01\",\n    \"order_status\": \"AWAITING_COLLECTION\",\n    \"line_items\": [\n      {\n        \"id\": \"ori_example_01\",\n        \"sku\": \"MUG-001\",\n        \"product_name\": \"Ceramic Mug\",\n        \"quantity\": 2,\n        \"allocated_quantity\": 1,\n        \"remaining_quantity\": 1,\n        \"price\": 125000\n      }\n    ],\n    \"package_list\": [\n      {\n        \"package_id\": \"pkg_example_01\",\n        \"package_number\": \"PKG-EXAMPLE-01\",\n        \"package_status\": \"READY_TO_SHIP\"\n      }\n    ],\n    \"shipment_list\": [\n      {\n        \"id\": \"shp_example_01\",\n        \"package_id\": \"pkg_example_01\",\n        \"order_id\": \"ord_example_01\",\n        \"status\": \"CREATED\",\n        \"tracking_number\": \"GXEXAMPLE01\"\n      }\n    ]\n  }\n}",
+    response: tokopediaOrderDetailResponse,
   }),
   endpoint({
     id: "tokopedia-pack-order", group: "Orders", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/orders/{id}/pack", title: "Pack a Tokopedia-like order", pathParams: [orderID], idempotent: true,
@@ -216,7 +260,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
     id: "tokopedia-create-shipment", group: "Fulfillment", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/orders/{id}/shipments", title: "Create a Tokopedia-like shipment", pathParams: [orderID], idempotent: true,
     summary: "Add tracking and pickup details after the provider order is AWAITING_COLLECTION.", body: '{\n  "package_id": "pkg_example_01",\n  "shipping_provider": "provider_express",\n  "pickup_type": "PICKUP"\n}', outcome: "200 OK with a CREATED shipment.",
     bodyFields: shipmentBodyFields,
-    response: '{\n  "code": 0,\n  "message": "success",\n  "data": { "shipment": { "id": "shp_…", "tracking_number": "GX…", "status": "CREATED" } }\n}',
+    response: JSON.stringify({ code: 0, message: "success", request_id: "req_example_01", data: { shipment: createdShipment } }, null, 2),
   }),
   endpoint({
     id: "tokopedia-configure-webhook", group: "Webhooks", contract: "tokopedia", method: "PUT", path: "/api/tokopedia/v202309/webhooks", title: "Configure a Tokopedia-like callback", idempotent: true,

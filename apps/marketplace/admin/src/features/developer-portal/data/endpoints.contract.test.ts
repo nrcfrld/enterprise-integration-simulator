@@ -142,11 +142,69 @@ describe("developer portal endpoint contract metadata", () => {
   it("documents each provider's actual pagination vocabulary", () => {
     const responseFor = (id: string) => ENDPOINTS.find((endpoint) => endpoint.id === id)?.response ?? "";
 
+    expect(responseFor("list-webhooks")).toContain('"pagination"');
+    expect(responseFor("list-webhooks")).toContain('"has_next"');
+    expect(responseFor("list-warehouses")).not.toContain('"pagination"');
     expect(responseFor("shopee-list-products")).toContain('"has_next_page"');
     expect(responseFor("shopee-list-orders")).toContain('"more"');
     expect(responseFor("shopee-list-orders")).not.toContain('"has_next_page"');
     expect(responseFor("tokopedia-search-products")).toContain('"next_page_token"');
     expect(responseFor("tokopedia-search-orders")).toContain('"has_more"');
+  });
+
+  it("documents shared webhook pagination independently from the unpaginated warehouse list", () => {
+    const webhook = ENDPOINTS.find((endpoint) => endpoint.id === "list-webhooks")!;
+    const warehouse = ENDPOINTS.find((endpoint) => endpoint.id === "list-warehouses")!;
+    expect(webhook.query?.map((parameter) => parameter.name)).toEqual(["page", "limit"]);
+    expect(warehouse.query).toBeUndefined();
+
+    const operations = publicOperations(openapi);
+    expect(operations.get("GET /api/v1/webhooks")).toMatch(/\bname:\s*page\b/);
+    expect(operations.get("GET /api/v1/webhooks")).toMatch(/\bname:\s*limit\b/);
+    expect(operations.get("GET /api/v1/warehouses")).not.toMatch(/\bname:\s*(?:page|limit)\b/);
+    expect(componentSchema(openapi, "WebhookList")).toContain("pagination:");
+    expect(componentSchema(openapi, "WarehouseList")).toContain("intentionally unpaginated");
+  });
+
+  it("labels Shopee time filters as inclusive creation-time bounds", () => {
+    const endpoint = ENDPOINTS.find((entry) => entry.id === "shopee-list-orders")!;
+    for (const name of ["time_from", "time_to"]) {
+      const parameter = endpoint.query?.find((entry) => entry.name === name);
+      expect(parameter?.label).toMatch(/^Created/);
+      expect(parameter?.help).toContain("created");
+      expect(parameter?.help).toContain("inclusive");
+      expect(parameter?.help).toContain("does not filter update_time");
+    }
+    const operation = publicOperations(openapi).get("GET /api/shopee/v1/orders") ?? "";
+    expect(operation).toContain("filter create_time, not update_time");
+    expect(operation).toMatch(/time_from.*Inclusive lower bound for order create_time/);
+    expect(operation).toMatch(/time_to.*Inclusive upper bound for order create_time/);
+  });
+
+  it("publishes real nested order-detail and shipment-create response shapes", () => {
+    const expectedLine = ["allocated_quantity", "id", "price", "product_id", "product_name", "quantity", "remaining_quantity", "sku", "subtotal"];
+    const expectedPackage = ["create_time", "package_id", "package_number", "package_status", "update_time"];
+    const expectedDetailShipment = ["created_at", "delivered_at", "delivery_failure_reason", "failed_at", "id", "order_id", "package_id", "pickup_type", "returned_at", "returning_at", "shipped_at", "shipping_provider", "status", "tracking_number"];
+    const expectedCreatedShipment = ["id", "order_id", "package_id", "pickup_type", "shipping_provider", "status", "tracking_number", "warehouse_id"];
+
+    const shopee = JSON.parse(ENDPOINTS.find((entry) => entry.id === "shopee-get-order")!.response).response;
+    const tokopedia = JSON.parse(ENDPOINTS.find((entry) => entry.id === "tokopedia-get-order")!.response).data;
+    expect(Object.keys(shopee.item_list[0]).sort()).toEqual(expectedLine);
+    expect(Object.keys(tokopedia.line_items[0]).sort()).toEqual(expectedLine);
+    expect(Object.keys(shopee.package_list[0]).sort()).toEqual(expectedPackage);
+    expect(Object.keys(tokopedia.package_list[0]).sort()).toEqual(expectedPackage);
+    expect(Object.keys(shopee.shipment_list[0]).sort()).toEqual(expectedDetailShipment);
+    expect(Object.keys(tokopedia.shipment_list[0]).sort()).toEqual(expectedDetailShipment);
+
+    const shopeeCreated = JSON.parse(ENDPOINTS.find((entry) => entry.id === "shopee-create-shipment")!.response).response.shipment;
+    const tokopediaCreated = JSON.parse(ENDPOINTS.find((entry) => entry.id === "tokopedia-create-shipment")!.response).data.shipment;
+    expect(Object.keys(shopeeCreated).sort()).toEqual(expectedCreatedShipment);
+    expect(Object.keys(tokopediaCreated).sort()).toEqual(expectedCreatedShipment);
+    expect(componentSchema(openapi, "CreatedShipment")).toContain("warehouse_id:");
+    expect(publicOperations(openapi).get("GET /api/shopee/v1/orders/{id}")).toContain("ShopeeOrderDetailResponse");
+    expect(publicOperations(openapi).get("GET /api/tokopedia/v202309/orders/{id}")).toContain("TokopediaOrderDetailResponse");
+    expect(publicOperations(openapi).get("POST /api/shopee/v1/orders/{id}/shipments")).toContain("ShopeeShipmentCreatedResponse");
+    expect(publicOperations(openapi).get("POST /api/tokopedia/v202309/orders/{id}/shipments")).toContain("TokopediaShipmentCreatedResponse");
   });
 
   it("matches every public OpenAPI method and path exactly", () => {

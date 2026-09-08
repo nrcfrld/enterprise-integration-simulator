@@ -82,6 +82,124 @@ paths:
               schema: { $ref: '#/components/schemas/ControlPlaneSession' }
         '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /control/v1/shops/{id}/events:
+    get:
+      operationId: listControlShopEvents
+      tags: [Control Plane]
+      summary: Inspect shop events with resource filters and delivery links
+      security: [{ ControlPlaneBearer: [] }]
+      description: Filters apply before pagination. Resource ID is an exact aggregate match; order detail additionally includes events from its shipments. Archived product events are retained. Newest events sort first by occurred_at then id. A canonical payload is not the transformed signed webhook body; inspect delivery attempts for that evidence.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: resource_type, in: query, schema: { type: string, enum: [order, product, shipment] } }
+        - { name: aggregate_id, in: query, schema: { type: string } }
+        - { name: event_type, in: query, schema: { type: string }, description: Exact canonical event name. }
+      responses:
+        '200':
+          description: Shop events with pagination and matching deliveries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ControlEvent' } }
+                  pagination: { $ref: '#/components/schemas/PagePagination' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /control/v1/shipments/{id}:
+    get:
+      operationId: getControlShipment
+      tags: [Control Plane, Fulfillment]
+      summary: Inspect shipment, linked order and warehouse, and shipment events
+      security: [{ ControlPlaneBearer: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      description: Shipment aggregate events cover failure and return to sender. Normal shipping milestones are recorded on the linked order. Product and shipment event rows include matching delivery links.
+      responses:
+        '200':
+          description: Canonical shipment detail and its event trail.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                required: [id, shop_id, order_id, package_id, status, warehouse, events]
+                properties:
+                  id: { type: string }
+                  shop_id: { type: string }
+                  order_id: { type: string }
+                  package_id: { type: string }
+                  status: { type: string }
+                  warehouse: { type: object, additionalProperties: true }
+                  events: { type: array, items: { $ref: '#/components/schemas/ControlEvent' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /control/v1/orders/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getControlOrder
+      tags: [Control Plane, Orders]
+      summary: Inspect canonical order, legal console actions and event/delivery history
+      security: [{ ControlPlaneBearer: [] }]
+      description: The event and delivery trails include related shipment aggregates, including delivery failure and return events. operations.payment_status is authoritative. Legacy payment.status only reports whether paid_at exists. Action eligibility is a read snapshot; mutations revalidate the locked state. Provider API status is mapped separately; webhook payloads retain canonical statuses.
+      responses:
+        '200':
+          description: Order with current action eligibility.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlOrderDetail' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /control/v1/orders/{id}/actions/{action}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: action, in: path, required: true, schema: { type: string, enum: [pay, payment_failed, process, ready_to_ship, complete, cancel] } }
+    post:
+      operationId: simulateControlOrderAction
+      tags: [Control Plane, Orders]
+      summary: Simulate a legal order action with explicit cancellation context
+      security: [{ ControlPlaneBearer: [] }]
+      description: |
+        Payment and completion simulate payment/customer events. Process and ready_to_ship are console equivalents of merchant API work. Carrier movement uses shipment actions.
+        Cancellation accepts CUSTOMER or SELLER plus an enumerated reason. Shopee CUSTOMER may cancel UNPAID/PAID; SELLER may cancel PAID/PROCESSING. Tokopedia permits these actors through READY_TO_SHIP. SYSTEM outcomes come from payment failure/expiry or seller deadlines. Legacy empty cancellation bodies retain SELLER/OUT_OF_STOCK behavior; the Admin UI always submits explicit fields.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor: { type: string, enum: [CUSTOMER, SELLER], description: Required together with reason for explicit cancellation. }
+                reason: { type: string, enum: [CHANGE_OF_MIND, DUPLICATE_ORDER, ADDRESS_ISSUE, OUT_OF_STOCK, SELLER_UNFULFILLABLE], description: First three reasons belong to CUSTOMER; last two belong to SELLER. }
+      responses:
+        '200': { description: Order action applied; refresh order detail. }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /control/v1/deliveries/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getControlDelivery
+      tags: [Control Plane, Webhooks]
+      summary: Inspect immutable webhook attempts and their source event
+      security: [{ ControlPlaneBearer: [] }]
+      description: |
+        Restricted to the shop owner or administrator. Each new attempt captures its actual application headers, exact signed body string, destination, provider, signing client identity, start time, response, truncation flag and failure reason. Secrets are never returned. Transport-generated HTTP headers are not captured.
+        Signing failures have no request body and http_attempted=false; forced failures preserve the prepared request but do not send it. http_attempted=true means the HTTP client was invoked, not that the receiver accepted the body. Legacy attempts have null snapshot fields and cannot be reconstructed from current settings. Response bodies are capped at 4096 bytes. Historical signature verification is an integrity exercise; receiver freshness and application processing must be checked separately.
+      responses:
+        '200':
+          description: Delivery, current registration context, canonical event and historical attempts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlDeliveryDetail' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /control/v1/shops/{id}/products:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string }, description: Shop id. }
@@ -115,13 +233,23 @@ paths:
     get:
       operationId: getControlProduct
       tags: [Control Plane, Products]
-      summary: Get one active control-plane product
+      summary: Inspect product catalog fields, warehouse inventory, and product events
       security: [{ ControlPlaneBearer: [] }]
       responses:
-        '200': { description: Product detail., content: { application/json: { schema: { $ref: '#/components/schemas/ControlProduct' } } } }
-        '401': { $ref: '#/components/responses/Error' }
+        '200':
+          description: Includes every shop warehouse, including inactive warehouses and zero quantities for unassigned products.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/ControlProduct' }
+                  - type: object
+                    properties:
+                      events: { type: array, items: { $ref: '#/components/schemas/ControlEvent' } }
+                      warehouse_inventory: { type: array, items: { $ref: '#/components/schemas/ControlProductWarehouse' } }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
     patch:
       operationId: updateControlProduct
       tags: [Control Plane, Products]
@@ -152,8 +280,8 @@ paths:
       operationId: shopeeListOrders
       tags: [Orders]
       summary: List SHOPEE_LIKE orders with page-number pagination
-      description: Copy response.order_list[].order_id into every order {id} path. The order_sn field is the human-readable order number, not the API identifier.
-      parameters: [{ $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { name: page_no, in: query, schema: { type: integer, minimum: 1, default: 1 } }, { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: order_status, in: query, schema: { type: string } }, { name: time_from, in: query, description: Unix seconds, schema: { type: integer } }, { name: time_to, in: query, description: Unix seconds, schema: { type: integer } }]
+      description: Copy response.order_list[].order_id into every order {id} path. The order_sn field is the human-readable order number, not the API identifier. time_from and time_to filter create_time, not update_time.
+      parameters: [{ $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { name: page_no, in: query, schema: { type: integer, minimum: 1, default: 1 } }, { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: order_status, in: query, schema: { type: string } }, { name: time_from, in: query, description: Inclusive lower bound for order create_time in Unix seconds; update_time is not filtered., schema: { type: integer, format: int64 } }, { name: time_to, in: query, description: Inclusive upper bound for order create_time in Unix seconds; update_time is not filtered., schema: { type: integer, format: int64 } }]
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '403': { $ref: '#/components/responses/ShopeeError' }, '429': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/products:
     get:
@@ -176,7 +304,7 @@ paths:
       tags: [Orders]
       summary: Get a SHOPEE_LIKE order using provider terminology
       parameters: [{ $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }]
-      responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '401': { $ref: '#/components/responses/ShopeeError' }, '404': { $ref: '#/components/responses/ShopeeError' } }
+      responses: { '200': { $ref: '#/components/responses/ShopeeOrderDetailResponse' }, '401': { $ref: '#/components/responses/ShopeeError' }, '404': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/orders/{id}/cancel:
     post:
       operationId: shopeeCancelOrder
@@ -214,7 +342,7 @@ paths:
       summary: Create a Shopee-like shipment for a ready-to-ship order
       parameters: [{ name: id, in: path, required: true, description: "API order_id from response.order_list; order_sn is the display number and is not accepted here.", schema: { type: string } }, { $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } } }
-      responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
+      responses: { '200': { $ref: '#/components/responses/ShopeeShipmentCreatedResponse' }, '400': { $ref: '#/components/responses/ShopeeError' }, '401': { $ref: '#/components/responses/ShopeeError' }, '409': { $ref: '#/components/responses/ShopeeError' }, '413': { $ref: '#/components/responses/ShopeeError' } }
   /api/shopee/v1/webhooks:
     get:
       operationId: shopeeListWebhooks
@@ -224,6 +352,7 @@ paths:
       responses: { '200': { $ref: '#/components/responses/ShopeeResponse' }, '401': { $ref: '#/components/responses/ShopeeError' } }
     post:
       operationId: shopeeCreateWebhook
+      description: item_update covers product events. logistics_status_update covers order shipped/in_delivery/delivered and shipment delivery_failed/returning/returned. order_status_update covers other order events including payment failure/expiry and seller deadline expiry.
       tags: [Webhooks]
       summary: Register callback_url for item_update, order_status_update, or logistics_status_update
       parameters: [{ $ref: '#/components/parameters/ShopeePartnerID' }, { $ref: '#/components/parameters/ShopeeTimestamp' }, { $ref: '#/components/parameters/ShopeeSignature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
@@ -259,7 +388,7 @@ paths:
       tags: [Tokopedia Like]
       summary: Get a TOKOPEDIA_LIKE order and its package/shipment reference
       parameters: [{ $ref: '#/components/parameters/TokopediaAppKey' }, { $ref: '#/components/parameters/TokopediaTimestamp' }, { $ref: '#/components/parameters/TokopediaSign' }, { $ref: '#/components/parameters/TokopediaAccessToken' }]
-      responses: { '200': { $ref: '#/components/responses/TokopediaResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
+      responses: { '200': { $ref: '#/components/responses/TokopediaOrderDetailResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
   /api/tokopedia/v202309/orders/{id}/pack:
     post:
       operationId: tokopediaPackOrder
@@ -289,10 +418,10 @@ paths:
       summary: Create a shipment through the Tokopedia-like fulfillment contract
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/TokopediaAppKey' }, { $ref: '#/components/parameters/TokopediaTimestamp' }, { $ref: '#/components/parameters/TokopediaSign' }, { $ref: '#/components/parameters/TokopediaAccessToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } } }
-      responses: { '200': { $ref: '#/components/responses/TokopediaResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '401': { $ref: '#/components/responses/TokopediaError' }, '409': { $ref: '#/components/responses/TokopediaError' }, '413': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
+      responses: { '200': { $ref: '#/components/responses/TokopediaShipmentCreatedResponse' }, '400': { $ref: '#/components/responses/TokopediaError' }, '401': { $ref: '#/components/responses/TokopediaError' }, '409': { $ref: '#/components/responses/TokopediaError' }, '413': { $ref: '#/components/responses/TokopediaError' }, '429': { $ref: '#/components/responses/TokopediaError' } }
   /api/tokopedia/v202309/webhooks:
     put:
-      description: The optional registration secret is unused for delivery verification. Delivery Authorization uses APP_KEY plus raw body with the oldest ACTIVE shop credential secret (creation time then credential ID).
+      description: ORDER_STATUS_CHANGE (body type 1) includes payment failure/expiry and seller deadline expiry. PACKAGE_UPDATE (type 4) includes shipment delivery failure and return-to-sender events plus order shipment movement. PRODUCT_INFORMATION_CHANGE is type 15. The optional registration secret is unused for delivery verification. Delivery Authorization uses APP_KEY plus raw body with the oldest ACTIVE shop credential secret (creation time then credential ID).
       operationId: tokopediaConfigureWebhooks
       tags: [Tokopedia Like, Webhooks]
       summary: Configure a TOKOPEDIA_LIKE callback for order, package, or product notifications
@@ -304,7 +433,7 @@ paths:
       operationId: listWarehouses
       tags: [Warehouses]
       summary: List fulfillment warehouses for the credential shop
-      description: Warehouses are read-only from the public API. Orders reserve one active warehouse at creation; warehouse administration stays in the control plane.
+      description: Warehouses are read-only from the public API. This operation returns the complete shop-scoped collection and is intentionally unpaginated. Orders reserve all lines at one ACTIVE warehouse at creation. The largest priority that can fulfill every line wins; ties use code alphabetically. Stock cannot be combined across warehouses. Warehouse administration stays in the control plane.
       parameters: [{ $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }]
       responses: { '200': { $ref: '#/components/responses/RateLimitedWarehouseList' }, '401': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/RateLimited' }, '503': { $ref: '#/components/responses/Maintenance' } }
   /api/v1/warehouses/{id}:
@@ -318,16 +447,17 @@ paths:
     get:
       operationId: listWebhooks
       tags: [Webhooks]
-      summary: List webhook registrations
-      parameters: [{ $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }]
-      responses: { '200': { $ref: '#/components/responses/RateLimitedWebhookList' }, '401': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/RateLimited' }, '503': { $ref: '#/components/responses/Maintenance' } }
+      summary: List webhook registrations with page-number pagination
+      description: Returns at most limit registrations. Increment page while pagination.has_next is true. Stored webhook secrets are never listed.
+      parameters: [{ $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }, { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }]
+      responses: { '200': { $ref: '#/components/responses/RateLimitedWebhookList' }, '400': { $ref: '#/components/responses/Error' }, '401': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/RateLimited' }, '503': { $ref: '#/components/responses/Maintenance' } }
     post:
       operationId: createWebhook
       tags: [Webhooks]
       description: Delivery format follows the shop provider even through this shared registration API. The registration secret verifies Shopee deliveries only; Tokopedia uses the oldest ACTIVE app credential.
       summary: Register a webhook; omit secret to have one generated and returned once
       parameters: [{ $ref: '#/components/parameters/ClientID' }, { $ref: '#/components/parameters/Timestamp' }, { $ref: '#/components/parameters/Signature' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [url, subscribed_events], properties: { url: { type: string, format: uri }, secret: { type: string, writeOnly: true }, subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.payment_failed, order.payment_expired, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled, order.sla_expired] } } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [url, subscribed_events], properties: { url: { type: string, format: uri }, secret: { type: string, writeOnly: true }, subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.payment_failed, order.payment_expired, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled, order.sla_expired, shipment.delivery_failed, shipment.returning, shipment.returned] } } } } } } }
       responses: { '201': { $ref: '#/components/responses/RateLimitedWebhookRegistration' }, '400': { $ref: '#/components/responses/Error' }, '401': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '413': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/RateLimited' }, '503': { $ref: '#/components/responses/Maintenance' } }
   /api/v1/webhooks/{id}:
     delete:
@@ -431,6 +561,117 @@ components:
     RateLimitRemaining: { description: Remaining requests in the current minute. Zero on a 429 response., schema: { type: integer, minimum: 0 } }
     RateLimitReset: { description: Unix timestamp when the quota window resets., schema: { type: integer, format: int64 } }
   schemas:
+    ControlEvent:
+      type: object
+      required: [id, event_type, aggregate_id, aggregate_type, occurred_at, payload]
+      properties:
+        id: { type: string }
+        event_type: { type: string, example: shipment.returned }
+        aggregate_id: { type: string }
+        aggregate_type: { type: string, enum: [order, product, shipment] }
+        occurred_at: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true, description: Stored canonical domain payload. }
+        deliveries:
+          type: array
+          items:
+            type: object
+            required: [id, event_id, status, attempt_count]
+            properties:
+              id: { type: string }
+              event_id: { type: string }
+              status: { type: string }
+              attempt_count: { type: integer }
+    ControlProductWarehouse:
+      type: object
+      required: [warehouse_id, code, name, status, priority, on_hand_quantity, reserved_quantity, available_quantity]
+      properties:
+        warehouse_id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        priority: { type: integer, description: Larger values win among eligible ACTIVE warehouses; ties use code alphabetically. }
+        on_hand_quantity: { type: integer }
+        reserved_quantity: { type: integer }
+        available_quantity: { type: integer, description: On hand minus reserved. }
+    ControlOrderDetail:
+      type: object
+      required: [id, shop_id, status, operations]
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        shop_id: { type: string }
+        status: { type: string, description: Canonical order status. }
+        events: { type: array, items: { $ref: '#/components/schemas/ControlEvent' } }
+        operations:
+          type: object
+          required: [provider_profile, provider_status, payment_status, available_actions, cancellation_options]
+          additionalProperties: true
+          properties:
+            provider_profile: { type: string }
+            provider_status: { type: string, description: Shopee retains canonical status. Tokopedia maps PAID to ON_HOLD, PROCESSING to AWAITING_SHIPMENT, READY_TO_SHIP to AWAITING_COLLECTION, SHIPPED/IN_DELIVERY to IN_TRANSIT, and CANCELLED/RETURNED to CANCEL. }
+            payment_status: { type: string, enum: [PENDING, PAID, FAILED, EXPIRED] }
+            available_actions: { type: array, items: { type: string, enum: [pay, payment_failed, process, ready_to_ship, complete] } }
+            cancellation_options:
+              type: array
+              items:
+                type: object
+                required: [actor, reasons]
+                properties:
+                  actor: { type: string, enum: [CUSTOMER, SELLER] }
+                  reasons: { type: array, items: { type: string } }
+    ControlDeliveryAttempt:
+      type: object
+      required: [id, attempt, status, duration_ms, created_at, request_headers, response_headers]
+      properties:
+        id: { type: string }
+        attempt: { type: integer }
+        status: { type: string, enum: [SUCCESS, FAILURE] }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        request_url: { type: string, nullable: true }
+        request_body: { type: string, nullable: true, description: Exact signed UTF-8 body; null for legacy or signing failure. Never parse/reserialize before signature verification. }
+        request_headers: { type: object, additionalProperties: { type: string } }
+        provider_profile: { type: string, nullable: true }
+        signing_client_id: { type: string, nullable: true, description: Tokopedia app key used for this attempt; no secret. }
+        http_attempted: { type: boolean, nullable: true }
+        failure_code: { type: string, nullable: true, enum: [SIGNING_ERROR, FORCED_FAILURE, REQUEST_ERROR, NETWORK_ERROR, TIMEOUT, RESPONSE_READ_ERROR, HTTP_STATUS] }
+        failure_reason: { type: string, nullable: true }
+        response_status: { type: integer, nullable: true }
+        response_headers: { type: object, additionalProperties: { type: string } }
+        response_body: { type: string }
+        response_body_truncated: { type: boolean, nullable: true }
+    ControlDeliveryDetail:
+      type: object
+      required: [id, shop_id, event_id, status, attempt_count, attempts, webhook_deleted, webhook, event, provider_profile]
+      properties:
+        id: { type: string }
+        shop_id: { type: string }
+        event_id: { type: string }
+        provider_profile: { type: string }
+        status: { type: string, enum: [PENDING, DELIVERED, FAILED, CANCELLED] }
+        attempt_count: { type: integer }
+        webhook_deleted: { type: boolean }
+        attempts: { type: array, items: { $ref: '#/components/schemas/ControlDeliveryAttempt' } }
+        webhook:
+          type: object
+          required: [id, url, enabled, deleted]
+          properties:
+            id: { type: string }
+            url: { type: string, description: Current registration URL; use attempt.request_url for historical evidence. }
+            enabled: { type: boolean }
+            deleted: { type: boolean }
+        event:
+          type: object
+          required: [id, event_type, aggregate_id, aggregate_type, occurred_at, payload]
+          properties:
+            id: { type: string }
+            event_type: { type: string }
+            aggregate_id: { type: string }
+            aggregate_type: { type: string, description: Resource family derived from the event name. }
+            occurred_at: { type: string, format: date-time }
+            payload: { type: object, additionalProperties: true, description: Canonical domain payload; not the provider HTTP envelope. }
+
     ControlPlaneSession:
       type: object
       required: [token, user]
@@ -480,7 +721,7 @@ components:
         category: { type: string }
         description: { type: string }
         price: { type: integer, format: int64 }
-        stock: { type: integer, description: Aggregate available quantity across warehouses. }
+        stock: { type: integer, description: Aggregate available quantity (on hand minus reserved) across all warehouses, including inactive warehouses. This alone does not guarantee single-warehouse allocation. }
         status: { type: string, enum: [ACTIVE, INACTIVE] }
     ProductInput:
       type: object
@@ -535,6 +776,125 @@ components:
         price: { type: integer, format: int64, description: Minor currency unit }
         quantity: { type: integer }
         subtotal: { type: integer, format: int64, description: Minor currency unit }
+    ProviderOrderItem:
+      type: object
+      required: [id, product_id, sku, product_name, price, quantity, subtotal, allocated_quantity, remaining_quantity]
+      properties:
+        id: { type: string, example: ori_example_01 }
+        product_id: { type: string, nullable: true, example: prd_example_01 }
+        sku: { type: string, example: MUG-001 }
+        product_name: { type: string, example: Ceramic Mug }
+        price: { type: integer, format: int64, example: 125000 }
+        quantity: { type: integer, example: 2 }
+        subtotal: { type: integer, format: int64, example: 250000 }
+        allocated_quantity: { type: integer, example: 1 }
+        remaining_quantity: { type: integer, example: 1 }
+    ProviderPackage:
+      type: object
+      required: [package_id, package_number, package_status, create_time, update_time]
+      properties:
+        package_id: { type: string, example: pkg_example_01 }
+        package_number: { type: string, example: pkg_example_01, description: Compatibility alias of package_id. }
+        package_status: { type: string, example: READY_TO_SHIP }
+        create_time: { type: integer, format: int64, example: 1788627000 }
+        update_time: { type: integer, format: int64, example: 1788627000 }
+    ProviderShipment:
+      type: object
+      required: [id, package_id, order_id, tracking_number, shipping_provider, pickup_type, status, created_at]
+      properties:
+        id: { type: string, example: shp_example_01 }
+        package_id: { type: string, example: pkg_example_01 }
+        order_id: { type: string, example: ord_example_01 }
+        tracking_number: { type: string, example: GXEXAMPLE01 }
+        shipping_provider: { type: string, example: provider_express }
+        pickup_type: { type: string, enum: [PICKUP] }
+        status: { type: string, enum: [CREATED, SHIPPED, IN_DELIVERY, DELIVERED, DELIVERY_FAILED, RETURNING, RETURNED] }
+        delivery_failure_reason: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        shipped_at: { type: string, format: date-time, nullable: true }
+        delivered_at: { type: string, format: date-time, nullable: true }
+        failed_at: { type: string, format: date-time, nullable: true }
+        returning_at: { type: string, format: date-time, nullable: true }
+        returned_at: { type: string, format: date-time, nullable: true }
+    CreatedShipment:
+      type: object
+      required: [id, package_id, warehouse_id, order_id, tracking_number, shipping_provider, pickup_type, status]
+      properties:
+        id: { type: string, example: shp_example_01 }
+        package_id: { type: string, example: pkg_example_01 }
+        warehouse_id: { type: string, example: wh_example_01 }
+        order_id: { type: string, example: ord_example_01 }
+        tracking_number: { type: string, example: GXEXAMPLE01 }
+        shipping_provider: { type: string, example: provider_express }
+        pickup_type: { type: string, enum: [PICKUP] }
+        status: { type: string, enum: [CREATED] }
+    ShopeeOrderDetail:
+      type: object
+      required: [order_id, order_sn, order_status, total_amount, buyer, recipient_address, create_time, update_time, item_list, package_list, shipment_list]
+      properties:
+        order_id: { type: string, example: ord_example_01 }
+        order_sn: { type: string, example: SIM-EXAMPLE-01 }
+        order_status: { type: string, example: READY_TO_SHIP }
+        total_amount: { type: integer, format: int64, example: 250000 }
+        buyer: { type: object, additionalProperties: true }
+        recipient_address: { type: object, additionalProperties: true }
+        create_time: { type: integer, format: int64 }
+        update_time: { type: integer, format: int64 }
+        item_list: { type: array, items: { $ref: '#/components/schemas/ProviderOrderItem' } }
+        package_list: { type: array, items: { $ref: '#/components/schemas/ProviderPackage' } }
+        shipment_list: { type: array, items: { $ref: '#/components/schemas/ProviderShipment' } }
+    TokopediaOrderDetail:
+      type: object
+      required: [order_id, order_number, order_status, payment_status, total_amount, create_time, update_time, line_items, package_list, shipment_list]
+      properties:
+        order_id: { type: string, example: ord_example_01 }
+        order_number: { type: string, example: SIM-EXAMPLE-01 }
+        order_status: { type: string, example: AWAITING_COLLECTION }
+        payment_status: { type: string, example: PAID }
+        total_amount: { type: integer, format: int64, example: 250000 }
+        create_time: { type: integer, format: int64 }
+        update_time: { type: integer, format: int64 }
+        line_items: { type: array, items: { $ref: '#/components/schemas/ProviderOrderItem' } }
+        package_list: { type: array, items: { $ref: '#/components/schemas/ProviderPackage' } }
+        shipment_list: { type: array, items: { $ref: '#/components/schemas/ProviderShipment' } }
+    ShopeeOrderDetailEnvelope:
+      type: object
+      required: [error, message, request_id, response]
+      properties:
+        error: { type: string, example: '' }
+        message: { type: string, example: success }
+        request_id: { type: string }
+        response: { $ref: '#/components/schemas/ShopeeOrderDetail' }
+    TokopediaOrderDetailEnvelope:
+      type: object
+      required: [code, message, request_id, data]
+      properties:
+        code: { type: integer, example: 0 }
+        message: { type: string, example: success }
+        request_id: { type: string }
+        data: { $ref: '#/components/schemas/TokopediaOrderDetail' }
+    ShopeeShipmentCreatedEnvelope:
+      type: object
+      required: [error, message, request_id, response]
+      properties:
+        error: { type: string, example: '' }
+        message: { type: string, example: success }
+        request_id: { type: string }
+        response:
+          type: object
+          required: [shipment]
+          properties: { shipment: { $ref: '#/components/schemas/CreatedShipment' } }
+    TokopediaShipmentCreatedEnvelope:
+      type: object
+      required: [code, message, request_id, data]
+      properties:
+        code: { type: integer, example: 0 }
+        message: { type: string, example: success }
+        request_id: { type: string }
+        data:
+          type: object
+          required: [shipment]
+          properties: { shipment: { $ref: '#/components/schemas/CreatedShipment' } }
     Payment:
       type: object
       required: [status]
@@ -616,15 +976,26 @@ components:
             city: { type: string, example: Jakarta }
             postal_code: { type: string, example: "13910" }
           additionalProperties: true
-        priority: { type: integer }
+        priority: { type: integer, description: Larger values win among eligible ACTIVE warehouses; ties use code alphabetically. }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         inventory: { type: array, items: { $ref: '#/components/schemas/WarehouseInventory' } }
     WarehouseList:
       type: object
       required: [data]
+      description: Complete shop-scoped warehouse collection. This operation is intentionally unpaginated.
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/Warehouse' } }
+    PagePagination:
+      type: object
+      required: [page, limit, total, total_pages, has_previous, has_next]
+      properties:
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        total_pages: { type: integer, minimum: 1 }
+        has_previous: { type: boolean }
+        has_next: { type: boolean }
     WebhookRegistration:
       type: object
       required: [id, shop_id, url, enabled, subscribed_events]
@@ -633,15 +1004,18 @@ components:
         shop_id: { type: string }
         url: { type: string, format: uri }
         enabled: { type: boolean }
-        subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled] } }
+        subscribed_events: { type: array, items: { type: string, enum: [product.created, product.updated, product.deleted, order.created, order.paid, order.payment_failed, order.payment_expired, order.processing, order.ready_to_ship, order.shipped, order.in_delivery, order.delivered, order.completed, order.cancelled, order.sla_expired, shipment.delivery_failed, shipment.returning, shipment.returned] } }
         secret: { type: string, writeOnly: true, description: Returned once when generated. Verifies Shopee delivery only; unused for Tokopedia which uses its oldest ACTIVE app credential. }
+        created_at: { type: string, format: date-time, readOnly: true, description: Present in list responses. }
     WebhookList:
       type: object
-      required: [data]
+      required: [data, pagination, delivery_contract]
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/WebhookRegistration' } }
+        pagination: { $ref: '#/components/schemas/PagePagination' }
         delivery_contract:
           type: object
+          required: [provider_profile, signing_client_id]
           properties:
             provider_profile: { type: string, enum: [SHOPEE_LIKE, TOKOPEDIA_LIKE] }
             signing_client_id: { type: string, description: Oldest ACTIVE credential Client ID; empty when none. Used for Tokopedia deliveries only. }
@@ -650,8 +1024,12 @@ components:
       properties: { error: { type: object, properties: { code: { type: string }, message: { type: string } } } }
   responses:
     ShopeeResponse: { description: Successful SHOPEE_LIKE response, headers: { X-Shopee-Api-Call-Limit: { schema: { type: string }, description: Calls used/current limit. }, X-Shopee-RateLimit-Reset: { schema: { type: integer }, description: Unix reset time. } }, content: { application/json: { schema: { type: object, required: [error, message, request_id, response], properties: { error: { type: string, example: '' }, message: { type: string, example: success }, request_id: { type: string }, response: { type: object } } } } } }
+    ShopeeOrderDetailResponse: { description: SHOPEE_LIKE order detail with complete item_list, package_list, and shipment_list collections., headers: { X-Shopee-Api-Call-Limit: { schema: { type: string }, description: Calls used/current limit. }, X-Shopee-RateLimit-Reset: { schema: { type: integer }, description: Unix reset time. } }, content: { application/json: { schema: { $ref: '#/components/schemas/ShopeeOrderDetailEnvelope' } } } }
+    ShopeeShipmentCreatedResponse: { description: The one shipment created by this request. Read order detail shipment_list to retrieve every shipment for the order., headers: { X-Shopee-Api-Call-Limit: { schema: { type: string }, description: Calls used/current limit. }, X-Shopee-RateLimit-Reset: { schema: { type: integer }, description: Unix reset time. } }, content: { application/json: { schema: { $ref: '#/components/schemas/ShopeeShipmentCreatedEnvelope' } } } }
     ShopeeError: { description: SHOPEE_LIKE error, content: { application/json: { schema: { type: object, required: [error, message, request_id], properties: { error: { type: string, example: error_invalid_state }, message: { type: string }, request_id: { type: string } } } } } }
     TokopediaResponse: { description: Successful TOKOPEDIA_LIKE response, headers: { X-TTS-Api-Call-Limit: { schema: { type: integer } }, X-TTS-RateLimit-Reset: { schema: { type: integer, description: Unix reset time. } } }, content: { application/json: { schema: { type: object, required: [code, message, request_id, data], properties: { code: { type: integer, example: 0 }, message: { type: string, example: Success }, request_id: { type: string }, data: { type: object } } } } } }
+    TokopediaOrderDetailResponse: { description: TOKOPEDIA_LIKE order detail with complete line_items, package_list, and shipment_list collections., headers: { X-TTS-Api-Call-Limit: { schema: { type: integer } }, X-TTS-RateLimit-Reset: { schema: { type: integer, description: Unix reset time. } } }, content: { application/json: { schema: { $ref: '#/components/schemas/TokopediaOrderDetailEnvelope' } } } }
+    TokopediaShipmentCreatedResponse: { description: The one shipment created by this request. Read order detail shipment_list to retrieve every shipment for the order., headers: { X-TTS-Api-Call-Limit: { schema: { type: integer } }, X-TTS-RateLimit-Reset: { schema: { type: integer, description: Unix reset time. } } }, content: { application/json: { schema: { $ref: '#/components/schemas/TokopediaShipmentCreatedEnvelope' } } } }
     TokopediaError: { description: TOKOPEDIA_LIKE error, content: { application/json: { schema: { type: object, required: [code, message, request_id, data], properties: { code: { type: integer, example: 36000003 }, message: { type: string }, request_id: { type: string }, data: { type: object } } } } } }
     Error: { description: API error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Maintenance: { description: Global maintenance is enabled., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: { code: MARKETPLACE_MAINTENANCE, message: marketplace is under maintenance } } } } }
