@@ -1,8 +1,9 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PAGEABLE_CONTROL_PAGES, type ControlPage } from "@/app/navigation";
+import { controlPlaneCollection } from "@/shared/api/controlPlaneCollection";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
-import type { ControlPlaneData, ListResponse, Shop } from "@/shared/types/controlPlane";
+import type { ControlPlaneData, Shop } from "@/shared/types/controlPlane";
 
 function pageEndpoint(page: ControlPage, shopID: string): string | undefined {
   return ({
@@ -28,7 +29,7 @@ export function useControlPlaneResources(
   token: string | null | undefined,
 ) {
   const [shops, setShops] = useState<Shop[]>([]);
-  const [shopID, setShopID] = useState("");
+  const [shopID, setShopID] = useState(() => sessionStorage.getItem("marketplace:selected-shop") || "");
   const [providerFilter, setProviderFilter] = useState("ALL");
   const [resource, setResource] = useState<{ scope: string; data: ControlPlaneData | null; loading: boolean; error: string; updatedAt?: number } | null>(null);
   const [shopsLoaded, setShopsLoaded] = useState(false);
@@ -66,12 +67,12 @@ export function useControlPlaneResources(
     if (!token || activeToken.current !== token) return;
     const version = ++shopsVersion.current;
     try {
-      const result = await controlPlaneRequest<ListResponse<Shop>>("/control/v1/shops", token);
+      const records = await controlPlaneCollection<Shop>("/control/v1/shops", token);
       if (version !== shopsVersion.current || activeToken.current !== token) return;
       setShopsLoaded(true);
-      setShops(current => [...result.data, ...current.filter(shop => !result.data.some(item => item.id === shop.id))]);
+      setShops(records);
       setShopsError("");
-      setShopID((current) => current || result.data[0]?.id || "");
+      setShopID((current) => records.some(shop => shop.id === current) ? current : records[0]?.id || "");
     } catch (error) {
       if (version === shopsVersion.current && activeToken.current === token) {
         setShopsLoaded(true);
@@ -102,6 +103,7 @@ export function useControlPlaneResources(
     }
   }, [route, scope, token]);
 
+  useEffect(() => { if (shopID) sessionStorage.setItem("marketplace:selected-shop", shopID); }, [shopID]);
   useEffect(() => { void refreshShops(); }, [refreshShops]);
   useEffect(() => { void refresh(); }, [refresh]);
 

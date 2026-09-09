@@ -88,7 +88,7 @@ describe("WebhookSettings critical actions", () => {
     expect(screen.queryByRole("button", { name: /Register webhook/ })).not.toBeInTheDocument();
 
     rerender(<WebhookSettings {...props} data={{ data: [] }} />);
-    expect(screen.getByText(/No endpoint yet/)).toBeVisible();
+    expect(screen.getByText(/No endpoints on this page/)).toBeVisible();
   });
 
   it("enables a disabled webhook and preserves its subscription", async () => {

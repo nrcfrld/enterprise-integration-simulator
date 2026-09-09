@@ -1,22 +1,53 @@
 # Implementation Report — Enterprise Integration Simulator
 
-Latest Product & DX audit: 2026-09-05 (implementation verification history below begins 2026-09-04)
+Latest Product & DX audit: 2026-09-09 (implementation verification history below begins 2026-09-04)
 PRD: Enterprise Integration Simulator v0.2, updated by Order Lifecycle & API Brief  
 Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
 ## Latest audit — Marketplace dashboard usability and Developer Experience
 
-**C1–C4, H1–H10, and H15 are FIXED and verified; 8 findings remain OPEN / NOT IMPLEMENTED: 0 Critical, 4 High Priority, and 4 Nice to Have.** The earlier implementation completion and verification claims below describe their original scopes; they do not establish completion against this new junior-developer usability audit.
+**C1–C4 and H1–H17 are implemented. Four Nice-to-Have findings (N1–N4) remain OPEN. C5 is excluded by the user's explicit decision to keep the frontend on port 5173.** Validation limitations for the current High Priority changes are stated below; historical audit text describes the product at that checkpoint.
 
-The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/general/UI-IMPROVEMENTS.md) contains the problem, junior-developer impact, affected feature, concrete recommendation, and source evidence for every finding. It also includes the ten-step developer journey, documentation/implementation parity inventory, missing simulator capabilities, terminology mapping, underexposed backend functionality, obsolete UI, and a prioritized implementation plan.
+The [audit index](specs/general/UI-IMPROVEMENTS.md) retains original findings and remediation history. The [2026-09-09 audit snapshot](specs/general/UI-AUDIT-2026-09-09.md) records the source-based walkthrough and links to current implementation status.
 
-| Priority | Open findings |
+| Priority | Current status |
 | --- | --- |
-| Critical | None open. C1–C4 are fixed; implementation and verification are recorded below. |
-| High Priority | **H11:** a complete end-to-end learning exercise. **H12–H14:** request export/response fidelity, simulator input/default/retry controls, and truncated paginated selectors/webhooks. |
-| Nice to Have | **N1:** task-specific list columns/counts/dates. **N2:** scenario exercises, consistent language, and reset. **N3:** durable documentation/detail links and distinct guide destinations. **N4:** optional account-registration placement and discoverable Admin user management. |
+| Critical | C1–C4 fixed; C5 excluded (5173 retained). |
+| High Priority | H1–H17 implemented; SQLc generator comparison for H14 PASS. |
+| Nice to Have | N1 list labels/columns, N2 scenario exercises/reset, N3 durable destinations, N4 account/admin discoverability remain open. |
 
-### Audit validation and boundaries
+### Implemented — H11–H14, H16, H17 (2026-09-09)
+
+**C5 is excluded by the user's decision: the supported local frontend origin remains port 5173.** The API CORS allowlist, Vite port configuration, and Playwright destination were not changed. N1–N4 remain open.
+
+| Finding | Implemented behavior | Verification |
+| --- | --- | --- |
+| H11 | Portal Start Here/Webhooks and a dedicated **Durable consumer exercise** link to provider-specific fresh UNPAID → payment → merchant fulfillment lessons. Downloadable Node 22.13+ consumer uses a SQLite inbox unique by shop/event, commits before 204, serially fetches and persists current provider documents, records processing/errors separately, traverses all order pages, and persists mutation inputs/keys before sending. Lessons cover IDs, explicit/automatic packages, duplicate/restart/out-of-order/retry/return evidence and the next ERP/OMS business intent. The original receiver is explicitly labeled an in-memory starter. | Real temporary SQLite databases test both providers across restart, duplicate acceptance, delayed shipment parent-ID mapping/current-state processing, API failures, pagination, durable retry keys and commit-before-acknowledgement. Public routes/signing were checked against implementation, including Shopee `process` → `/ship-order`. |
+| H12 | One request input/preparation model supplies actual fetch, prepared URL/header/body evidence and Node export using edited path/query/raw body/retry key. Credential values use environment variables; webhook body secrets use an environment placeholder. Tokopedia signing-input credential secrets and outgoing access tokens are redacted. Response diagnostics include replay/retry/quota headers, preserved request IDs in provider bodies, explicit HTTP/API failure guidance, and an unformatted response-body view. | Generated exports are executed with mocked fetch and compared against prepared requests for all three contracts; tests assert exact edited query/body/key and credential redaction. HTTP rejection/retry-header regressions pass. Existing CORS already exposes supported diagnostic headers; no allowlist change was needed. |
+| H13 | Unfiltered Tokopedia search defaults, runnable receiver callback addresses, body constraints beside Try, per-operation in-memory drafts and keys, explicit Retry same operation/New operation, elapsed time, 1–120s timeout/Stop waiting, request invalidation on reset/unmount/credential changes, and returned-ID/next-page handoffs for both providers. Changing inputs or Client ID cannot silently reuse an earlier mutation's retry identity. | Tests cover reset/late response isolation, abort on unmount, timeout without a rollback claim, draft remount/retry identity, changed-body and changed-credential guards, default filters, returned IDs and opaque next-page tokens. |
+| H14 | Global shop/picker collections follow control pagination to completion with filterable choices. Shop selection hydrates from the selected row, persists only its non-secret ID for reload, and restores provider context. Webhooks has pagination/true registration totals and explicitly page-scoped enabled counts. Product source query no longer stops at 1,000 before control pagination. | Tests select/restore shop 21, edit webhook 21, offer product/warehouse 101, and reject incomplete picker loads. Backend pagination test returns product 1001; server tests pass and SQL query bindings compile. **SQLc regeneration comparison PASS:** the approved generator run produced identical bindings. |
+| H16 | Generated Shopee webhook secrets have a protected one-time dialog with shop/endpoint context, copy feedback, explicit saved acknowledgement, receiver configuration and lost-secret replacement guidance. Escape cannot discard the only copy. Tokopedia continues to use app-credential verification and receives no irrelevant secret handoff. | Generated-secret form regression checks no generic notice, copy, Escape protection and acknowledgement. Existing Tokopedia contract and credential dialog tests remain passing. |
+| H17 | Acknowledged stock drafts are cleared; clean inputs follow refreshed on-hand counts. Unsaved edits retain their baseline, show a conflict if the server count changes, and block replacement until reviewed via Use latest count. Save/Add controls guard duplicate submissions. | Tests cover save 10 → externally refreshed count 8 → unchanged Save sends 8, unsaved edit conflict/review, and pending duplicate submission guards. This is a rendered component regression, not a live concurrent inventory experiment. |
+
+**Validation:** 174 frontend tests across 45 files; 10 standalone durable-consumer tests; focused server tests and SQL binding compilation. TypeScript, lint and production build PASS; the mechanical detector reports no findings. A final focused rerun of the changed form/portal suites passed 20 tests after the complete frontend suite, and the 10 consumer tests passed again after correcting/locking the Shopee `/ship-order` action mapping. No Docker Compose, browser E2E, database migration, production/shop data mutation, or commit was performed.
+
+**SQLc validation completed after user approval:** `go generate ./internal/store` PASS. The generated bindings exactly match the existing implementation (queries.sql.go blob `b4d0ff3e0536038de0cd3939f74cccfa6bc092b7` before and after; no additional generated-file changes). Backend server tests and binding compilation pass after regeneration. The earlier usage-limit approval block is resolved.
+
+**Validation boundary:** The catalog regression verifies control pagination beyond 1,000, not a new live PostgreSQL performance or concurrency benchmark. Control pickers currently exhaust pages before local filtering; server-side search/virtualization for very large collections is future optimization.
+
+**Product & DX Review:** Admin (shops, webhooks, pickers, warehouse editing), Portal, API Simulator, examples and repository guidance were updated together. Backend change is limited to removing the hidden catalog query cap. Domain rules, public API routes/envelopes, OpenAPI shapes and webhook worker behavior are unchanged; their contracts were reviewed against the new examples. Durable business side effects, multi-worker consumer leasing and production ERP integration remain explicitly outside this local learning exercise. No open Nice-to-Have item is marked implemented.
+
+### Pre-fix reassessment — 2026-09-09 (historical snapshot)
+
+Reviewed **d881cd9** after the H9/H10 work and the subsequent Webhooks/Start Here hierarchy update. The [current audit](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md) contains all 11 open findings with problem, junior-developer impact, affected feature, concrete recommendation and current source evidence, plus a ten-step walkthrough, documentation/simulator coverage, terminology, obsolete UI and prioritized plan.
+
+**New, not implemented:** C5 confirms the user-reported 5174 login preflight failure against the hard-coded CORS allowlist; H16 records the generated Shopee webhook secret's notification-only handoff; H17 records stale saved on-hand drafts surviving refreshed warehouse data. H11 is narrowed: the runnable receiver, lifecycle guide, inventory example and delivery diagnosis are present; durable external processing/reconciliation remains a missing complete exercise. H14 now records page-only webhook totals and unresolved provider context after selecting an existing later-page shop. The earlier resolved findings are not reopened wholesale.
+
+**Validation:** 152 frontend tests / 40 files PASS under bundled Node; existing CORS middleware test PASS; mechanical detector reports no findings across Admin and portal source. The CORS test does not cover 5174 and is not evidence that the reported failure is fixed. This was a source-based cognitive walkthrough plus the user's supplied CORS evidence, not a new browser execution or visual/accessibility certification. No Compose, browser E2E, rebuild, migration or application data mutation was performed.
+
+**Product & DX Review:** Domain, Backend, OpenAPI, Admin, Developer Portal, API Request Simulator, Examples and Tests reviewed together. Only the audit reports and this implementation report changed. C5/H11–H14/H16/H17/N1–N4 remain OPEN / NOT IMPLEMENTED.
+
+### Original audit validation and boundaries
 
 - Source-based review at commit `0dfdd77` of Admin UI, Developer Portal, simulator, routes/handlers, worker, OpenAPI, repository guides, and example clients. The walkthrough is a cognitive walkthrough, not a completed live integration or user study.
 - The documented UI address `localhost:5173` was unreachable during a connection check. No services were started or application records changed. No Docker Compose or browser E2E was run.
@@ -24,20 +55,20 @@ The [full audit report](/Users/enrico/Documents/engineering-challenge/specs/gene
 - All 25 public operations already have simulator entries. The missing capabilities concern optional fields, pagination inputs, realistic examples, request chaining/export, and diagnostics. No absent endpoint was inferred merely from an absent standalone resource screen.
 - The historical limitation below excluding partial shipments is superseded for current behavior: partial package allocation and multiple package-linked shipments are implemented. H1/H2 now cover package workflow and relationship discoverability; other response/filter/pagination documentation gaps remain under H3. Returns/refunds/disputes and a separate Shipping Simulator should be scoped independently; current return-to-sender behavior does not imply a full returns/refunds workflow.
 
-### Proposed remediation order
+### Remaining implementation plan
 
-1. C1–C4 and H3 completed.
-2. H4/H7 setup and state feedback completed. H5 credential handoff completed; finish pagination (H14).
-3. H1/H2 package workflow/traversal completed. H6 lifecycle learning and H10 inventory discoverability completed.
-4. H8 delivery diagnosis and H9 event coverage completed; finish the full receiver exercise (H11).
-5. H3 documentation parity completed. Finish simulator request/retry fidelity (H12/H13).
-6. H15 dialog behavior completed. Finish N1–N4. Validate each fix before changing its status; defer broad visual redesign.
+1. N1: task-oriented list columns and unambiguous counts/dates/actions.
+2. N2: scenario presets, consistent language and explicit clear-faults behavior.
+3. N3: durable non-secret lesson/detail destinations and navigation semantics.
+4. N4: optional account registration placement and Admin user-management entry.
+
+The requested High Priority work and SQLc validation are complete. N1–N4 remain proposed; retain the user-selected 5173 origin.
 
 **Original audit Product & DX Review:** reviewed Domain, Backend, OpenAPI, Developer Portal, API Request Simulator, Examples, Admin/Control Plane, and Tests together. That audit updated only this implementation report and the audit artifact; the subsequent C1–C4 implementations and verification are recorded below.
 
-## Latest remediation — H9/H10 events and inventory discovery (2026-09-09)
+## Prior remediation — H9/H10 events and inventory discovery (2026-09-09)
 
-**H9 and H10 FIXED.** Earlier uncommitted work was preserved. The remaining audit findings are H11–H14 and N1–N4.
+**H9 and H10 FIXED.** Earlier uncommitted work was preserved. At this checkpoint, the remaining audit findings were H11–H14 and N1–N4; the current reassessment above adds C5, H16 and H17.
 
 - **H9:** Real shop Event Logs with resource/type filters before pagination, canonical payload inspection, replay/duplicate/delay, and resource/delivery links. Product and shipment details expose trails; order trails include linked shipment failures/returns and deliveries. Admin/portal/simulator share all 18 event names, trigger guidance and provider mapping. Shopee logistics and Tokopedia order subscription expansion now include the missing failure/expiry/return events. Existing subscription selections are preserved; the guide explains how to reconfigure them.
 - **H10:** Explicit Warehouses & Inventory navigation, stable product stock/status columns, per-product warehouse ledgers and stock-editor links, and clear order/warehouse/product-edit help. Portal and warehouse simulator explain on-hand/reserved/available accounting, largest-priority/single-warehouse allocation, tie-breaking, a worked multi-line example, and physical count replacement.
@@ -549,7 +580,7 @@ Implemented in the current increment:
 
 ## Remaining gaps / known limitations
 
-The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **8 open Product & DX findings (C1–C4, H1–H10, and H15 fixed)** recorded in the 2026-09-05 audit above.
+The earlier implementation review reported **no remaining gaps against the initial Marketplace Simulator PRD v0.2, Order Lifecycle & API Brief, or the requested P0/P1/P2 provider-profile expansion**. That historical scope is distinct from the **11 open Product & DX findings (C1–C4, H1–H10, and H15 retain their fixes)** recorded in the 2026-09-05 audit above.
 
 Operational notes, not PRD gaps:
 

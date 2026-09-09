@@ -346,13 +346,8 @@ func (q *Queries) ListOrdersForShop(ctx context.Context, shopID string) ([]ListO
 const listProductsForShop = `-- name: ListProductsForShop :many
 SELECT id, shop_id, sku, name, category, description, price, stock, status, created_at, updated_at
 FROM products WHERE shop_id = $1 AND status <> 'DELETED'
-ORDER BY created_at DESC, id DESC LIMIT $2
+ORDER BY created_at DESC, id DESC
 `
-
-type ListProductsForShopParams struct {
-	ShopID string
-	Limit  int32
-}
 
 type ListProductsForShopRow struct {
 	ID          string
@@ -368,8 +363,8 @@ type ListProductsForShopRow struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
-func (q *Queries) ListProductsForShop(ctx context.Context, arg ListProductsForShopParams) ([]ListProductsForShopRow, error) {
-	rows, err := q.db.Query(ctx, listProductsForShop, arg.ShopID, arg.Limit)
+func (q *Queries) ListProductsForShop(ctx context.Context, shopID string) ([]ListProductsForShopRow, error) {
+	rows, err := q.db.Query(ctx, listProductsForShop, shopID)
 	if err != nil {
 		return nil, err
 	}

@@ -38,7 +38,8 @@ it("returns from credential creation to the edited Tokopedia request, warns on m
  expect(screen.getByLabelText(/JSON request body/)).toHaveValue('{"page_size":7}');
  expect(screen.getByText(/Known Client ID/)).toHaveTextContent("Toko learner");
  expect(JSON.stringify(localStorage)).not.toContain("one-time");
- expect(sessionStorage.length).toBe(0);
+ expect(JSON.stringify(sessionStorage)).not.toContain("one-time");
+ expect(Object.keys(sessionStorage)).toEqual(["marketplace:selected-shop"]);
  await user.click(screen.getByRole("button", { name: "Shopee-like" }));
  expect(screen.getByRole("alert")).toHaveTextContent("Toko learner uses tokopedia");
  expect(screen.getByRole("button", { name: "Send signed request" })).toBeDisabled();

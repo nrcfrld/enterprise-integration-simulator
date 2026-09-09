@@ -7,7 +7,7 @@ SELECT owner_user_id FROM shops WHERE id = $1;
 -- name: ListProductsForShop :many
 SELECT id, shop_id, sku, name, category, description, price, stock, status, created_at, updated_at
 FROM products WHERE shop_id = $1 AND status <> 'DELETED'
-ORDER BY created_at DESC, id DESC LIMIT $2;
+ORDER BY created_at DESC, id DESC;
 
 -- name: ListAllShops :many
 SELECT id, owner_user_id, name, provider_profile, status, created_at, updated_at

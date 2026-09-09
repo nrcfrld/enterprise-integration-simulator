@@ -12,7 +12,6 @@ import (
 
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/platform"
 	"github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/products"
-	store "github.com/enrico/enterprise-integration-simulator/apps/marketplace/internal/store/sqlc"
 )
 
 func (s *Server) shopProducts(c *gin.Context) {
@@ -20,7 +19,7 @@ func (s *Server) shopProducts(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.store.ListProductsForShop(c, store.ListProductsForShopParams{ShopID: shop, Limit: 1000})
+	rows, err := s.store.ListProductsForShop(c, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list products"))
 		return

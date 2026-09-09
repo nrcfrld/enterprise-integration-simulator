@@ -49,7 +49,7 @@ function AuthenticatedControlPlane({ session, onLogout }: { session: ControlPlan
         selectedShop={resources.selectedShop} providerFilter={resources.providerFilter}
         onShopChange={resources.setShopID} onProviderChange={resources.chooseOrderProvider} />}
       <div hidden={!isDocumentation}>
-        <DeveloperPortal key={`${resources.shopID}:${portalGeneration}`} shop={resources.selectedShop} api={API_BASE_URL}
+        <DeveloperPortal key={`${resources.shopID}:${resources.selectedShop?.provider_profile ?? ""}:${portalGeneration}`} shop={resources.selectedShop} api={API_BASE_URL}
           credentialHandoff={handoff?.shop.id === resources.shopID ? handoff : undefined}
           onHandoffConsumed={() => setHandoff(undefined)} onNavigate={next => navigate(CONTROL_PATHS[next])} />
       </div>
@@ -117,8 +117,8 @@ function ControlPlaneWorkspace({ session, page, resources, onUseCredential, onCl
           onDetail={openDetail}
           onRefresh={resources.refresh}
           onNotice={notice}
-          onSelectShop={(id) => {
-            resources.setShopID(id);
+          onSelectShop={(shop) => {
+            resources.selectCreatedShop(shop);
             go("Products");
           }}
           listPage={resources.listPage}

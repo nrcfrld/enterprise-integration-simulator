@@ -1,3 +1,4 @@
+import { Pagination } from "./ResourcePage";
 import { useState } from "react";
 import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
@@ -12,6 +13,8 @@ const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
   controlPlaneRequest<T>(...args);
 
 interface WebhookSettingsProps {
+  listPage?: number;
+  onPageChange?: (page: number) => void;
   shop?: Shop;
   data: ControlPlaneData | null;
   shopID: string;
@@ -21,7 +24,7 @@ interface WebhookSettingsProps {
   onNotice: (text: string) => void;
 }
 
-export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, onNotice }: WebhookSettingsProps) {
+export function WebhookSettings({ listPage = 1, onPageChange, shop, data, shopID, token, onForm, onRefresh, onNotice }: WebhookSettingsProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const mutate = async (action: () => Promise<void>) => {
@@ -74,7 +77,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
           <p>Register a callback, choose its events, then enable delivery.</p>
         </div>
         <div className="webhook-overview-actions">
-          <span>{enabledHooks} of {hooks.length} endpoints enabled</span>
+          <span>{enabledHooks} of {hooks.length} endpoints on this page enabled</span>
           <button className="btn btn-primary" onClick={() => onForm({ kind: "webhook" })}>
             Register endpoint
           </button>
@@ -94,8 +97,9 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
       </details>}
       <div className="webhook-list-heading">
         <h2>Your endpoints</h2>
-        <span>{hooks.length} registered</span>
+        <span>{data?.pagination?.total ?? hooks.length} registered</span>
       </div>
+      {onPageChange && <Pagination pagination={data?.pagination} page={listPage} onChange={onPageChange} />}
       <div className="webhook-list">
         {hooks.length ? (
           hooks.map((hook) => (
@@ -124,7 +128,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
                 </div>
               </div>
               <p className="subscription-label">
-                Subscribed order/product events
+                Subscribed events
               </p>
               <div className="event-chips">
                 {(Array.isArray(hook.subscribed_events) ? hook.subscribed_events : []).map((event: string) => (
@@ -135,7 +139,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
           ))
         ) : (
           <p className="empty">
-            No endpoint yet. Register one before triggering an order or product event.
+            No endpoints on this page. Register one before triggering an event, or return to the previous page.
           </p>
         )}
       </div>

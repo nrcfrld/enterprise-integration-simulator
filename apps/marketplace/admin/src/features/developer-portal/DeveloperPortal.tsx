@@ -1,15 +1,15 @@
+import { ConsumerExercise } from "./components/ConsumerExercise";
 import { InventoryGuide } from "./components/InventoryGuide";
 import { LifecycleGuide } from "./components/LifecycleGuide";
 import { FulfillmentGuide } from "./components/FulfillmentGuide";
 import type { Shop, CredentialHandoff } from "@/shared/types/controlPlane";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ControlPage } from "@/app/navigation";
 import { ENDPOINT_BY_ID, ENDPOINTS } from "./data/endpoints";
-import { CodeExamples } from "./components/CodeExamples";
 import { ApiReference } from "./components/ApiReference";
 import { CredentialPanel } from "./components/CredentialPanel";
 import { HttpMethod } from "./components/HttpMethod";
-import { RequestSimulator } from "./components/RequestSimulator";
+import { RequestSimulator, type SavedRequestDraft } from "./components/RequestSimulator";
 import { Authentication, Errors, QuickStart, Webhooks } from "./sections/Guides";
 import type { IntegrationCredentials, PortalSection } from "./types";
 
@@ -21,7 +21,8 @@ interface DeveloperPortalProps {
   onNavigate: (page: ControlPage) => void;
 }
 
-function TryIt({ shop, knownCredential, api, activeEndpointID, onSelect, credentials, onCredentialsChange, onNavigate }: {
+function TryIt({ drafts, shop, knownCredential, api, activeEndpointID, onSelect, credentials, onCredentialsChange, onNavigate }: {
+  drafts: Map<string, SavedRequestDraft>;
   shop?: Shop;
   knownCredential?: CredentialHandoff;
   api: string;
@@ -47,12 +48,15 @@ function TryIt({ shop, knownCredential, api, activeEndpointID, onSelect, credent
   const selectOrder = (orderID: string) => {
     setSelectedPackageID("");
     setSelectedOrderID(orderID);
+    drafts.delete("shopee-get-order");
     onSelect("shopee-get-order");
   };
-  return <><section className="try-heading"><h2>Make a signed request to the provider you are integrating with.</h2><p>Choose a provider contract first. The simulator signs and sends the exact request shape used by the selected Marketplace API.</p></section><div className="contract-switcher join" aria-label="Provider contract">{contracts.map((contract) => <button key={contract} type="button" className={`btn btn-sm join-item ${endpoint.contract === contract ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(ENDPOINTS.find((item) => item.contract === contract)?.id ?? endpoint.id)}>{contract === "shared" ? "Shared resources" : contract === "shopee" ? "Shopee-like" : "Tokopedia-like"}</button>)}</div><CredentialPanel shop={shop} knownCredential={known} credentials={credentials} onChange={onCredentialsChange} onClear={() => onCredentialsChange({ clientID: "", secret: "", accessToken: "" })} onNavigate={onNavigate} contract={endpoint.contract} /><section className="operation-picker card bg-base-100"><div><h3>Choose an operation</h3><p>Start with a list or search request. It returns ids you can paste into the next lifecycle operation.</p></div><div>{ENDPOINTS.filter((item) => item.contract === endpoint.contract).map((item) => <button type="button" key={item.id} className={`btn ${item.id === endpoint.id ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(item.id)}><HttpMethod method={item.method} /><span><b>{item.title}</b><small>{item.group}</small></span></button>)}</div></section><RequestSimulator blockedReason={mismatch} shopProvider={shop?.provider_profile} key={endpoint.id} endpoint={endpoint} api={api} credentials={credentials} initialPathParams={selectedOrderID ? { id: selectedOrderID } : undefined} onSelectOrder={selectOrder} initialPackageID={selectedPackageID || undefined} onSelectPackage={(orderID, packageID) => { setSelectedOrderID(orderID); setSelectedPackageID(packageID); onSelect("shopee-create-shipment"); }} /><CodeExamples endpoint={endpoint} /></>;
+  return <><section className="try-heading"><h2>Make a signed request to the provider you are integrating with.</h2><p>Choose a provider contract first. The simulator signs and sends the exact request shape used by the selected Marketplace API.</p></section><div className="contract-switcher join" aria-label="Provider contract">{contracts.map((contract) => <button key={contract} type="button" className={`btn btn-sm join-item ${endpoint.contract === contract ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(ENDPOINTS.find((item) => item.contract === contract)?.id ?? endpoint.id)}>{contract === "shared" ? "Shared resources" : contract === "shopee" ? "Shopee-like" : "Tokopedia-like"}</button>)}</div><CredentialPanel shop={shop} knownCredential={known} credentials={credentials} onChange={onCredentialsChange} onClear={() => onCredentialsChange({ clientID: "", secret: "", accessToken: "" })} onNavigate={onNavigate} contract={endpoint.contract} /><section className="operation-picker card bg-base-100"><div><h3>Choose an operation</h3><p>Start with a list or search request. It returns ids you can paste into the next lifecycle operation.</p></div><div>{ENDPOINTS.filter((item) => item.contract === endpoint.contract).map((item) => <button type="button" key={item.id} className={`btn ${item.id === endpoint.id ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(item.id)}><HttpMethod method={item.method} /><span><b>{item.title}</b><small>{item.group}</small></span></button>)}</div></section><RequestSimulator drafts={drafts} onSelectResource={(id, resourceID) => { setSelectedPackageID(""); setSelectedOrderID(resourceID); drafts.delete(id); onSelect(id); }} blockedReason={mismatch} shopProvider={shop?.provider_profile} key={endpoint.id} endpoint={endpoint} api={api} credentials={credentials} initialPathParams={selectedOrderID ? { id: selectedOrderID } : undefined} onSelectOrder={selectOrder} initialPackageID={selectedPackageID || undefined} onSelectPackage={(orderID, packageID) => { setSelectedOrderID(orderID); setSelectedPackageID(packageID); drafts.delete("shopee-create-shipment"); onSelect("shopee-create-shipment"); }} /></>;
 }
 
 export function DeveloperPortal({ shop, api, onNavigate, credentialHandoff, onHandoffConsumed }: DeveloperPortalProps) {
+  const drafts = useRef(new Map<string, SavedRequestDraft>());
+  const [draftGeneration, setDraftGeneration] = useState(0);
   const [section, setSection] = useState<PortalSection>("quickstart");
   const [activeEndpointID, setActiveEndpointID] = useState(shop?.provider_profile === "TOKOPEDIA_LIKE" ? "tokopedia-search-products" : shop ? "shopee-list-products" : "list-warehouses");
   const [credentials, setCredentials] = useState<IntegrationCredentials>({ clientID: "", secret: "", accessToken: "" });
@@ -69,12 +73,13 @@ export function DeveloperPortal({ shop, api, onNavigate, credentialHandoff, onHa
 
   let content;
   if (section === "quickstart") content = <QuickStart provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} onOpenSection={setSection} />;
-  else if (section === "try") content = <TryIt shop={shop} knownCredential={knownCredential} api={api} activeEndpointID={activeEndpointID} onSelect={setActiveEndpointID} credentials={credentials} onCredentialsChange={value => { setCredentials(value); if (!value.clientID) setKnownCredential(undefined); }} onNavigate={onNavigate} />;
+  else if (section === "consumer") content = <ConsumerExercise provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} />;
+  else if (section === "try") content = <TryIt key={draftGeneration} drafts={drafts.current} shop={shop} knownCredential={knownCredential} api={api} activeEndpointID={activeEndpointID} onSelect={setActiveEndpointID} credentials={credentials} onCredentialsChange={value => { setCredentials(value); if (!value.clientID) { setKnownCredential(undefined); drafts.current.clear(); setDraftGeneration(value => value + 1); } }} onNavigate={onNavigate} />;
   else if (section === "authentication") content = <Authentication api={api} />;
   else if (section === "products") content = <ApiReference title="Products API reference" description="Read the provider catalogue without translating its public field names yourself. Every operation below documents its signing inputs, filters, payload, response envelope, and failure shape." note="Product creation, stock changes, and archival stay in the Admin Control Plane. The public Shopee-like and Tokopedia-like catalogue APIs are intentionally read-only." groups={["Products"]} endpoints={ENDPOINTS} onTry={openTry} />;
   else if (section === "warehouses") content = <><InventoryGuide /><ApiReference title="Warehouses API reference" description="Discover fulfillment origins and inspect their physical, reserved, and available inventory through the shared signed contract." note="Create warehouses and adjust stock in the Admin Control Plane. Public warehouse calls only expose data owned by the credential's shop." groups={["Warehouses"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
   else if (section === "orders") content = <><LifecycleGuide /><FulfillmentGuide /><ApiReference title="Orders and fulfilment API reference" description="Follow each provider's order lifecycle from discovery through package allocation and shipment creation, with state prerequisites and provider-shaped responses visible at every step." note="List or search first and reuse the returned ID. Payment verification and physical shipment progression are simulator control-plane actions; merchant processing, packing, handover, package allocation, shipment creation, and eligible cancellation use these public APIs." groups={["Orders", "Fulfillment"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
-  else if (section === "webhooks") content = <><Webhooks onTry={openTry} /><ApiReference title="Webhook API reference" description="Register, list, or configure callback destinations using the event vocabulary and signing contract of each provider." note="Deliveries are asynchronous and at-least-once. Verify the exact raw bytes, then durably deduplicate and accept the event before returning 2xx." groups={["Webhooks"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
+  else if (section === "webhooks") content = <><Webhooks onTry={openTry} onOpenConsumer={() => setSection("consumer")} /><ApiReference title="Webhook API reference" description="Register, list, or configure callback destinations using the event vocabulary and signing contract of each provider." note="Deliveries are asynchronous and at-least-once. Verify the exact raw bytes, then durably deduplicate and accept the event before returning 2xx." groups={["Webhooks"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
   else content = <Errors />;
 
   return <div className="docs-portal">
@@ -83,6 +88,7 @@ export function DeveloperPortal({ shop, api, onNavigate, credentialHandoff, onHa
       <aside className="portal-rail menu" aria-label="Developer documentation">
         <button type="button" className={section === "quickstart" ? "selected" : ""} onClick={() => setSection("quickstart")}>Start here</button>
         <button type="button" className={section === "try" ? "selected" : ""} onClick={() => setSection("try")}>Request simulator</button>
+        <button type="button" className={section === "consumer" ? "selected" : ""} onClick={() => setSection("consumer")}>Durable consumer exercise</button>
         <p>CONCEPTS</p>
         <button type="button" className={section === "authentication" ? "selected" : ""} onClick={() => setSection("authentication")}>Request signing</button>
         <p>REFERENCE</p>

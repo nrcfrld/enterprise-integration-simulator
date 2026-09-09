@@ -103,6 +103,7 @@ export const PAGE_BY_PATH: Record<string, ControlPage> = Object.fromEntries(
 ) as Record<string, ControlPage>;
 
 export const PAGEABLE_CONTROL_PAGES = new Set<ControlPage>([
+  "Webhooks",
   "Shops",
   "Products",
   "Warehouses",

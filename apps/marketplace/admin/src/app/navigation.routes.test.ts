@@ -18,6 +18,7 @@ describe("control-plane routes", () => {
 
   it("only paginates collection resources", () => {
     expect([...PAGEABLE_CONTROL_PAGES]).toEqual([
+      "Webhooks",
       "Shops",
       "Products",
       "Warehouses",

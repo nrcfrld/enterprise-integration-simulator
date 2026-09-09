@@ -2,7 +2,9 @@
 
 Audit date: 2026-09-05 · Baseline: commit 0dfdd77 · Audience: entry-level and junior integration developers.
 
-**Status: C1–C4, H1–H10, and H15 FIXED and verified; 8 findings remain OPEN / NOT IMPLEMENTED.** Remaining: zero Critical, four High Priority, and four Nice to Have (23 findings originally recorded). This report recommends targeted corrections and workflow improvements; it does not authorize or claim a redesign.
+**Current status (2026-09-09): C1–C4 and H1–H17 are implemented; N1–N4 remain OPEN. C5 is excluded by the user's explicit decision to retain local frontend origin 5173.** The current High Priority implementation and test evidence are in the [implementation report](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). SQLc generator parity for H14 is verified; no CORS/port change was made.
+
+Read the [current audit and prioritized implementation plan](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md). It supersedes the original walkthrough and gap inventory below where later implementations have changed the product. This file retains the original findings, IDs, and remediation history for traceability. Original problem statements do not mean fixed behavior is still missing.
 
 ## Scope, method, and limits
 
@@ -25,7 +27,7 @@ Severity: **Critical** blocks a central documented workflow or risks misleading 
 
 ## Critical
 
-All four Critical findings are now fixed. Original problem statements and source references are retained below for traceability; remediation notes describe the current behavior.
+C1–C4 are fixed. **C5 is excluded by user decision:** keep the supported local frontend origin on 5173. The original 5174 observation remains historical evidence, not an active implementation request. Original C1–C4 statements below are audit history.
 
 ### C1 — Shopee instructions tell the learner to use the wrong order identifier
 
@@ -289,6 +291,10 @@ All four Critical findings are now fixed. Original problem statements and source
 
 ### H11 — The portal stops short of teaching a complete external application workflow
 
+**Status: IMPLEMENTED — 2026-09-09.** Dedicated provider-specific durable consumer lessons and downloadable SQLite-backed receiver/worker now cover acceptance, persistence, pagination, stable mutation keys and recovery. See the [runnable lesson](../../apps/marketplace/admin/examples/durable-consumer-README.md). See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
+
+**Pre-fix reassessment (historical):** A runnable raw-body receiver, lifecycle guide, inventory worked example and delivery diagnostics now exist. The remaining gap is the complete provider-specific fresh-order → durable inbox → state retrieval/persistence/reconciliation exercise. The original statement below that there is no runnable receiver is obsolete; use [the current H11 finding](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md#h11--the-learning-journey-still-ends-before-durable-external-application-processing).
+
 **Problem:** Quick start compresses fulfillment into “process/pack … package or shipment,” while the portal Concepts section contains only request signing. Richer lifecycle, warehouse, retry, and ordering material exists in repository guides but is not linked or rendered in the portal. There is no runnable receiver example or complete “what my application does next” exercise. Seeded historical orders are COMPLETED, so they are unsuitable for the advertised seller actions without creating a fresh order.
 
 **Why it matters for juniors:** Reference coverage does not tell them how to construct an OMS flow, keep local state correct, or recover after duplicates, out-of-order notifications, timeouts, expiry, and partial fulfillment.
@@ -300,6 +306,8 @@ All four Critical findings are now fixed. Original problem statements and source
 **Evidence:** [portal sections](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/DeveloperPortal.tsx:49), [quick start](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/sections/Guides.tsx:9), [existing repository guidance](/Users/enrico/Documents/engineering-challenge/docs/marketplace/integration-guide.md:139), [seed semantics](/Users/enrico/Documents/engineering-challenge/docs/marketplace/operations-guide.md:23).
 
 ### H12 — The request shown and generated code are not the exact request sent
+
+**Status: IMPLEMENTED — 2026-09-09.** Prepared request inputs now drive edited Node export and outgoing request evidence. Credential secrets use environment placeholders/redaction; response replay/retry/quota headers, HTTP/API errors and raw body evidence are visible. See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
 
 **Problem:** The URL preview excludes dynamically added Tokopedia signing query parameters and no full outgoing header snapshot is shown. The “Run this exact request” Node example uses endpoint defaults, ignores edited path/body/query values, and does not add endpoint query defaults at all. Response inspection whitelists quota headers, hiding X-Request-ID, Retry-After, and Idempotent-Replayed even though they matter for diagnosis. HTTP failures render as a generic completed response without tailored recovery guidance.
 
@@ -313,6 +321,8 @@ All four Critical findings are now fixed. Original problem statements and source
 
 ### H13 — Simulator inputs and defaults do not support a dependable first request or retry exercise
 
+**Status: IMPLEMENTED — 2026-09-09.** Useful unfiltered defaults, receiver callback addresses, in-memory operation drafts, original-request retries/new operations, timeout/cancel/reset isolation, credential guards and provider result/page handoffs are implemented. See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
+
 **Problem:** Body field requirements are available only in Reference, while Try uses a raw JSON textarea and syntax-only validation. Tokopedia order search defaults to ON_HOLD, which excludes both freshly simulated UNPAID orders and COMPLETED seed orders; product search defaults to “mug,” with no guarantee of a matching generated product. Callback examples use example.com destinations rather than a working learner receiver. Endpoint switching remounts the simulator and drops IDs, edits, response, and idempotency keys. Reset generates a new key, yet there is no separate new-operation action. Timeout scenarios have no client timeout/cancel control or elapsed time.
 
 **Why it matters for juniors:** Empty results look like broken seeding; valid JSON still fails schema/domain checks; returning to an operation can accidentally become a new mutation rather than a retry.
@@ -324,6 +334,8 @@ All four Critical findings are now fixed. Original problem statements and source
 **Evidence:** [input rendering/reset](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/components/RequestSimulator.tsx:61), [defaults](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/data/endpoints.ts:227), [keyed simulator](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/developer-portal/DeveloperPortal.tsx:27), [completed seed orders](/Users/enrico/Documents/engineering-challenge/docs/marketplace/operations-guide.md:23).
 
 ### H14 — Pagination makes existing shops, webhooks, and picker choices disappear
+
+**Status: IMPLEMENTED — 2026-09-09.** Shop/picker collections exhaust pagination, choices are filterable, selected shop/provider survive navigation/reload, Webhooks has true totals and paging, and the product query cap is removed. Local tests pass; the approved SQLc regeneration succeeded and produced identical bindings. The earlier approval block is resolved. See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
 
 **Problem:** The global shop picker fetches only the default first 20 shops. Choosing a later shop through the paged Shops screen does not add it to the picker's options/provider metadata. Webhooks uses the same paginated backend list but has no pagination UI and is absent from pageable pages, so registrations after the first 20 are inaccessible there. Product and warehouse form pickers fetch only the first 100 rows without a continuation/search control.
 
@@ -352,6 +364,18 @@ All four Critical findings are now fixed. Original problem statements and source
 **Recommendation:** Use a shared accessible dialog primitive with initial focus, contained Tab order, Escape policy, background inertness, and return focus. Give dynamic selectors contextual labels. Verify keyboard-only creation, one-time-value copying, dismissal, and return to the initiating action. Actual screen-reader/browser behavior remains to be checked during remediation.
 
 **Evidence:** [form markup](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/control-plane/components/ControlForm.tsx:352), [detail modal](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/control-plane/components/DetailPanel.tsx:49), [credential modal](/Users/enrico/Documents/engineering-challenge/apps/marketplace/admin/src/features/control-plane/components/CredentialCreatedDialog.tsx:84).
+
+### H16 — Generated Shopee webhook secrets lack a dependable handoff
+
+**Status: IMPLEMENTED — 2026-09-09.** Generated Shopee webhook secrets now use a copy/acknowledgement dialog with protected dismissal, shop/endpoint context and provider-correct receiver/replacement guidance. Tokopedia keeps app-credential verification. See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
+
+**Original finding — recorded 2026-09-09 (before remediation).** The generated verification secret appears only in a dismissible workspace notification. Unlike API credentials, it has no dedicated copy/acknowledgement flow and can be lost when navigating to receiver setup. Juniors must then replace the secret and update the receiver. Add a provider-aware one-time-value handoff with copy and recovery guidance; do not use the registration secret for Tokopedia verification. See [full evidence and recommendation](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md#h16--a-generated-shopee-webhook-secret-is-easy-to-lose-during-receiver-setup).
+
+### H17 — Refreshed warehouse data can retain a stale saved input
+
+**Status: IMPLEMENTED — 2026-09-09.** Saved drafts are cleared, clean inputs follow refresh, unsaved stock conflicts are explicit and require review, and pending Save/Add actions prevent duplicate submissions. See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). The original problem below is retained as audit history.
+
+**Original finding — recorded 2026-09-09 (before remediation).** Saving inventory retains the submitted count as a draft; later refresh can show a newer on-hand table value while the input still uses the old saved value. A second Save can reintroduce shipped units. Clear acknowledged drafts, distinguish unsaved edits/conflicts, and guard pending row saves. This is a source-supported risk, not a newly reproduced concurrency test. See [full evidence and recommendation](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md#h17--the-inventory-editor-can-preserve-a-stale-saved-count-after-refresh).
 
 ## Nice to Have
 
@@ -472,9 +496,11 @@ This records the discoverable path and the source-supported stumbling points. It
 - **Static “exact request” snippets and narrow parity tests:** C1/H3 add identifier semantics, semantic pagination/filter checks, exact nested examples, and a list-to-detail contract exercise. Edited-request export remains open (H12).
 - **Historical report claims need scope qualifiers:** the implementation report's “85/85 complete” and “no remaining gaps” concern earlier delivery scopes, not this audit's Product & DX acceptance. Its limitation saying partial shipments are out of scope conflicts with current partial allocation/multiple-shipment behavior; preserve the historical record but clarify present support boundaries. No runtime fix is claimed by this audit.
 
-## Prioritized implementation plan
+## Original prioritized implementation plan (historical)
 
-C1–C4, H1–H10, and H15 are implemented and verified. H11–H14 and N1–N4 below remain **proposed, not implemented**. Fix the central journey before undertaking broad visual redesign.
+The [current remaining plan](../../IMPLEMENTATION_REPORT.md#remaining-implementation-plan) covers N1–N4; the SQLc validation follow-up is complete. C5 is excluded, and H11–H14/H16/H17 are implemented. The sequencing below is historical.
+
+C1–C4, H1–H10, and H15 are implemented and verified. At that historical checkpoint, H11–H14 and N1–N4 were proposed. H11–H14 are now implemented; N1–N4 remain open. Fix the central journey before undertaking broad visual redesign.
 
 | Sequence | Scope and dependencies | Completion evidence required |
 | --- | --- | --- |

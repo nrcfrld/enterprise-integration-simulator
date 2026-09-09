@@ -61,7 +61,7 @@ describe("DeveloperPortal navigation", () => {
     expect(await screen.findByText("200 OK")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [requestURL, options] = fetchMock.mock.calls[1] as [URL, RequestInit];
-    expect(requestURL.pathname).toBe("/api/shopee/v1/orders/ord_selected");
+    expect(new URL(String(requestURL)).pathname).toBe("/api/shopee/v1/orders/ord_selected");
     expect(options).toEqual(expect.objectContaining({
       method: "GET",
       headers: expect.objectContaining({ "X-Shopee-Partner-Id": "partner_1", "X-Shopee-Signature": expect.any(String) }),
@@ -125,4 +125,15 @@ describe("DeveloperPortal navigation", () => {
 
     expect(onNavigate.mock.calls).toEqual([["Dashboard"], ["Shops"], ["Scenarios"]]);
   });
+});
+
+it("opens the provider-specific durable exercise with runnable downloads", async () => {
+  const user = userEvent.setup();
+  render(<DeveloperPortal shop={{ id: "toko_1", name: "Toko", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} api="http://localhost:18080" onNavigate={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Durable consumer exercise" }));
+  expect(screen.getByRole("heading", { name: "Build a durable Tokopedia-like consumer" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Download durable-consumer.mjs" })).toHaveAttribute("download", "durable-consumer.mjs");
+  expect(screen.getByRole("link", { name: "Download webhook-receiver.mjs" })).toHaveAttribute("download", "webhook-receiver.mjs");
+  expect(screen.getByRole("button", { name: "Search orders (POST)" })).toBeVisible();
+  expect(screen.getByText(/same persisted retry_key/i)).toBeVisible();
 });

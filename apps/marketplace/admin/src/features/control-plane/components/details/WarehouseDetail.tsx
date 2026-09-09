@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { controlPlaneCollection } from "@/shared/api/controlPlaneCollection";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
-import type { ListResponse, ProductSummary } from "@/shared/types/controlPlane";
+import type { ProductSummary } from "@/shared/types/controlPlane";
 import type { DetailContentProps } from "./types";
 
 export function WarehouseDetail({
@@ -11,8 +12,12 @@ export function WarehouseDetail({
   onNotice,
   onError,
 }: DetailContentProps) {
+  const [productFilter, setProductFilter] = useState("");
   const [catalogProducts, setCatalogProducts] = useState<ProductSummary[]>([]);
-  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, number>>({});
+  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, { value: string; baseline: number }>>({});
+  const pendingRef = useRef(false);
+  const [saving, setSaving] = useState<string>();
+  const discardDraft = (id: string) => setInventoryDrafts(current => { const next = { ...current }; delete next[id]; return next; });
   const [newInventory, setNewInventory] = useState<{
     product_id: string;
     on_hand_quantity: number | string;
@@ -21,12 +26,12 @@ export function WarehouseDetail({
   useEffect(() => {
     if (!data.shop_id) return;
     let active = true;
-    controlPlaneRequest<ListResponse<ProductSummary>>(
+    controlPlaneCollection<ProductSummary>(
       `/control/v1/shops/${data.shop_id}/products?limit=100`,
       token,
     )
       .then((result) => {
-        if (active) setCatalogProducts(result.data || []);
+        if (active) setCatalogProducts(result);
       })
       .catch((error: unknown) => {
         if (active) onError(error instanceof Error ? error.message : "Request failed");
@@ -37,7 +42,14 @@ export function WarehouseDetail({
   }, [data.shop_id, onError, token]);
 
   const saveInventory = async (productID: string, onHandQuantity: unknown) => {
-    const quantity = Number(onHandQuantity);
+    if (pendingRef.current) return;
+    const draft = inventoryDrafts[productID];
+    const currentItem = data.inventory?.find(item => item.product_id === productID);
+    if (draft && currentItem && draft.baseline !== currentItem.on_hand_quantity) {
+      onError("Stock changed while you were editing. Use the latest count, then re-enter your adjustment.");
+      return;
+    }
+    const quantity = onHandQuantity === "" ? NaN : Number(onHandQuantity);
     if (!productID) {
       onError("Choose a product before adding inventory.");
       return;
@@ -48,6 +60,8 @@ export function WarehouseDetail({
     }
 
     onError("");
+    pendingRef.current = true;
+    setSaving(productID);
     try {
       await controlPlaneRequest<unknown>(
         `/control/v1/warehouses/${data.id}/inventory/${productID}`,
@@ -57,8 +71,8 @@ export function WarehouseDetail({
           body: JSON.stringify({ on_hand_quantity: quantity }),
         },
       );
+      discardDraft(productID);
       await onReload();
-      setInventoryDrafts((current) => ({ ...current, [productID]: quantity }));
       setNewInventory((current) =>
         current.product_id === productID
           ? { product_id: "", on_hand_quantity: 0 }
@@ -68,6 +82,9 @@ export function WarehouseDetail({
       onNotice("Warehouse inventory updated");
     } catch (error: unknown) {
       onError(error instanceof Error ? error.message : "Request failed");
+    } finally {
+      pendingRef.current = false;
+      setSaving(undefined);
     }
   };
 
@@ -132,23 +149,29 @@ export function WarehouseDetail({
                         event.preventDefault();
                         void saveInventory(
                           item.product_id,
-                          inventoryDrafts[item.product_id] ?? item.on_hand_quantity,
+                          inventoryDrafts[item.product_id]?.value ?? item.on_hand_quantity,
                         );
                       }}
                     >
                       <input
                         aria-label={`On hand quantity for ${item.product_name}`}
+                        disabled={Boolean(saving)}
+                        required
                         type="number"
                         min={item.reserved_quantity}
-                        value={inventoryDrafts[item.product_id] ?? item.on_hand_quantity}
+                        value={inventoryDrafts[item.product_id]?.value ?? item.on_hand_quantity}
                         onChange={(event) =>
                           setInventoryDrafts((current) => ({
                             ...current,
-                            [item.product_id]: Number(event.target.value),
+                            [item.product_id]: { value: event.target.value, baseline: current[item.product_id]?.baseline ?? item.on_hand_quantity },
                           }))
                         }
                       />
-                      <button>Save</button>
+                      <button disabled={Boolean(saving) || Boolean(inventoryDrafts[item.product_id] && inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity)}>{saving === item.product_id ? "Saving…" : "Save"}</button>
+                      {inventoryDrafts[item.product_id] && <span role="status">
+                        {inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity ? `Stock changed from ${inventoryDrafts[item.product_id].baseline} to ${item.on_hand_quantity}. Review your unsaved count.` : "Unsaved count"}
+                        <button type="button" disabled={Boolean(saving)} onClick={() => discardDraft(item.product_id)}>Use latest count</button>
+                      </span>}
                     </form>
                   </td>
                 </tr>
@@ -160,10 +183,12 @@ export function WarehouseDetail({
         <p className="empty compact">No product inventory is assigned to this warehouse.</p>
       )}
       <form className="inventory-addition" onSubmit={submitNewInventory}>
+        {availableProducts.length > 20 && <label>Filter inventory products<input type="search" value={productFilter} onChange={event => setProductFilter(event.target.value)} /></label>}
         <label>
           Add a product to this warehouse
           <select
             required
+            disabled={Boolean(saving)}
             value={newInventory.product_id}
             onChange={(event) =>
               setNewInventory((current) => ({
@@ -173,7 +198,7 @@ export function WarehouseDetail({
             }
           >
             <option value="">Choose product</option>
-            {availableProducts.map((product) => (
+            {availableProducts.filter(product => product.id === newInventory.product_id || `${product.name} ${product.sku} ${product.id}`.toLowerCase().includes(productFilter.toLowerCase())).map((product) => (
               <option key={product.id} value={product.id}>
                 {product.name} · {product.sku}
               </option>
@@ -183,6 +208,7 @@ export function WarehouseDetail({
         <label>
           On-hand quantity
           <input
+            disabled={Boolean(saving)}
             aria-label="New inventory on-hand quantity"
             type="number"
             min="0"
@@ -196,7 +222,7 @@ export function WarehouseDetail({
             }
           />
         </label>
-        <button disabled={!newInventory.product_id}>Add inventory</button>
+        <button disabled={!newInventory.product_id || Boolean(saving)}>Add inventory</button>
       </form>
     </>
   );

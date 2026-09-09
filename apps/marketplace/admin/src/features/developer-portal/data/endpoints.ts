@@ -27,7 +27,7 @@ const cancellationBodyFields = (name: "cancel_reason" | "reason") => [
 ];
 
 const callbackBodyFields = (provider: "shared" | "shopee" | "tokopedia") => [
-  { name: provider === "shared" ? "url" : "callback_url", type: "URI string", required: true, description: "Public HTTP(S) destination that receives signed deliveries.", example: `https://example.com/hooks/${provider === "shared" ? "marketplace" : provider}` },
+  { name: provider === "shared" ? "url" : "callback_url", type: "URI string", required: true, description: "HTTP(S) receiver destination. The example reaches a host receiver from Docker Desktop; use http://localhost:9000/webhooks for a native worker. Start the receiver before registering.", example: "http://host.docker.internal:9000/webhooks" },
   { name: provider === "shared" ? "subscribed_events" : "event_types", type: "string[]", required: true, description: "Provider event names to subscribe to. Use the exact, case-sensitive values shown in the example.", example: provider === "shared" ? "[\"order.created\"]" : provider === "shopee" ? "[\"order_status_update\"]" : "[\"ORDER_STATUS_CHANGE\"]" },
   { name: "secret", type: "string", required: false, description: "Shopee delivery verification secret; unused for Tokopedia, which signs with its oldest ACTIVE app credential. If omitted, a secret is generated and returned once.", example: "whsec_your_secret" },
 ];
@@ -126,15 +126,15 @@ export const ENDPOINTS: PortalEndpoint[] = [
     id: "list-webhooks", group: "Webhooks", contract: "shared", method: "GET", path: "/api/v1/webhooks", title: "List shared webhooks",
     query: sharedWebhookPage,
     summary: "Read one page of shop webhook registrations without revealing their stored secrets. Delivery format follows the shop provider, including registrations made here.", outcome: "200 OK with data, page/limit pagination metadata, and the shop’s delivery contract.",
-    response: '{\n  "data": [{ "id": "wh_example_01", "shop_id": "shop_example_01", "url": "https://example.com/hooks/marketplace", "enabled": true, "subscribed_events": ["order.created"], "created_at": "2026-09-06T00:00:00Z" }],\n  "pagination": { "page": 1, "limit": 20, "total": 1, "total_pages": 1, "has_previous": false, "has_next": false },\n  "delivery_contract": { "provider_profile": "SHOPEE_LIKE", "signing_client_id": "client_example_01" }\n}',
+    response: '{\n  "data": [{ "id": "wh_example_01", "shop_id": "shop_example_01", "url": "http://host.docker.internal:9000/webhooks", "enabled": true, "subscribed_events": ["order.created"], "created_at": "2026-09-06T00:00:00Z" }],\n  "pagination": { "page": 1, "limit": 20, "total": 1, "total_pages": 1, "has_previous": false, "has_next": false },\n  "delivery_contract": { "provider_profile": "SHOPEE_LIKE", "signing_client_id": "client_example_01" }\n}',
   }),
   endpoint({
     id: "register-webhook", group: "Webhooks", contract: "shared", method: "POST", path: "/api/v1/webhooks", title: "Register a shared webhook", idempotent: true,
     summary: "Subscribe an HTTP(S) destination to durable canonical product and order events.",
-    body: '{\n  "url": "https://example.com/hooks/marketplace",\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"]\n}',
+    body: '{\n  "url": "http://host.docker.internal:9000/webhooks",\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"]\n}',
     bodyFields: callbackBodyFields("shared"),
     outcome: "201 Created. An omitted secret is generated and returned once only.",
-    response: '{\n  "id": "wh_example_01",\n  "shop_id": "shop_example_01",\n  "url": "https://example.com/hooks/marketplace",\n  "enabled": true,\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"],\n  "secret": "whsec_example_01"\n}',
+    response: '{\n  "id": "wh_example_01",\n  "shop_id": "shop_example_01",\n  "url": "http://host.docker.internal:9000/webhooks",\n  "enabled": true,\n  "subscribed_events": ["order.created", "order.paid", "order.ready_to_ship", "order.shipped"],\n  "secret": "whsec_example_01"\n}',
   }),
   endpoint({
     id: "delete-webhook", group: "Webhooks", contract: "shared", method: "DELETE", path: "/api/v1/webhooks/{id}", title: "Delete a shared webhook", pathParams: [webhookID], idempotent: true,
@@ -205,14 +205,14 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "shopee-create-webhook", group: "Webhooks", contract: "shopee", method: "POST", path: "/api/shopee/v1/webhooks", title: "Register a Shopee-like callback", idempotent: true,
     summary: "Subscribe to provider categories; the simulator maps them to durable domain events.",
-    body: '{\n  "callback_url": "https://example.com/hooks/shopee",\n  "event_types": ["order_status_update", "logistics_status_update"]\n}', outcome: "200 OK. An omitted secret is returned once.",
+    body: '{\n  "callback_url": "http://host.docker.internal:9000/webhooks",\n  "event_types": ["order_status_update", "logistics_status_update"]\n}', outcome: "200 OK. An omitted secret is returned once.",
     bodyFields: callbackBodyFields("shopee"),
     response: '{\n  "error": "",\n  "message": "success",\n  "response": { "webhook_id": "wh_…", "event_types": ["order_status_update"], "secret": "whsec_…" }\n}',
   }),
 
   endpoint({
     id: "tokopedia-search-products", group: "Products", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/products/search", title: "Search Tokopedia-like products",
-    summary: "Search provider products with opaque page tokens; send a returned token unchanged for the next page.", body: '{\n  "page_size": 20,\n  "keyword": "mug"\n}', outcome: "200 OK in a Partner Center-style envelope.",
+    summary: "Search provider products with opaque page tokens; send a returned token unchanged for the next page.", body: '{\n  "page_size": 20\n}', outcome: "200 OK in a Partner Center-style envelope.",
     bodyFields: [
       { name: "page_size", type: "integer", required: false, description: "Number of records to return, from 1 to 100. Defaults to 20.", example: "20" },
       { name: "page_token", type: "string", required: false, description: "Opaque next_page_token from the preceding response; do not modify it." },
@@ -227,7 +227,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   }),
   endpoint({
     id: "tokopedia-search-orders", group: "Orders", contract: "tokopedia", method: "POST", path: "/api/tokopedia/v202309/orders/search", title: "Search Tokopedia-like orders",
-    summary: "Start a Tokopedia-like lifecycle here. Copy a returned order_id for the next action.", body: '{\n  "page_size": 20,\n  "order_status": "ON_HOLD"\n}', outcome: "200 OK with opaque page-token pagination.",
+    summary: "Start a Tokopedia-like lifecycle here. Copy a returned order_id for the next action.", body: '{\n  "page_size": 20\n}', outcome: "200 OK with opaque page-token pagination.",
     bodyFields: [
       { name: "page_size", type: "integer", required: false, description: "Number of records to return, from 1 to 100. Defaults to 20.", example: "20" },
       { name: "page_token", type: "string", required: false, description: "Opaque next_page_token from the preceding response; do not modify it." },
@@ -265,7 +265,7 @@ export const ENDPOINTS: PortalEndpoint[] = [
   endpoint({
     id: "tokopedia-configure-webhook", group: "Webhooks", contract: "tokopedia", method: "PUT", path: "/api/tokopedia/v202309/webhooks", title: "Configure a Tokopedia-like callback", idempotent: true,
     summary: "Configure provider notification categories. Deliveries carry a numeric type and Authorization HMAC.",
-    body: '{\n  "callback_url": "https://example.com/hooks/tokopedia",\n  "event_types": ["ORDER_STATUS_CHANGE", "PACKAGE_UPDATE"]\n}', outcome: "200 OK. Any returned registration secret is unused for verification. Use the oldest ACTIVE app credential’s Client ID and secret for Authorization HMAC.",
+    body: '{\n  "callback_url": "http://host.docker.internal:9000/webhooks",\n  "event_types": ["ORDER_STATUS_CHANGE", "PACKAGE_UPDATE"]\n}', outcome: "200 OK. Any returned registration secret is unused for verification. Use the oldest ACTIVE app credential’s Client ID and secret for Authorization HMAC.",
     bodyFields: callbackBodyFields("tokopedia"),
     response: '{\n  "code": 0,\n  "message": "success",\n  "data": { "webhook_id": "wh_…", "event_types": ["ORDER_STATUS_CHANGE"], "secret": "whsec_…" }\n}',
   }),

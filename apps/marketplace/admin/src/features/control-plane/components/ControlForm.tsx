@@ -1,14 +1,15 @@
+import { WebhookSecretDialog } from "./WebhookSecretDialog";
 import { EVENT_CATALOG, eventMapping } from "@/shared/events/catalog";
 import { PackageAllocationFields } from "./PackageAllocationFields";
 import { WebhookVerification } from "@/features/developer-portal/components/WebhookVerification";
 import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { controlPlaneCollection } from "@/shared/api/controlPlaneCollection";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type {
   Shop,
   CreatedCredential,
   FormInitial,
   FormKind,
-  ListResponse,
   ProductSummary,
   WarehouseSummary,
 } from "@/shared/types/controlPlane";
@@ -110,6 +111,9 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
   const [productsLoading, setProductsLoading] = useState(false);
   const [warehouses, setWarehouses] = useState<WarehouseSummary[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const initialFocusRef = useRef<HTMLHeadingElement>(null);
+  const [choiceFilter, setChoiceFilter] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState<{ id: string; secret: string; url: string }>();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const fields =
@@ -156,9 +160,8 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
   useEffect(() => {
     if (kind !== "order" || orderMode === "random" || !shopID) return;
     setProductsLoading(true);
-    request<ListResponse<ProductSummary>>(`/control/v1/shops/${shopID}/products?limit=100`, token)
-      .then((result) => {
-        const records = result.data || [];
+    controlPlaneCollection<ProductSummary>(`/control/v1/shops/${shopID}/products?limit=100`, token)
+      .then((records) => {
         setProducts(records);
         setMassOrder((current) => ({
           ...current,
@@ -171,9 +174,8 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
   useEffect(() => {
     if (kind !== "product" || !shopID || initial) return;
     setWarehousesLoading(true);
-    request<ListResponse<WarehouseSummary>>(`/control/v1/shops/${shopID}/warehouses?limit=100`, token)
-      .then((result) => {
-        const records = result.data || [];
+    controlPlaneCollection<WarehouseSummary>(`/control/v1/shops/${shopID}/warehouses?limit=100`, token)
+      .then((records) => {
         setWarehouses(records);
         setValues((current) => {
           const configured = current.warehouse_inventory?.some((item) => item.warehouse_id);
@@ -320,7 +322,10 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
         return;
       }
       if (kind === "package") { await onSaved(`Package ${result.id} allocated for order ${values.order_id}. Use this package_id in the provider shipment request.`); return; }
-      const secret = result.client_secret || (shop?.provider_profile === "TOKOPEDIA_LIKE" ? undefined : result.secret);
+      if (kind === "webhook" && !initial && result.secret && shop?.provider_profile !== "TOKOPEDIA_LIKE") {
+        setWebhookSecret({ id: result.id || "", secret: result.secret, url: String(values.url) });
+        return;
+      }
       if (kind === "credential") {
         if (!result.id || !result.client_id || !result.client_secret) {
           throw new Error("The credential was created, but its one-time values were not returned. Revoke it before creating another credential.");
@@ -334,9 +339,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
         return;
       }
       await onSaved(
-        secret
-          ? `Created. Save this secret now: ${secret}`
-          : initial && kind === "product"
+        initial && kind === "product"
             ? "Product updated"
             : initial
               ? "Webhook registration updated"
@@ -348,6 +351,8 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
       setSubmitting(false);
     }
   };
+  if (webhookSecret) return <WebhookSecretDialog webhook={webhookSecret} shop={shop} shopID={shopID}
+    returnFocusRef={returnFocusRef} onAcknowledge={() => void onSaved("Webhook registration created")} />;
   const title =
     kind === "order"
       ? "Simulate an order event"
@@ -363,7 +368,6 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
             : "Register webhook destination"
           : `Create ${kind}`;
   const titleID = `control-form-${kind}-title`;
-  const initialFocusRef = useRef<HTMLHeadingElement>(null);
   return (
     <AccessibleDialog
       ariaLabelledby={titleID}
@@ -386,6 +390,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
           </button>
         </div>
         {kind === "package" && <PackageAllocationFields shopID={shopID} token={token} onChange={(orderID, items) => setValues(current => ({ ...current, order_id: orderID, package_items: items }))} />}
+        {(products.length > 20 || warehouses.length > 20) && <label>Filter product or warehouse choices<input type="search" value={choiceFilter} onChange={event => setChoiceFilter(event.target.value)} placeholder="Name, SKU, code, or ID" /></label>}
         {kind === "order" && (
           <>
             <p>
@@ -479,7 +484,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                           ? "Loading products…"
                           : "Choose product"}
                       </option>
-                      {products.map((product) => (
+                      {products.filter(product => `${product.name} ${product.sku} ${product.id}`.toLowerCase().includes(choiceFilter.toLowerCase()) || values.items.some(item => item.product_id === product.id)).map((product) => (
                         <option key={product.id} value={product.id}>
                           {product.name} · {product.sku} · stock {product.stock}
                         </option>
@@ -579,7 +584,7 @@ export function ControlForm({ shop, kind, initial, shopID, token, onClose, onSav
                       onChange={(event) => setValues((current) => ({ ...current, warehouse_inventory: current.warehouse_inventory.map((item, itemIndex) => itemIndex === index ? { ...item, warehouse_id: event.target.value } : item) }))}
                     >
                       <option value="">Choose warehouse</option>
-                      {warehouses.map((warehouse) => (
+                      {warehouses.filter(warehouse => `${warehouse.name} ${warehouse.code} ${warehouse.id}`.toLowerCase().includes(choiceFilter.toLowerCase()) || values.warehouse_inventory.some(item => item.warehouse_id === warehouse.id)).map((warehouse) => (
                         <option key={warehouse.id} value={warehouse.id} disabled={values.warehouse_inventory.some((item, itemIndex) => itemIndex !== index && item.warehouse_id === warehouse.id)}>
                           {warehouse.name} · {warehouse.code}
                         </option>

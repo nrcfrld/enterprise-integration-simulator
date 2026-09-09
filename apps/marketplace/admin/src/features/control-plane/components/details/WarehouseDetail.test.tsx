@@ -1,0 +1,43 @@
+// @vitest-environment jsdom
+import "@/test/setup";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { WarehouseDetail } from "./WarehouseDetail";
+const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock("@/shared/api/controlPlaneClient", () => ({ controlPlaneRequest: request }));
+const data = (count: number) => ({ id: "wh_1", shop_id: "shop_1", inventory: [{ product_id: "prd_1", product_name: "Mug", sku: "MUG", on_hand_quantity: count, reserved_quantity: 0, available_quantity: count }] });
+const props = { token: "token", onReload: vi.fn(), onRefresh: vi.fn(), onNotice: vi.fn(), onError: vi.fn() };
+beforeEach(() => { request.mockReset().mockResolvedValue({ data: [] }); Object.values(props).forEach(value => { if (typeof value === "function") value.mockReset(); }); });
+it("save → shipment → refresh keeps the clean input at the latest count", async () => {
+  const { rerender } = render(<WarehouseDetail {...props} data={data(7)} />);
+  const input = screen.getByLabelText("On hand quantity for Mug");
+  fireEvent.change(input, { target: { value: "10" } });
+  fireEvent.submit(input.closest("form")!);
+  await waitFor(() => expect(props.onNotice).toHaveBeenCalled());
+  rerender(<WarehouseDetail {...props} data={data(8)} />);
+  expect(input).toHaveValue(8);
+  fireEvent.submit(input.closest("form")!);
+  await waitFor(() => expect(request).toHaveBeenLastCalledWith("/control/v1/warehouses/wh_1/inventory/prd_1", "token", { method: "PUT", body: '{"on_hand_quantity":8}' }));
+});
+it("preserves unsaved edits, blocks conflicts, and guards duplicate submissions", async () => {
+  const { rerender } = render(<WarehouseDetail {...props} data={data(10)} />);
+  const input = screen.getByLabelText("On hand quantity for Mug");
+  fireEvent.change(input, { target: { value: "15" } });
+  rerender(<WarehouseDetail {...props} data={data(8)} />);
+  expect(input).toHaveValue(15);
+  expect(screen.getByRole("status")).toHaveTextContent("Stock changed from 10 to 8");
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.submit(input.closest("form")!);
+  expect(request.mock.calls.filter(call => call[2]?.method === "PUT")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Use latest count" }));
+  expect(input).toHaveValue(8);
+  let finish!: () => void;
+  request.mockImplementation((_path, _token, options) => options?.method === "PUT" ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve({ data: [] }));
+  fireEvent.change(input, { target: { value: "12" } });
+  fireEvent.submit(input.closest("form")!);
+  fireEvent.submit(input.closest("form")!);
+  expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+  expect(request.mock.calls.filter(call => call[2]?.method === "PUT")).toHaveLength(1);
+  await act(async () => finish());
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});

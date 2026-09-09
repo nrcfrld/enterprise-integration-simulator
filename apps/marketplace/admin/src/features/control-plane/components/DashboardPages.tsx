@@ -236,7 +236,7 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
 
 interface ShopsProps {
   data: ControlPlaneData | null;
-  onSelect: (id: string) => void;
+  onSelect: (shop: Shop) => void;
   onForm: (form: FormRequest) => void;
   listPage: number;
   onPageChange: (page: number) => void;
@@ -262,7 +262,7 @@ export function Shops({ data, onSelect, onForm, listPage, onPageChange }: ShopsP
             <button
               className="record shop card"
               key={shop.id}
-              onClick={() => onSelect(shop.id)}
+              onClick={() => onSelect(shop)}
             >
               <span className="status-dot"></span>
               <span>

@@ -320,3 +320,7 @@ or reduce the order quantities before retrying.
 The on-hand editor **replaces the physical count**, rather than adding a delta.
 With 10 on hand and 2 reserved, entering 15 produces 13 available. To add 5 units,
 enter 15, not 5. The new physical count cannot be below the reserved quantity.
+
+## Durable external application exercise
+
+Continue with the [durable consumer exercise](durable-consumer-exercise.md) for both providers. It supplies a SQLite inbox, processing worker, current-state projection, full pagination and stable retry keys, with duplicate/restart/out-of-order/return evidence. The same lesson and downloadable files are in the Developer Portal.

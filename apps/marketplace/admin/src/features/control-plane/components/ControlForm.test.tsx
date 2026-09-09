@@ -260,16 +260,18 @@ describe("ControlForm critical mutations", () => {
       screen.getByLabelText("Endpoint URL"),
       "https://receiver.example/webhooks",
     );
-    await user.type(screen.getByLabelText("Webhook secret (optional)"), "secret-123");
     await user.click(screen.getByLabelText("product.updated"));
     await user.click(screen.getByLabelText("shipment.returned"));
     await user.click(screen.getByRole("button", { name: "Create →" }));
 
-    await waitFor(() =>
-      expect(baseProps.onSaved).toHaveBeenCalledWith(
-        "Created. Save this secret now: generated-secret",
-      ),
-    );
+    expect(await screen.findByRole("heading", { name: "Save your Shopee webhook secret" })).toBeVisible();
+    expect(baseProps.onSaved).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Copy Webhook secret" }));
+    expect(await screen.findByText("Copied")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "I saved the webhook secret" }));
+    expect(baseProps.onSaved).toHaveBeenCalledWith("Webhook registration created");
     expect(requestMock).toHaveBeenCalledWith(
       "/control/v1/shops/shop_1/webhooks",
       "session-token",
@@ -277,7 +279,7 @@ describe("ControlForm critical mutations", () => {
     );
     expect(requestBody()).toMatchObject({
       url: "https://receiver.example/webhooks",
-      secret: "secret-123",
+      secret: "",
       enabled: true,
     });
     expect(requestBody().subscribed_events).toContain("product.updated");

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CONTROL_NAVIGATION, CONTROL_PATHS, type ControlPage } from "@/app/navigation";
 import type { ControlPlaneSession, NoticeMessage, Shop } from "@/shared/types/controlPlane";
@@ -74,6 +75,7 @@ export function WorkspaceHeader({
   onShopChange,
   onProviderChange,
 }: WorkspaceHeaderProps) {
+  const [shopFilter, setShopFilter] = useState("");
   return (
     <header className="workspace-header navbar">
       <div>
@@ -99,6 +101,7 @@ export function WorkspaceHeader({
             </div>
           </div>
         )}
+        {visibleShops.length > 20 && <label>Filter shops<input type="search" value={shopFilter} onChange={event => setShopFilter(event.target.value)} /></label>}
         <label className="shop-selector">
           <span>{page === "Orders" ? "Order scope" : "Current shop"}</span>
           <select
@@ -108,7 +111,7 @@ export function WorkspaceHeader({
             onChange={(event) => onShopChange(event.target.value)}
           >
             <option value="">{page === "Orders" ? "Select a provider shop" : "Select a shop"}</option>
-            {visibleShops.map((shop) => (
+            {visibleShops.filter(shop => shop.id === shopID || `${shop.name} ${shop.id} ${shop.provider_profile}`.toLowerCase().includes(shopFilter.toLowerCase())).map((shop) => (
               <option key={shop.id} value={shop.id}>
                 {page === "Orders" ? `[${providerLabel(shop.provider_profile)}] ` : ""}{shop.name}
               </option>

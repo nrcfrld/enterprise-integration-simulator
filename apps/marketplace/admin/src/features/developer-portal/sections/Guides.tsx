@@ -43,6 +43,7 @@ export function QuickStart({ onNavigate, onTry, onOpenSection, provider }: Quick
         <p>Jump straight to the guide for your current task.</p>
       </header>
       <nav className="docs-task-list" aria-label="Documentation shortcuts">
+        <button type="button" onClick={() => onOpenSection("consumer")}><span><strong>Process an order durably</strong><small>Persistent inbox, provider state, retries and recovery</small></span><span>Durable consumer exercise</span></button>
         <button type="button" onClick={() => onOpenSection("authentication")}><span><strong>Sign a request</strong><small>Headers, timestamps, and signature inputs</small></span><span>Request signing</span></button>
         <button type="button" onClick={() => onOpenSection("products")}><span><strong>Find product data</strong><small>Filters, field names, and response shapes</small></span><span>Products</span></button>
         <button type="button" onClick={() => onTry(orders)}><span><strong>Fulfil an order</strong><small>Start with an order list, then reuse the returned ID</small></span><span>Request simulator</span></button>
@@ -93,8 +94,9 @@ export function Authentication({ api }: { api: string }) {
   return <><section className="reference-heading"><h2>Choose the signature that matches the path</h2><p>A dashboard login or Operator registration never authenticates a public integration request. All three integration contracts use the credential secret, but their signing inputs differ.</p></section><section className="explanation-flow"><article><b>Shared resources</b><p>For <code>/api/v1</code>, send X-Client-Id, X-Timestamp, and X-Signature. Sign <code>METHOD + PATH + TIMESTAMP + raw body</code>.</p></article><article><b>Shopee-like</b><p>For <code>/api/shopee/v1</code>, send X-Shopee-Partner-Id, X-Shopee-Timestamp, and X-Shopee-Signature. Sign <code>PARTNER_ID + PATH + TIMESTAMP + raw body</code>; the HTTP method is not included.</p></article><article><b>Tokopedia-like</b><p>For <code>/api/tokopedia/v202309</code>, send app_key, timestamp, sign, and x-tts-access-token. Sort query keys before signing; exclude sign and access_token.</p></article></section><section className="reference-callout"><b>HMAC signature</b><p>An HMAC is a tamper-check made with your secret. Never send the secret itself. Requests older than five minutes are rejected, so generate a new timestamp for every attempt.</p></section><section className="reference-callout"><b>Control Plane accounts</b><p>Registering at <code>/control/v1/auth/register</code> needs no signature. It creates only an Operator account; an existing Admin creates other Admin users. The returned bearer token is only for the console.</p></section><ControlPlaneRegistrationSimulator api={api} /></>;
 }
 
-export function Webhooks({ onTry }: Pick<NavigationProps, "onTry">) {
+export function Webhooks({ onTry, onOpenConsumer }: Pick<NavigationProps, "onTry"> & { onOpenConsumer?: () => void }) {
   return <>
+    {onOpenConsumer && <button onClick={onOpenConsumer}>Continue to durable consumer exercise</button>}
     <section className="reference-heading"><h2>Receive and verify webhook deliveries</h2><p>Choose a registration path first. Open the technical guides only when you need the signature or receiver details.</p></section>
     <section className="explanation-flow">
       <article><b>Shared registration</b><p>Subscribe using canonical event names such as order.paid. Delivery still follows the shop’s Shopee-like or Tokopedia-like profile.</p><button type="button" onClick={() => onTry("register-webhook")}>Register shared webhook</button></article>
@@ -109,7 +111,7 @@ export function Webhooks({ onTry }: Pick<NavigationProps, "onTry">) {
       <details className="reference-disclosure">
         <summary><span><strong>Run a local receiver</strong><small>Docker address, retry timing, and a raw-body example</small></span><span className="disclosure-action">View setup</span></summary>
         <div className="reference-disclosure-body">
-          <p>Save the example as <code>receiver.mjs</code> and run it with Node.js or Bun. Use <code>PROVIDER</code> and the matching Shopee webhook secret or Tokopedia app credential.</p>
+          <p>This starter keeps its inbox in memory and loses it on restart. For persistence and actual provider-state processing, use the Durable consumer exercise. Save the starter as <code>receiver.mjs</code> and run it with Node.js or Bun. Use <code>PROVIDER</code> and the matching Shopee webhook secret or Tokopedia app credential.</p>
           <p>For a Docker Compose worker on Docker Desktop, register <code>http://host.docker.internal:9000/webhooks</code> when the receiver runs on your host. Return 2xx after durable acceptance; failures retry after 30 seconds, 2 minutes, 10 minutes, and 30 minutes.</p>
           <CodeSnippet value={receiverSource} />
         </div>

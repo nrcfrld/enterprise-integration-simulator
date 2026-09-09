@@ -8,6 +8,7 @@ export function restoreSession(): ControlPlaneSession | null {
     return JSON.parse(stored) as ControlPlaneSession;
   } catch {
     localStorage.removeItem("marketplace-session");
+    sessionStorage.removeItem("marketplace:selected-shop");
     return null;
   }
 }
@@ -18,6 +19,7 @@ export function useControlPlaneSession() {
   useEffect(() => {
     const invalidate = () => {
       localStorage.removeItem("marketplace-session");
+      sessionStorage.removeItem("marketplace:selected-shop");
       setSession(null);
     };
     window.addEventListener("marketplace:session-invalid", invalidate);
@@ -31,6 +33,7 @@ export function useControlPlaneSession() {
 
   const logout = () => {
     localStorage.removeItem("marketplace-session");
+    sessionStorage.removeItem("marketplace:selected-shop");
     setSession(null);
   };
 

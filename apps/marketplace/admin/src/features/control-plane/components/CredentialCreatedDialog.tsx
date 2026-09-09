@@ -21,7 +21,7 @@ function SuccessIcon() {
   );
 }
 
-function CredentialValue({ label, value }: { label: string; value: string }) {
+export function CredentialValue({ label, value }: { label: string; value: string }) {
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const timer = useRef<number | undefined>(undefined);
 

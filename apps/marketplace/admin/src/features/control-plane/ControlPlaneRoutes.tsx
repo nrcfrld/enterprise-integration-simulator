@@ -26,7 +26,7 @@ interface ControlPlaneRoutesProps {
   onDetail: (detail: DetailRequest) => void;
   onRefresh: () => Promise<void>;
   onNotice: (text: string) => void;
-  onSelectShop: (id: string) => void;
+  onSelectShop: (shop: Shop) => void;
   listPage: number;
   onPageChange: (page: number) => void;
 }
@@ -123,7 +123,7 @@ export function ControlPlaneRoutes({
       <Route
         path={CONTROL_PATHS.Webhooks}
         element={
-          <WebhookSettings shop={selectedShop}
+          <WebhookSettings shop={selectedShop} listPage={listPage} onPageChange={onPageChange}
             data={data}
             shopID={shopID}
             token={token}

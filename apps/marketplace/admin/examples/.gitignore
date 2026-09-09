@@ -1,0 +1,4 @@
+consumer.env
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

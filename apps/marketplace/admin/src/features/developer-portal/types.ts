@@ -47,6 +47,7 @@ export interface IntegrationCredentials {
 }
 
 export interface SimulatorResponse {
+  rawBody?: string;
   status: string;
   body: string;
   headers: Array<[string, string | null]>;
@@ -60,6 +61,7 @@ export interface SimulatorState {
 }
 
 export type PortalSection =
+  | "consumer"
   | "quickstart"
   | "try"
   | "authentication"
