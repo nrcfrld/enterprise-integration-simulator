@@ -31,6 +31,8 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
   };
   const hooks = (Array.isArray(data?.data) ? data.data : []) as WebhookRegistration[];
   const provider = data?.delivery_contract?.provider_profile ?? shop?.provider_profile;
+  const enabledHooks = hooks.filter((hook) => hook.enabled).length;
+  const providerName = provider === "TOKOPEDIA_LIKE" ? "Tokopedia-like" : "Shopee-like";
   const remove = async (id: string) => {
     if (
       !window.confirm(
@@ -66,19 +68,34 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
   return (
     <>
       {error && <p role="alert">{error}</p>}
-      {provider && <WebhookVerification provider={provider} signingClientID={data?.delivery_contract?.signing_client_id} />}
-      <section className="webhook-explainer card">
-        <p className="eyebrow">Registration settings</p>
-        <h2>Tell the simulator where to send matching events.</h2>
-        <p>
-          Creating a webhook does not create an event. An order transition
-          creates an event; this registration decides whether it is delivered to
-          your endpoint.
-        </p>
-        <button className="btn btn-primary" onClick={() => onForm({ kind: "webhook" })}>
-          + Register webhook <span>→</span>
-        </button>
+      <section className="webhook-overview" aria-labelledby="webhook-overview-title">
+        <div>
+          <h2 id="webhook-overview-title">Route events to your endpoint</h2>
+          <p>Register a callback, choose its events, then enable delivery.</p>
+        </div>
+        <div className="webhook-overview-actions">
+          <span>{enabledHooks} of {hooks.length} endpoints enabled</span>
+          <button className="btn btn-primary" onClick={() => onForm({ kind: "webhook" })}>
+            Register endpoint
+          </button>
+        </div>
       </section>
+      {provider && <details className="webhook-help-disclosure">
+        <summary>
+          <span>
+            <strong>{providerName} verification guide</strong>
+            <small>Signature inputs, credentials, payload, and retries</small>
+          </span>
+          <span className="disclosure-action">View guide</span>
+        </summary>
+        <div className="webhook-help-content">
+          <WebhookVerification provider={provider} signingClientID={data?.delivery_contract?.signing_client_id} />
+        </div>
+      </details>}
+      <div className="webhook-list-heading">
+        <h2>Your endpoints</h2>
+        <span>{hooks.length} registered</span>
+      </div>
       <div className="webhook-list">
         {hooks.length ? (
           hooks.map((hook) => (
@@ -118,8 +135,7 @@ export function WebhookSettings({ shop, data, shopID, token, onForm, onRefresh, 
           ))
         ) : (
           <p className="empty">
-            No webhook is registered yet. Use the runbook to add a destination
-            before triggering an order.
+            No endpoint yet. Register one before triggering an order or product event.
           </p>
         )}
       </div>

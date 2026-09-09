@@ -23,8 +23,8 @@ beforeEach(() => {
 it("returns from credential creation to the edited Tokopedia request, warns on mismatch, and clears on shop switch", async () => {
  const user = userEvent.setup();
  render(<MemoryRouter initialEntries={["/docs"]}><ControlPlaneApp /></MemoryRouter>);
- await waitFor(() => expect(screen.getByText(/Current shop: Toko learner/)).toBeVisible());
- await user.click(screen.getByRole("button", { name: "Start the order workflow" }));
+ await waitFor(() => expect(screen.getByLabelText("Selected shop context")).toHaveTextContent("Toko learner"));
+ await user.click(screen.getByRole("button", { name: /Fulfil an order/ }));
  const body = screen.getByLabelText(/JSON request body/);
  await user.clear(body); await user.paste('{"page_size":7}');
  await user.click(screen.getByRole("button", { name: "Open Credentials" }));
@@ -56,7 +56,7 @@ it("returns from credential creation to the edited Tokopedia request, warns on m
 it("preserves pasted credentials across a console visit and explicitly clears them", async () => {
  const user = userEvent.setup();
  render(<MemoryRouter initialEntries={["/docs"]}><ControlPlaneApp /></MemoryRouter>);
- await waitFor(() => expect(screen.getByText(/Current shop: Toko learner/)).toBeVisible());
+ await waitFor(() => expect(screen.getByLabelText("Selected shop context")).toHaveTextContent("Toko learner"));
  await user.click(screen.getByRole("button", { name: "Request simulator" }));
  await user.type(screen.getByRole("textbox", { name: "Client ID" }), "pasted_id");
  await user.type(screen.getByLabelText(/Client secret/), "pasted-secret");

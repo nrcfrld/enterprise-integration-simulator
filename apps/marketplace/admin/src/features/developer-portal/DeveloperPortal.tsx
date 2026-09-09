@@ -68,7 +68,7 @@ export function DeveloperPortal({ shop, api, onNavigate, credentialHandoff, onHa
   const openTry = (endpointID: string) => { setActiveEndpointID(endpointID); setSection("try"); };
 
   let content;
-  if (section === "quickstart") content = <QuickStart provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} />;
+  if (section === "quickstart") content = <QuickStart provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} onOpenSection={setSection} />;
   else if (section === "try") content = <TryIt shop={shop} knownCredential={knownCredential} api={api} activeEndpointID={activeEndpointID} onSelect={setActiveEndpointID} credentials={credentials} onCredentialsChange={value => { setCredentials(value); if (!value.clientID) setKnownCredential(undefined); }} onNavigate={onNavigate} />;
   else if (section === "authentication") content = <Authentication api={api} />;
   else if (section === "products") content = <ApiReference title="Products API reference" description="Read the provider catalogue without translating its public field names yourself. Every operation below documents its signing inputs, filters, payload, response envelope, and failure shape." note="Product creation, stock changes, and archival stay in the Admin Control Plane. The public Shopee-like and Tokopedia-like catalogue APIs are intentionally read-only." groups={["Products"]} endpoints={ENDPOINTS} onTry={openTry} />;
@@ -95,7 +95,15 @@ export function DeveloperPortal({ shop, api, onNavigate, credentialHandoff, onHa
         <button type="button" onClick={() => onNavigate("Shops")}>Manage shops</button>
         <button type="button" onClick={() => onNavigate("Scenarios")}>Failure scenarios</button>
       </aside>
-      <main className="portal-main">{shop ? <p>Current shop: {shop.name} · {shop.provider_profile} · {shop.id}. Shared resources use this shop’s credential too.</p> : <p>No shop selected. <button onClick={() => onNavigate("Shops")}>Choose a shop</button> before testing its provider APIs.</p>}{content}</main>
+      <main className="portal-main">
+        {shop ? <div className="portal-context" aria-label="Selected shop context">
+          <span>Current shop</span>
+          <strong>{shop.name}</strong>
+          <span>{shop.provider_profile === "TOKOPEDIA_LIKE" ? "Tokopedia-like API" : "Shopee-like API"}</span>
+          <code>{shop.id}</code>
+        </div> : <div className="portal-context portal-context-empty"><span>No shop selected</span><button type="button" onClick={() => onNavigate("Shops")}>Choose a shop</button></div>}
+        {content}
+      </main>
     </div>
   </div>;
 }

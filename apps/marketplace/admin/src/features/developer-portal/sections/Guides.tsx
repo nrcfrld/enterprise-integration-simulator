@@ -5,16 +5,62 @@ import { CodeSnippet } from "../components/CodeSnippet";
 import receiverSource from "../../../../examples/webhook-receiver.mjs?raw";
 import { useState, type FormEvent } from "react";
 import type { ControlPage } from "@/app/navigation";
+import type { PortalSection } from "../types";
 
 interface NavigationProps {
   onNavigate: (page: ControlPage) => void;
   onTry: (endpointID: string) => void;
 }
 
-export function QuickStart({ onNavigate, onTry, provider }: NavigationProps & { provider?: ProviderProfile }) {
+interface QuickStartProps extends NavigationProps {
+  provider?: ProviderProfile;
+  onOpenSection: (section: PortalSection) => void;
+}
+
+export function QuickStart({ onNavigate, onTry, onOpenSection, provider }: QuickStartProps) {
   const products = provider === "TOKOPEDIA_LIKE" ? "tokopedia-search-products" : "shopee-list-products";
   const orders = provider === "TOKOPEDIA_LIKE" ? "tokopedia-search-orders" : "shopee-list-orders";
-  return <><section className="portal-hero"><div><h2>Make a real provider request before reading the reference.</h2><p>The Marketplace Simulator has three public contracts: shared warehouse/webhook resources, Shopee-like APIs, and Tokopedia-like APIs. Each has a distinct signature and response shape.</p><div className="portal-actions"><button type="button" onClick={() => onNavigate("Credentials")}>Create credential</button><button type="button" className="quiet" onClick={() => onTry(products)}>Try a provider request</button></div></div><div className="portal-status"><b>1. Create a credential</b><small>Copy its Client ID and secret once.</small><i /><b>2. Choose the shop provider</b><small>The shop profile determines its public API contract.</small><i /><b>3. List, then act</b><small>Start with a list/search call and reuse the returned id.</small></div></section><section className="guided-start"><div><h3>A safe first workflow</h3></div><ol><li><span>1</span><div><b>Get credentials</b><p>Create an active credential for the selected shop. Tokopedia-like shops also show an access token once.</p><button type="button" className="link-button" onClick={() => onNavigate("Credentials")}>Open Credentials</button></div></li><li><span>2</span><div><b>Read provider data</b><p>Choose a provider in Request simulator, then send a prefilled product or order list/search request.</p><button type="button" className="link-button" onClick={() => onTry(products)}>Open request simulator</button></div></li><li><span>3</span><div><b>Follow fulfillment</b><p>Verify payment in the control plane, process/pack the order through the provider API, create a package or shipment, then inspect webhook delivery.</p><button type="button" className="link-button" onClick={() => onTry(orders)}>Start the order workflow</button></div></li></ol></section><section className="concept-grid"><article><b>Reserved inventory</b><p>When an order is created, stock is held at one warehouse so another order cannot spend it. Cancellation releases it.</p></article><article><b>Package and shipment</b><p>A package allocates order items for fulfillment. A shipment carries pickup, tracking, and delivery state for that package.</p></article><article><b>Idempotency</b><p>Every state-changing public request uses one retry key, so a network retry cannot apply the operation twice. Reusing the key with different input returns a conflict.</p></article></section></>;
+  const providerName = provider === "TOKOPEDIA_LIKE" ? "Tokopedia-like" : provider === "SHOPEE_LIKE" ? "Shopee-like" : "provider";
+  return <>
+    <section className="portal-hero portal-home-hero">
+      <div>
+        <h2>Send your first signed request.</h2>
+        <p>Start with a prefilled {providerName} product request. The simulator handles the request shape while you learn the contract.</p>
+        <div className="portal-actions">
+          <button type="button" onClick={() => onTry(products)}>Open request simulator</button>
+          <button type="button" className="quiet" onClick={() => onNavigate("Credentials")}>Create credential</button>
+        </div>
+      </div>
+      <ol className="portal-quick-path" aria-label="First request checklist">
+        <li><span>1</span><div><strong>Create credentials</strong><small>Copy the one-time secret.</small></div></li>
+        <li><span>2</span><div><strong>Match the provider</strong><small>Use the selected shop’s contract.</small></div></li>
+        <li><span>3</span><div><strong>List, then act</strong><small>Reuse IDs from the response.</small></div></li>
+      </ol>
+    </section>
+    <section className="docs-task-finder" aria-labelledby="docs-task-finder-title">
+      <header>
+        <h3 id="docs-task-finder-title">Find what you need</h3>
+        <p>Jump straight to the guide for your current task.</p>
+      </header>
+      <nav className="docs-task-list" aria-label="Documentation shortcuts">
+        <button type="button" onClick={() => onOpenSection("authentication")}><span><strong>Sign a request</strong><small>Headers, timestamps, and signature inputs</small></span><span>Request signing</span></button>
+        <button type="button" onClick={() => onOpenSection("products")}><span><strong>Find product data</strong><small>Filters, field names, and response shapes</small></span><span>Products</span></button>
+        <button type="button" onClick={() => onTry(orders)}><span><strong>Fulfil an order</strong><small>Start with an order list, then reuse the returned ID</small></span><span>Request simulator</span></button>
+        <button type="button" onClick={() => onOpenSection("webhooks")}><span><strong>Receive events</strong><small>Registration, verification, retries, and replay</small></span><span>Webhooks</span></button>
+      </nav>
+    </section>
+    <details className="docs-concepts-disclosure">
+      <summary>
+        <span><strong>Key simulator concepts</strong><small>Inventory, packages, and idempotency</small></span>
+        <span className="disclosure-action">Learn more</span>
+      </summary>
+      <div className="concept-grid">
+        <article><b>Reserved inventory</b><p>Creating an order holds stock at one warehouse. Cancellation releases it.</p></article>
+        <article><b>Package and shipment</b><p>A package groups order items. A shipment carries tracking and delivery state.</p></article>
+        <article><b>Idempotency</b><p>Retry state-changing requests with the same key to prevent duplicate changes.</p></article>
+      </div>
+    </details>
+  </>;
 }
 
 function ControlPlaneRegistrationSimulator({ api }: { api: string }) {
@@ -48,17 +94,35 @@ export function Authentication({ api }: { api: string }) {
 }
 
 export function Webhooks({ onTry }: Pick<NavigationProps, "onTry">) {
-  return <><EventCatalog />
-    <section className="reference-heading"><h2>Receive and verify webhook deliveries</h2><p>Registration chooses a destination and event filter. The shop provider chooses the delivery contract.</p></section>
-    <WebhookVerification />
+  return <>
+    <section className="reference-heading"><h2>Receive and verify webhook deliveries</h2><p>Choose a registration path first. Open the technical guides only when you need the signature or receiver details.</p></section>
     <section className="explanation-flow">
       <article><b>Shared registration</b><p>Subscribe using canonical event names such as order.paid. Delivery still follows the shop’s Shopee-like or Tokopedia-like profile.</p><button type="button" onClick={() => onTry("register-webhook")}>Register shared webhook</button></article>
       <article><b>Shopee registration</b><p>Subscribe to item_update, order_status_update, or logistics_status_update.</p><button type="button" onClick={() => onTry("shopee-create-webhook")}>Register Shopee-like callback</button></article>
       <article><b>Tokopedia registration</b><p>Subscribe to ORDER_STATUS_CHANGE, PACKAGE_UPDATE, or PRODUCT_INFORMATION_CHANGE.</p><button type="button" onClick={() => onTry("tokopedia-configure-webhook")}>Configure Tokopedia-like callback</button></article>
     </section>
-    <section className="reference-callout"><h3>Run a local receiver</h3><p>Save the example below as receiver.mjs and run it with Node.js or Bun. For Shopee set PROVIDER=SHOPEE_LIKE and WEBHOOK_SECRET. For Tokopedia set PROVIDER=TOKOPEDIA_LIKE, APP_KEY, and APP_SECRET using the signing credential shown in Admin Webhooks.</p><p>Register a worker-reachable URL ending in /webhooks. For the Docker Compose worker on Docker Desktop, use http://host.docker.internal:9000/webhooks when the receiver runs on your host; localhost inside the worker refers to that container. Private targets must be enabled for local exercises.</p><p>Create an order or change its state, then open Webhook Deliveries → Attempts. Return 2xx after durable acceptance. Other statuses and network errors retry after 30 seconds, 2 minutes, 10 minutes, and 30 minutes. The example’s memory-only inbox is for learning; use a database inbox with a unique shop/event key and process committed events in a worker in your application.</p><p>Deleting a registration preserves delivery history and cancels pending deliveries. An in-flight attempt may still finish. A deleted registration cannot be retried; register a new callback and replay the event. Reset to seed intentionally clears shop history.</p></section>
-    <section className="reference-callout"><h3>Debug a recorded attempt</h3><p>Open Webhook Deliveries → Attempts, or follow a delivery from its order event. The canonical event payload is separate from the exact signed HTTP body. Each attempt records its destination, provider, signing identity, application headers, start time, response, truncation flag, and failure code/reason. Current registration changes do not rewrite old attempts.</p><p>SIGNING_ERROR means credentials prevented signing; FORCED_FAILURE means the scenario prevented sending. NETWORK_ERROR/TIMEOUT means the HTTP client tried; HTTP_STATUS means the receiver returned non-2xx. Use the recorded evidence and the recovery guidance before retrying. Signing failures count toward the same bounded retry schedule.</p><p>Historical attempts predating snapshot storage cannot be reconstructed. The local signature exercise uses the key active at that attempt and clears it after checking. It sends no secret and verifies integrity only; freshness and your application’s durable processing remain separate checks.</p></section>
-    <details><summary>Raw-body receiver example (Node.js / Bun)</summary><CodeSnippet value={receiverSource} /></details>
+    <div className="reference-disclosure-list">
+      <details className="reference-disclosure">
+        <summary><span><strong>Verify incoming deliveries</strong><small>Provider signatures, credentials, payloads, and freshness</small></span><span className="disclosure-action">View guide</span></summary>
+        <WebhookVerification />
+      </details>
+      <details className="reference-disclosure">
+        <summary><span><strong>Run a local receiver</strong><small>Docker address, retry timing, and a raw-body example</small></span><span className="disclosure-action">View setup</span></summary>
+        <div className="reference-disclosure-body">
+          <p>Save the example as <code>receiver.mjs</code> and run it with Node.js or Bun. Use <code>PROVIDER</code> and the matching Shopee webhook secret or Tokopedia app credential.</p>
+          <p>For a Docker Compose worker on Docker Desktop, register <code>http://host.docker.internal:9000/webhooks</code> when the receiver runs on your host. Return 2xx after durable acceptance; failures retry after 30 seconds, 2 minutes, 10 minutes, and 30 minutes.</p>
+          <CodeSnippet value={receiverSource} />
+        </div>
+      </details>
+      <details className="reference-disclosure">
+        <summary><span><strong>Debug a recorded attempt</strong><small>Signed body, response, failure reason, and recovery</small></span><span className="disclosure-action">View checklist</span></summary>
+        <div className="reference-disclosure-body">
+          <p>Open Webhook Deliveries → Attempts, or follow a delivery from its order event. Compare the canonical event with the exact signed body, destination, provider, signing identity, headers, response, and failure reason.</p>
+          <p><code>SIGNING_ERROR</code> means credentials prevented signing; <code>FORCED_FAILURE</code> means the scenario blocked sending. <code>NETWORK_ERROR</code> and <code>TIMEOUT</code> reached the HTTP client; <code>HTTP_STATUS</code> means the receiver returned non-2xx.</p>
+        </div>
+      </details>
+      <EventCatalog />
+    </div>
   </>;
 }
 

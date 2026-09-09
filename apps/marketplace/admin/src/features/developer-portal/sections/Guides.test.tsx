@@ -13,11 +13,12 @@ describe("developer portal guides", () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     const onTry = vi.fn();
-    const { rerender } = render(<QuickStart onNavigate={onNavigate} onTry={onTry} />);
+    const onOpenSection = vi.fn();
+    const { rerender } = render(<QuickStart onNavigate={onNavigate} onTry={onTry} onOpenSection={onOpenSection} />);
 
     await user.click(screen.getByRole("button", { name: "Create credential" }));
-    await user.click(screen.getByRole("button", { name: "Try a provider request" }));
-    await user.click(screen.getByRole("button", { name: "Start the order workflow" }));
+    await user.click(screen.getByRole("button", { name: "Open request simulator" }));
+    await user.click(screen.getByRole("button", { name: /Fulfil an order/ }));
 
     expect(onNavigate).toHaveBeenCalledWith("Credentials");
     expect(onTry).toHaveBeenCalledWith("shopee-list-products");

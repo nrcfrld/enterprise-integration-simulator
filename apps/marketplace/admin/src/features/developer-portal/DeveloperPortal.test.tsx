@@ -24,10 +24,11 @@ describe("DeveloperPortal navigation", () => {
     render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
     await user.click(screen.getByRole("button", { name: "Webhooks" }));
     expect(screen.getByRole("heading", { name: "Receive and verify webhook deliveries" })).toBeVisible();
+    await user.click(screen.getByText("Verify incoming deliveries"));
     expect(screen.getByText("EVENT + TIMESTAMP + RAW_BODY")).toBeVisible();
     expect(screen.getByText("APP_KEY + RAW_BODY")).toBeVisible();
     expect(screen.getByText(/oldest ACTIVE credential/, { selector: "p" })).toBeVisible();
-    await user.click(screen.getByText("Raw-body receiver example (Node.js / Bun)"));
+    await user.click(screen.getByText("Run a local receiver"));
     expect(screen.getByText("timingSafeEqual", { selector: "span.token.function" })).toBeVisible();
   });
 
@@ -46,7 +47,7 @@ describe("DeveloperPortal navigation", () => {
     const user = userEvent.setup();
     render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
 
-    await user.click(screen.getByRole("button", { name: "Start the order workflow" }));
+    await user.click(screen.getByRole("button", { name: /Fulfil an order/ }));
     expect(screen.getByText(/Copy order_id from response.order_list into/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Client ID"), "partner_1");
     await user.type(screen.getByLabelText(/Client secret/), "secret_1");
@@ -71,7 +72,7 @@ describe("DeveloperPortal navigation", () => {
     const user = userEvent.setup();
     render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
 
-    expect(screen.getByRole("heading", { name: /make a real provider request/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /send your first signed request/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Request signing" }));
     expect(screen.getByRole("heading", { name: /choose the signature/i })).toBeInTheDocument();

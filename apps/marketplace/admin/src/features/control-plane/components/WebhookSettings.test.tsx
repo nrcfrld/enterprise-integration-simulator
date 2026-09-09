@@ -38,14 +38,17 @@ describe("WebhookSettings critical actions", () => {
 
   it("identifies the current Tokopedia signing credential and unused registration secret", () => {
     render(<WebhookSettings {...props} shop={{ id: "shop_1", name: "Tokopedia", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} data={{ ...props.data, delivery_contract: { provider_profile: "TOKOPEDIA_LIKE", signing_client_id: "client_oldest" } }} />);
+    screen.getByText("Tokopedia-like verification guide").click();
     expect(screen.getByText("client_oldest")).toBeVisible();
     expect(screen.getByText(/optional registration secret.*unused/)).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Shopee-like deliveries" })).not.toBeInTheDocument();
   });
 
-  it("uses the delivery contract while the selected shop is still loading", () => {
+  it("uses the delivery contract while the selected shop is still loading", async () => {
+    const user = userEvent.setup();
     render(<WebhookSettings {...props} data={{ ...props.data, delivery_contract: { provider_profile: "TOKOPEDIA_LIKE", signing_client_id: "client_oldest" } }} />);
 
+    await user.click(screen.getByText("Tokopedia-like verification guide"));
     expect(screen.getByRole("heading", { name: "Tokopedia-like deliveries" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Shopee-like deliveries" })).not.toBeInTheDocument();
   });
@@ -72,7 +75,7 @@ describe("WebhookSettings critical actions", () => {
     const user = userEvent.setup();
     render(<WebhookSettings {...props} />);
 
-    await user.click(screen.getByRole("button", { name: /Register webhook/ }));
+    await user.click(screen.getByRole("button", { name: "Register endpoint" }));
     expect(props.onForm).toHaveBeenCalledWith({ kind: "webhook" });
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -85,7 +88,7 @@ describe("WebhookSettings critical actions", () => {
     expect(screen.queryByRole("button", { name: /Register webhook/ })).not.toBeInTheDocument();
 
     rerender(<WebhookSettings {...props} data={{ data: [] }} />);
-    expect(screen.getByText(/No webhook is registered yet/)).toBeVisible();
+    expect(screen.getByText(/No endpoint yet/)).toBeVisible();
   });
 
   it("enables a disabled webhook and preserves its subscription", async () => {
