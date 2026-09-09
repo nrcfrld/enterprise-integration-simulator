@@ -23,6 +23,7 @@ export function detailPath(detail: DetailRequest): string {
 export function useDetailData(
   detail: DetailRequest,
   token: string | null | undefined,
+  expectedShopID?: string,
 ) {
   const [data, setData] = useState<DetailData | null>(null);
   const [error, setError] = useState("");
@@ -43,6 +44,7 @@ export function useDetailData(
     setLoadError("");
     try {
       const result = await controlPlaneRequest<DetailData>(path, token);
+      if (expectedShopID && result.shop_id && result.shop_id !== expectedShopID) throw new Error("This record belongs to a different shop. Open it with the correct shop context.");
       if (active.current && current === version.current) {
         setData(result);
         setUpdatedAt(Date.now());
@@ -53,7 +55,7 @@ export function useDetailData(
     } finally {
       if (active.current && current === version.current) setRefreshing(false);
     }
-  }, [path, token]);
+  }, [path, token, expectedShopID]);
   const refresh = useCallback(async () => { try { await reload(); } catch { /* Render the load error; keep the last successful response. */ } }, [reload]);
   useEffect(() => { void refresh(); }, [refresh]);
   return { data, error: error || loadError, setError, reload, refresh, refreshing, updatedAt };

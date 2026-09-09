@@ -167,7 +167,7 @@ describe("resource-specific detail views", () => {
     expect(requestMock).toHaveBeenCalledWith(
       "/control/v1/warehouses/warehouse_1/inventory/product_2",
       "session-token",
-      { method: "PUT", body: JSON.stringify({ on_hand_quantity: 3 }) },
+      { method: "PUT", body: JSON.stringify({ on_hand_quantity: 3, expected_updated_at: "" }) },
     );
   });
 });

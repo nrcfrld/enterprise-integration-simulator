@@ -13,10 +13,11 @@ const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
   controlPlaneRequest<T>(...args);
 
 function providerLabel(profile: string) {
-  return ({ SHOPEE_LIKE: "Shopee-like", TOKOPEDIA_LIKE: "Tokopedia & TikTok Shop" } as Record<string, string>)[profile] || "Shopee-like";
+  return ({ SHOPEE_LIKE: "Shopee-like", TOKOPEDIA_LIKE: "Tokopedia-like" } as Record<string, string>)[profile] || "Shopee-like";
 }
 
 interface DashboardProps {
+  onTryOrders?: () => void;
   data: ControlPlaneData | null;
   shopID: string;
   token: string | null | undefined;
@@ -36,7 +37,7 @@ interface RunbookStep {
   action: () => void | Promise<void>;
 }
 
-export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSeed, isSeeding }: DashboardProps) {
+export function Dashboard({ onTryOrders, data, shopID, token, role, onNavigate, onForm, onSeed, isSeeding }: DashboardProps) {
   const steps: RunbookStep[] = [
     {
       number: "1",
@@ -135,7 +136,7 @@ export function Dashboard({ data, shopID, token, role, onNavigate, onForm, onSee
         <h2>Verify the integration yourself</h2>
         <p>These checks are not tracked by the dashboard. A saved credential does not prove you have its secret, and a successful delivery does not prove your application processed it.</p>
         <ol>
-          <li><div><b>Test your first signed request</b><p>Open the API Simulator, select this shop’s provider, and use your saved credentials. Shopee lists orders with GET orders; Tokopedia uses POST orders/search. Confirm a successful response.</p></div><button disabled={!shopID} onClick={() => onNavigate("Documentation")}>Test in API Simulator</button></li>
+          <li><div><b>Test your first signed request</b><p>Open the API Simulator, select this shop’s provider, and use your saved credentials. Shopee lists orders with GET orders; Tokopedia uses POST orders/search. Confirm a successful response.</p></div><button disabled={!shopID} onClick={() => onTryOrders ? onTryOrders() : onNavigate("Documentation")}>Test in API Simulator</button></li>
           <li><div><b>Trigger an order event</b><p>Simulate a new order and inspect its event trail. The 50 sample orders are completed historical records, not proof of webhook delivery.</p></div><button disabled={!shopID} onClick={() => onForm({ kind: "order" })}>Simulate order</button></li>
           <li><div><b>Verify delivery and processing</b><p>Inspect attempts for an HTTP success, then confirm your external application verified, stored, and processed the event once.</p></div><button disabled={!shopID} onClick={() => onNavigate("Deliveries")}>Inspect deliveries</button></li>
         </ol>

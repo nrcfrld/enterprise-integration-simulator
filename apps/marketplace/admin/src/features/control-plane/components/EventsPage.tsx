@@ -25,7 +25,7 @@ export function EventsPage({ data, shopID, token, onDetail, onRefresh, onNotice,
     <form className="table-toolbar" onSubmit={event => {
       event.preventDefault();
       const values = new FormData(event.currentTarget);
-      const next = new URLSearchParams();
+      const next = new URLSearchParams({ shop: shopID });
       for (const key of ["resource_type", "aggregate_id", "event_type"]) {
         const value = String(values.get(key) || "").trim();
         if (value) next.set(key, value);
@@ -36,7 +36,7 @@ export function EventsPage({ data, shopID, token, onDetail, onRefresh, onNotice,
       <label>Resource type<select name="resource_type" defaultValue={params.get("resource_type") || ""}><option value="">All resources</option><option value="order">Orders</option><option value="product">Products</option><option value="shipment">Shipments</option></select></label>
       <label>Resource ID<input name="aggregate_id" defaultValue={params.get("aggregate_id") || ""} placeholder="Exact order, product, or shipment ID" /></label>
       <label>Event type<select name="event_type" defaultValue={params.get("event_type") || ""}><option value="">All events</option>{EVENT_CATALOG.map(event => <option key={event.name}>{event.name}</option>)}</select></label>
-      <button>Apply filters</button><button type="button" className="quiet" onClick={() => { onPageChange(1); setParams({}); }}>Clear filters</button>
+      <button>Apply filters</button><button type="button" className="quiet" onClick={() => { onPageChange(1); setParams({ shop: shopID }); }}>Clear filters</button>
     </form>
     <p>Newest events first. Resource ID matches the exact aggregate; open an order to see its related shipment events together. Archived products retain their event history and payload even when their resource detail is no longer available.</p>
     {error && <p role="alert" className="error">{error}</p>}

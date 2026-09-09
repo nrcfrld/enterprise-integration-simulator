@@ -14,7 +14,7 @@ export function WarehouseDetail({
 }: DetailContentProps) {
   const [productFilter, setProductFilter] = useState("");
   const [catalogProducts, setCatalogProducts] = useState<ProductSummary[]>([]);
-  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, { value: string; baseline: number }>>({});
+  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, { value: string; baseline: number; version?: string }>>({});
   const pendingRef = useRef(false);
   const [saving, setSaving] = useState<string>();
   const discardDraft = (id: string) => setInventoryDrafts(current => { const next = { ...current }; delete next[id]; return next; });
@@ -45,7 +45,7 @@ export function WarehouseDetail({
     if (pendingRef.current) return;
     const draft = inventoryDrafts[productID];
     const currentItem = data.inventory?.find(item => item.product_id === productID);
-    if (draft && currentItem && draft.baseline !== currentItem.on_hand_quantity) {
+    if (draft && currentItem && (draft.baseline !== currentItem.on_hand_quantity || draft.version !== currentItem.updated_at)) {
       onError("Stock changed while you were editing. Use the latest count, then re-enter your adjustment.");
       return;
     }
@@ -68,7 +68,7 @@ export function WarehouseDetail({
         token,
         {
           method: "PUT",
-          body: JSON.stringify({ on_hand_quantity: quantity }),
+          body: JSON.stringify({ on_hand_quantity: quantity, expected_updated_at: draft?.version ?? currentItem?.updated_at ?? "" }),
         },
       );
       discardDraft(productID);
@@ -81,6 +81,9 @@ export function WarehouseDetail({
       await onRefresh();
       onNotice("Warehouse inventory updated");
     } catch (error: unknown) {
+      if (error && typeof error === "object" && "code" in error && error.code === "INVENTORY_CONFLICT") {
+        try { await onReload(); } catch { /* Keep the conflict and unsaved count visible. */ }
+      }
       onError(error instanceof Error ? error.message : "Request failed");
     } finally {
       pendingRef.current = false;
@@ -119,7 +122,7 @@ export function WarehouseDetail({
         </section>
       </div>
       <h3>Inventory</h3>
-      <p>Available = on hand − reserved. Saving on-hand quantity replaces the physical count; it does not add a delta. For example, to add 5 to 10 on hand, enter 15. The count cannot be less than reserved stock.</p>
+      <p>Available = on hand − reserved. Saving on-hand quantity replaces the physical count; it does not add a delta. For example, to add 5 to 10 on hand, enter 15. The count cannot be less than reserved stock. Saves check the loaded inventory version; if stock changes before Save, refresh and review the count before trying again.</p>
       <p>Only ACTIVE warehouses receive new orders. Larger priority wins among warehouses that can fulfill every order line; ties use warehouse code alphabetically.</p>
       {data.inventory?.length ? (
         <div className="table-wrap">
@@ -163,13 +166,13 @@ export function WarehouseDetail({
                         onChange={(event) =>
                           setInventoryDrafts((current) => ({
                             ...current,
-                            [item.product_id]: { value: event.target.value, baseline: current[item.product_id]?.baseline ?? item.on_hand_quantity },
+                            [item.product_id]: { value: event.target.value, baseline: current[item.product_id]?.baseline ?? item.on_hand_quantity, version: current[item.product_id]?.version ?? item.updated_at },
                           }))
                         }
                       />
-                      <button disabled={Boolean(saving) || Boolean(inventoryDrafts[item.product_id] && inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity)}>{saving === item.product_id ? "Saving…" : "Save"}</button>
+                      <button disabled={Boolean(saving) || Boolean(inventoryDrafts[item.product_id] && (inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity || inventoryDrafts[item.product_id].version !== item.updated_at))}>{saving === item.product_id ? "Saving…" : "Save"}</button>
                       {inventoryDrafts[item.product_id] && <span role="status">
-                        {inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity ? `Stock changed from ${inventoryDrafts[item.product_id].baseline} to ${item.on_hand_quantity}. Review your unsaved count.` : "Unsaved count"}
+                        {(inventoryDrafts[item.product_id].baseline !== item.on_hand_quantity || inventoryDrafts[item.product_id].version !== item.updated_at) ? `Stock changed from ${inventoryDrafts[item.product_id].baseline} to ${item.on_hand_quantity}. Review your unsaved count.` : "Unsaved count"}
                         <button type="button" disabled={Boolean(saving)} onClick={() => discardDraft(item.product_id)}>Use latest count</button>
                       </span>}
                     </form>

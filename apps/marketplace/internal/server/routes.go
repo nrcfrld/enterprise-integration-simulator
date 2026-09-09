@@ -65,7 +65,7 @@ func (s *Server) registerControlRoutes(router *gin.Engine) {
 	secured.POST("/events/:id/delay", s.delayEvent)
 	secured.GET("/shops/:id/scenario", s.getScenario)
 	secured.PUT("/shops/:id/scenario", s.putScenario)
-	secured.GET("/maintenance", s.requireRole("ADMIN"), s.getMaintenance)
+	secured.GET("/maintenance", s.getMaintenance)
 	secured.PUT("/maintenance", s.requireRole("ADMIN"), s.maintenance)
 	secured.GET("/users", s.requireRole("ADMIN"), s.listUsers)
 	secured.POST("/users", s.requireRole("ADMIN"), s.createUser)

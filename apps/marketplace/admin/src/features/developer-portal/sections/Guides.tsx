@@ -133,7 +133,7 @@ export function Errors() {
     ["Shared: 401 INVALID_SIGNATURE", "Client ID, timestamp, exact body bytes, or HMAC is wrong.", "Regenerate the timestamp and signature from the exact sent request."],
     ["Shopee-like: error_auth", "Partner headers are missing, stale, or signed with the wrong input.", "Sign partner_id + path + timestamp + body, without the method."],
     ["Tokopedia-like: 36000001", "The app key, access token, query signature, or profile is invalid.", "Use a TOKOPEDIA_LIKE credential and include x-tts-access-token."],
-    ["429 / provider rate-limit headers", "This credential has reached its minute quota.", "Wait for the documented reset header, then retry with backoff."],
+    ["429 / provider rate-limit headers", "The minute quota is exhausted or Force rate limit is enabled for this shop.", "Check Simulation conditions in Try. Clear a forced rate-limit exercise, then honor the quota reset header and retry with backoff."],
     ["Invalid transition", "The order is not in the state required by that action.", "Fetch the order, follow the provider workflow, and use the control plane for payment or delivery progression."],
   ];
   return <><section className="reference-heading"><h2>Recover from common responses</h2><p>Provider error formats differ. Treat codes as stable client behavior and messages as guidance for a developer.</p></section><div className="reference-table-wrap"><table className="reference-table"><thead><tr><th>Response</th><th>Meaning</th><th>What to do</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]}><td><code>{row[0]}</code></td><td>{row[1]}</td><td>{row[2]}</td></tr>)}</tbody></table></div></>;

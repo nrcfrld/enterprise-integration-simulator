@@ -39,3 +39,28 @@ func TestControlPaginationIncludesRecordsBeyondOneThousand(t *testing.T) {
 		t.Fatalf("incomplete page: %s", response.Body.String())
 	}
 }
+
+func TestControlSearchFiltersBeforePagination(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rows := make([]gin.H, 0, 45)
+	for i := range 45 {
+		rows = append(rows, gin.H{"id": fmt.Sprintf("order_%d", i), "order_number": "SIM-MATCH", "status": "PAID"})
+	}
+	rows = append(rows, gin.H{"id": "excluded", "order_number": "SIM-MATCH", "status": "CANCELLED"})
+	router := gin.New()
+	router.GET("/orders", func(c *gin.Context) { (&Server{}).controlSearchResponse(c, rows, "id", "order_number") })
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest("GET", "/orders?q=sim-match&status=paid&page=3&limit=20", nil))
+	var body struct {
+		Data       []gin.H `json:"data"`
+		Pagination struct {
+			Total int `json:"total"`
+		} `json:"pagination"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != 200 || len(body.Data) != 5 || body.Pagination.Total != 45 {
+		t.Fatal(response.Body.String())
+	}
+}

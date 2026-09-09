@@ -5,6 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Scenario } from "./Scenario";
+import { CLEAR_FAULTS } from "@/shared/scenarios";
 
 const { requestMock } = vi.hoisted(() => ({ requestMock: vi.fn() }));
 
@@ -14,6 +15,27 @@ vi.mock("@/shared/api/controlPlaneClient", () => ({
 
 describe("Scenario critical save flow", () => {
   beforeEach(() => requestMock.mockReset());
+
+  it("applies a named exercise then clears all faults without resetting shop data", async () => {
+    requestMock.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<Scenario token="token" shopID="shop_2" data={{}} onSaved={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText("Learning exercise"), "Rate-limit recovery");
+    expect(screen.getByText(/Forced limiting continues until you clear faults/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Apply scenario →" }));
+    expect(JSON.parse(requestMock.mock.calls[0][2].body).force_rate_limit).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Clear shop faults" }));
+    expect(requestMock).toHaveBeenLastCalledWith("/control/v1/shops/shop_2/scenario", "token", { method: "PUT", body: JSON.stringify(CLEAR_FAULTS) });
+    expect(requestMock.mock.calls.every(call => call[0].endsWith("/scenario"))).toBe(true);
+  });
+
+  it("explains an out-of-range probability without sending it", async () => {
+    const user = userEvent.setup();
+    render(<Scenario token="token" shopID="shop_2" data={{ api_random_500_probability: 101 }} onSaved={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Apply scenario →" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("from 0 to 100");
+    expect(requestMock).not.toHaveBeenCalled();
+  });
 
   it("saves numeric failures and webhook flags for the selected shop", async () => {
     requestMock.mockResolvedValue({});

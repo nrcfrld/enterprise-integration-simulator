@@ -1,5 +1,7 @@
 # Implementation Checklist — Enterprise Integration Simulator
 
+Latest Product & DX increment: **2026-09-10 — N1–N3 and H18–H20 implemented.** [Changes, compatibility limits and test evidence](IMPLEMENTATION_REPORT.md#implemented--n1n3-h18h20-2026-09-10). N4 remains open; N5–N7 remain proposed; C5 excluded (5173 retained). The initial-scope matrix and validation snapshot below are historical, not a claim that the new UX work used Compose/browser E2E.
+
 Audit date: 2026-09-04
 Scope: Marketplace Simulator, PRD v0.2 as superseded for orders by **Order Lifecycle & API Brief**
 

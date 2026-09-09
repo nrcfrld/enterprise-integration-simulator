@@ -176,7 +176,6 @@ it("offers shop setup instead of invalid resource actions without a selected sho
 
 it.each([
   ["Products", "Archive", { id: "product_1", name: "Bag" }],
-  ["Credentials", "Revoke", { id: "credential_1", status: "ACTIVE" }],
   ["Deliveries", "Retry", { id: "delivery_1", status: "FAILED" }],
 ] as const)("shows pending and failure feedback for %s mutations, allowing a retry", async (page, label, row) => {
   let reject!: (reason: Error) => void;

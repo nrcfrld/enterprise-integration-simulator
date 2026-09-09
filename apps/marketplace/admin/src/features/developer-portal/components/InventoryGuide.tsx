@@ -8,5 +8,6 @@ export function InventoryGuide() {
     <p>Warehouse A (priority 20) has 5 mugs and 0 plates available; B (priority 10) has 2 mugs and 3 plates. An order for 2 mugs and 1 plate selects B, because A cannot supply the plate. An order for 4 mugs and 1 plate fails even though aggregate stock is 7 mugs and 3 plates: no single warehouse has both quantities.</p>
     <p>With 10 on hand and 2 reserved, available is 8. Saving on hand as 15 replaces the physical count and makes 13 available. It does not add 15. Never enter a count below reserved units. Return-to-sender completion does not automatically restock physical inventory; inspect the returned goods, then adjust the warehouse count.</p>
     <p>Public warehouse APIs are read-only. List warehouses, copy a returned warehouse ID, then inspect its on_hand_quantity, reserved_quantity, and available_quantity in the request simulator.</p>
+    <p>The Admin inventory editor checks the loaded inventory version when saving. If a shipment changes stock before Save, the server returns 409 INVENTORY_CONFLICT and the editor reloads while keeping your unsaved count. Use latest count, review what changed, then re-enter your adjustment. This is separate from public API authentication and request idempotency.</p>
   </section>;
 }

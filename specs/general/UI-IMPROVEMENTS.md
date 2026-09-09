@@ -2,9 +2,11 @@
 
 Audit date: 2026-09-05 · Baseline: commit 0dfdd77 · Audience: entry-level and junior integration developers.
 
-**Current status (2026-09-09): C1–C4 and H1–H17 are implemented; N1–N4 remain OPEN. C5 is excluded by the user's explicit decision to retain local frontend origin 5173.** The current High Priority implementation and test evidence are in the [implementation report](../../IMPLEMENTATION_REPORT.md#implemented--h11h14-h16-h17-2026-09-09). SQLc generator parity for H14 is verified; no CORS/port change was made.
+**Current status (2026-09-10): C1–C4, H1–H20 and N1–N3 are implemented. N4 remains OPEN; N5–N7 remain proposed. C5 is excluded: retain local frontend origin 5173.** See the [implementation evidence](../../IMPLEMENTATION_REPORT.md#implemented--n1n3-h18h20-2026-09-10). H20 checks Admin inventory saves; legacy control API calls omitting the optional version retain unconditional replacement semantics.
 
-Read the [current audit and prioritized implementation plan](/Users/enrico/Documents/engineering-challenge/specs/general/UI-AUDIT-2026-09-09.md). It supersedes the original walkthrough and gap inventory below where later implementations have changed the product. This file retains the original findings, IDs, and remediation history for traceability. Original problem statements do not mean fixed behavior is still missing.
+Read the [latest post-remediation re-audit and implementation plan](UI-REAUDIT-2026-09-09.md) for current recommendations, evidence and the updated ten-step journey. It supersedes the earlier audit snapshots below. Prior problem statements and status notes are historical, not a current backlog.
+
+The [earlier audit snapshot](UI-AUDIT-2026-09-09.md) and the original findings below retain IDs and remediation history for traceability. Original problem statements do not mean fixed behavior is still missing.
 
 ## Scope, method, and limits
 

@@ -324,3 +324,12 @@ enter 15, not 5. The new physical count cannot be below the reserved quantity.
 ## Durable external application exercise
 
 Continue with the [durable consumer exercise](durable-consumer-exercise.md) for both providers. It supplies a SQLite inbox, processing worker, current-state projection, full pagination and stable retry keys, with duplicate/restart/out-of-order/return evidence. The same lesson and downloadable files are in the Developer Portal.
+
+
+## Recovering and sharing a learning exercise
+
+In the Request Simulator, check **Simulation conditions** before debugging signatures. Scenarios offers Duplicate delivery, Client timeout and Rate-limit recovery presets with expected evidence. Apply the preset, run the exercise, then **Clear shop faults**. Resetting sample data does not clear faults; clearing faults does not undo queued deliveries or server mutations. All operators can read global maintenance status; an Admin must disable it.
+
+Use Orders ID/number search, Products SKU search, Shipments tracking search or Deliveries event/registration search to locate the evidence across all pages. Bookmark the portal lesson/operation or resource detail URL to share its non-secret shop/record context. A mentor still needs authorization for that shop; do not share credential secrets or signed request URLs.
+
+Before revoking an API credential, review the console’s impact preview. Tokopedia webhook signing changes only when the oldest active key is removed; prepare the replacement receiver key at that switch. Shopee callback secrets do not change when an API credential is revoked. Verify a signed read and fresh webhook afterward, and inspect current state before retrying an earlier mutation through a replacement credential.

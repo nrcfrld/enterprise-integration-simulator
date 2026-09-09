@@ -29,5 +29,5 @@ it("requests filtered event pages and discards late results from the previous sh
   await act(async () => resolveOld({ data: [{ id: "old_shop_event" }] }));
   expect(result.current.data?.data?.[0].id).toBe("event_b");
   act(() => result.current.setListPage(2));
-  await waitFor(() => expect(request).toHaveBeenCalledWith("/control/v1/shops/shop_b/events?page=2&limit=20&resource_type=shipment&aggregate_id=shipment_a&event_type=shipment.returned", "token"));
+  await waitFor(() => expect(request).toHaveBeenCalledWith("/control/v1/shops/shop_b/events?page=2&limit=20&resource_type=shipment&event_type=shipment.returned", "token"));
 });

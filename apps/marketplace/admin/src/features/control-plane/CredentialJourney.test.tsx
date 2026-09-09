@@ -63,6 +63,7 @@ it("preserves pasted credentials across a console visit and explicitly clears th
  await user.type(screen.getByLabelText(/Client secret/), "pasted-secret");
  await user.click(screen.getByRole("button", { name: "Open Credentials" }));
  await user.click(await screen.findByRole("link", { name: "API Documentation" }));
+ await user.click(screen.getByRole("button", { name: "Request simulator" }));
  expect(screen.getByLabelText(/Client secret/)).toHaveValue("pasted-secret");
  await user.click(screen.getByRole("button", { name: "Clear credential" }));
  expect(screen.getByLabelText(/Client secret/)).toHaveValue("");

@@ -1,3 +1,6 @@
+import { useInRouterContext } from "react-router-dom";
+import { ResourceSearch } from "./ResourceSearch";
+import { CredentialRevocation } from "./CredentialRevocation";
 import { useState } from "react";
 import type { ControlPage } from "@/app/navigation";
 import { RelatedResource } from "./details/RelatedResource";
@@ -10,6 +13,7 @@ import type {
   FormRequest,
   PaginationMetadata,
   ResourceRecord,
+  Shop,
 } from "@/shared/types/controlPlane";
 
 const request = <T,>(...args: Parameters<typeof controlPlaneRequest>) =>
@@ -26,6 +30,8 @@ type ResourcePageName =
   | "Users";
 
 interface ResourcePageProps {
+  onTry?: (endpointID: string) => void;
+  shop?: Shop;
   page: ResourcePageName;
   onNavigate?: (page: ControlPage) => void;
   data: ControlPlaneData | null;
@@ -43,6 +49,8 @@ interface ResourcePageProps {
 }
 
 export function ResourcePage({
+  onTry,
+  shop,
   page,
   onNavigate,
   data,
@@ -58,6 +66,8 @@ export function ResourcePage({
   listPage,
   onPageChange,
 }: ResourcePageProps) {
+  const inRouter = useInRouterContext();
+  const [revokingID, setRevokingID] = useState<string>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const rows = Array.isArray(data?.data) ? data.data : [];
@@ -105,6 +115,7 @@ export function ResourcePage({
   };
   return (
     <>
+      {revokingID && shop && <CredentialRevocation id={revokingID} shop={shop} token={token} onClose={() => setRevokingID(undefined)} onRevoked={async () => { await onRefresh(); onNotice("Credential revoked. Update your client and verify delivery before resuming."); }} />}
       {error && <p role="alert" className="error alert alert-error">{error}</p>}
       {pending && <p role="status">Saving action…</p>}
       <div className="page-hint alert alert-info">
@@ -120,6 +131,7 @@ export function ResourcePage({
       </div>
       {page === "Products" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Warehouses")}>Manage warehouse inventory</button>}
       {page === "Credentials" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Documentation")}>Return to request simulator</button>}
+      {inRouter && ["Orders", "Products", "Shipments", "Deliveries"].includes(page) && <ResourceSearch page={page} shopID={shopID} />}
       <div className="table-toolbar">
         {action && (
           <button className="btn btn-primary" onClick={() => onForm({ kind: action[0] })}>
@@ -141,7 +153,7 @@ export function ResourcePage({
             <thead>
               <tr>
                 {columns(rows[0], page).map((key) => (
-                  <th key={key}>{key === "stock" ? "available stock" : key.replaceAll("_", " ")}</th>
+                  <th key={key}>{columnLabel(key)}</th>
                 ))}
                 <th>Actions</th>
               </tr>
@@ -150,10 +162,10 @@ export function ResourcePage({
               {rows.map((row) => (
                 <tr key={row.id}>
                   {columns(rows[0], page).map((key) => (
-                    <td key={key} data-label={key === "stock" ? "available stock" : key.replaceAll("_", " ")}>
+                    <td key={key} data-label={columnLabel(key)}>
                       {(page === "Packages" || page === "Shipments") && key === "order_number" ? <RelatedResource type="order" id={String(row.order_id || "")} label={String(row.order_number || row.order_id || "")} onOpen={onDetail} />
                         : (page === "Packages" || page === "Shipments") && key === "warehouse_name" ? <RelatedResource type="warehouse" id={String(row.warehouse_id || "")} label={String(row.warehouse_name || "")} onOpen={onDetail} />
-                        : page === "Shipments" && key === "package_id" ? <RelatedResource type="package" id={String(row.package_id || "")} onOpen={onDetail} /> : String(row[key] ?? "—")}
+                        : page === "Shipments" && key === "package_id" ? <RelatedResource type="package" id={String(row.package_id || "")} onOpen={onDetail} /> : <RecordValue name={key} value={row[key]} onError={setError} onNotice={onNotice} />}
                     </td>
                   ))}
                   <td className="row-actions" data-label="Actions">
@@ -168,7 +180,7 @@ export function ResourcePage({
                       <button
                         onClick={() => onDetail({ type: "order", id: row.id })}
                       >
-                        Event trail
+                        View order
                       </button>
                     )}
                     {page === "Shipments" && (
@@ -206,7 +218,7 @@ export function ResourcePage({
                     {page === "Credentials" && row.status === "ACTIVE" && (
                       <button
                         disabled={pending}
-                        onClick={() => void mutate(`/control/v1/credentials/${row.id}/revoke`, "POST", "Credential revoked")}
+                        onClick={() => setRevokingID(row.id)}
                       >
                         Revoke
                       </button>
@@ -217,8 +229,8 @@ export function ResourcePage({
             </tbody>
           </table>
         ) : (
-          <div className="empty"><p>{emptyHelp[page]}</p>
-            {onNavigate && page === "Shipments" && <button onClick={() => onNavigate("Documentation")}>Open API Simulator</button>}
+          <div className="empty"><p>{emptyHelp[page]}</p>{["Orders", "Products", "Shipments", "Deliveries"].includes(page) && <p>If searching, clear the search to see other records in this shop.</p>}
+            {onNavigate && page === "Shipments" && <button onClick={() => onTry ? onTry(shop?.provider_profile === "TOKOPEDIA_LIKE" ? "tokopedia-create-shipment" : "shopee-create-shipment") : onNavigate("Documentation")}>Open API Simulator</button>}
             {onNavigate && page === "Deliveries" && <button onClick={() => onNavigate("Webhooks")}>Configure webhooks</button>}
             {onNavigate && page === "Packages" && <button onClick={() => onNavigate("Orders")}>View orders</button>}
           </div>
@@ -261,8 +273,20 @@ function columns(row: Record<string, unknown>, page: string) {
   if (page === "Warehouses") return ["code", "name", "status", "priority", "product_count", "available_quantity"];
   if (page === "Deliveries") return ["event_type", "endpoint", "status", "attempt_count", "next_attempt_at", "failure_reason"];
   if (page === "Shipments") return ["order_number", "package_id", "warehouse_name", "tracking_number", "status", "created_at"];
-  if (page === "Packages") return ["order_number", "status", "item_count", "warehouse_name", "warehouse_code", "created_at"];
-  return Object.keys(row)
-    .filter((key) => typeof row[key] !== "object")
-    .slice(0, 7);
+  if (page === "Packages") return ["order_number", "status", "item_count", "unit_count", "warehouse_name", "warehouse_code", "created_at"];
+  if (page === "Orders") return ["id", "order_number", "status", "total_amount", "created_at"];
+  if (page === "Credentials") return ["client_id", "status", "created_at", "revoked_at"];
+  if (page === "Users") return ["email", "role", "status", "created_at"];
+  return Object.keys(row).filter(key => typeof row[key] !== "object");
+}
+
+function columnLabel(key: string) {
+  return ({ stock: "available stock", item_count: "Lines", unit_count: "Units", id: "API ID" } as Record<string, string>)[key] || key.replaceAll("_", " ");
+}
+function RecordValue({ name, value, onError, onNotice }: { name: string; value: unknown; onError: (text: string) => void; onNotice: (text: string) => void }) {
+  if (value == null) return <>—</>;
+  const text = String(value);
+  if (name.endsWith("_at") && !Number.isNaN(Date.parse(text))) return <time dateTime={text} title={text}>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(text))} UTC</time>;
+  if (name === "id" || name.endsWith("_id")) return <><code>{text}</code> <button className="btn btn-ghost btn-xs" aria-label={`Copy ${name.replaceAll("_", " ")} ${text}`} onClick={() => { void navigator.clipboard.writeText(text).then(() => onNotice("ID copied"), () => onError("Could not copy. Select and copy the displayed ID.")); }}>Copy</button></>;
+  return <>{text}</>;
 }

@@ -1,7 +1,7 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:18080";
 
 export interface ControlPlaneErrorResponse {
-  error?: { message?: string };
+  error?: { message?: string; code?: string };
 }
 
 export async function controlPlaneRequest<T>(
@@ -24,7 +24,7 @@ export async function controlPlaneRequest<T>(
   }
   if (!response.ok) {
     const error = data as ControlPlaneErrorResponse | null;
-    throw new Error(error?.error?.message || "Request failed");
+    throw Object.assign(new Error(error?.error?.message || "Request failed"), { code: error?.error?.code, status: response.status });
   }
 
   return data as T;

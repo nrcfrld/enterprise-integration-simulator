@@ -32,7 +32,7 @@ func (s *Server) putScenario(c *gin.Context) {
 		return
 	}
 	if err := v.Validate(); err != nil {
-		c.JSON(400, errorBody("INVALID_REQUEST", "invalid scenario values"))
+		c.JSON(400, errorBody("INVALID_REQUEST", err.Error()))
 		return
 	}
 	_, err := s.db.Exec(c, `INSERT INTO shop_scenarios(shop_id,api_slow_ms,api_slow_probability,api_random_500_probability,api_timeout_probability,force_rate_limit,webhook_duplicate,webhook_delay_seconds,webhook_out_of_order,webhook_force_failure) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(shop_id) DO UPDATE SET api_slow_ms=EXCLUDED.api_slow_ms,api_slow_probability=EXCLUDED.api_slow_probability,api_random_500_probability=EXCLUDED.api_random_500_probability,api_timeout_probability=EXCLUDED.api_timeout_probability,force_rate_limit=EXCLUDED.force_rate_limit,webhook_duplicate=EXCLUDED.webhook_duplicate,webhook_delay_seconds=EXCLUDED.webhook_delay_seconds,webhook_out_of_order=EXCLUDED.webhook_out_of_order,webhook_force_failure=EXCLUDED.webhook_force_failure,updated_at=now()`, shop, v.APISlowMS, v.APISlowProbability, v.APIRandom500Probability, v.APITimeoutProbability, v.ForceRateLimit, v.WebhookDuplicate, v.WebhookDelaySeconds, v.WebhookOutOfOrder, v.WebhookForceFailure)

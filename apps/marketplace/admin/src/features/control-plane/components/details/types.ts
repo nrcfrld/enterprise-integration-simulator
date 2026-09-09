@@ -18,6 +18,7 @@ export interface ShipmentSummary {
 }
 
 export interface WarehouseInventoryItem {
+  updated_at?: string;
   product_id: string;
   sku: string;
   product_name: string;

@@ -14,6 +14,7 @@ import { Scenario } from "./components/Scenario";
 import { WebhookSettings } from "./components/WebhookSettings";
 
 interface ControlPlaneRoutesProps {
+  onTry?: (endpointID: string) => void;
   selectedShop?: Shop;
   data: ControlPlaneData | null;
   shopID: string;
@@ -32,6 +33,7 @@ interface ControlPlaneRoutesProps {
 }
 
 export function ControlPlaneRoutes({
+  onTry,
   data,
   selectedShop,
   shopID,
@@ -79,6 +81,7 @@ export function ControlPlaneRoutes({
         path={CONTROL_PATHS.Dashboard}
         element={
           <Dashboard
+            onTryOrders={onTry ? () => onTry(selectedShop?.provider_profile === "TOKOPEDIA_LIKE" ? "tokopedia-search-orders" : "shopee-list-orders") : undefined}
             data={data}
             shopID={shopID}
             token={token}
@@ -140,6 +143,8 @@ export function ControlPlaneRoutes({
           path={CONTROL_PATHS[resource]}
           element={
             <ResourcePage
+              onTry={onTry}
+              shop={selectedShop}
               page={resource}
               {...resourceProps}
               listPage={listPage}

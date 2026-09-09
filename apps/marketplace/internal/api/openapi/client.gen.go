@@ -349,6 +349,17 @@ type ControlEvent struct {
 // ControlEventAggregateType defines model for ControlEvent.AggregateType.
 type ControlEventAggregateType string
 
+// ControlInventoryRow defines model for ControlInventoryRow.
+type ControlInventoryRow struct {
+	AvailableQuantity int    `json:"available_quantity"`
+	OnHandQuantity    int    `json:"on_hand_quantity"`
+	ProductId         string `json:"product_id"`
+	ReservedQuantity  int    `json:"reserved_quantity"`
+
+	// UpdatedAt Preserve exactly as the conditional replacement version.
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // ControlOrderDetail defines model for ControlOrderDetail.
 type ControlOrderDetail struct {
 	Events     *[]ControlEvent               `json:"events,omitempty"`
@@ -1210,6 +1221,18 @@ type SimulateControlOrderActionJSONBodyActor string
 // SimulateControlOrderActionJSONBodyReason defines parameters for SimulateControlOrderAction.
 type SimulateControlOrderActionJSONBodyReason string
 
+// ListControlDeliveriesParams defines parameters for ListControlDeliveries.
+type ListControlDeliveriesParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Q Case-insensitive substring over the documented identity fields; filters apply across all pages.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Status Case-insensitive exact canonical status match.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+}
+
 // ListControlShopEventsParams defines parameters for ListControlShopEvents.
 type ListControlShopEventsParams struct {
 	Page         *int                                     `form:"page,omitempty" json:"page,omitempty"`
@@ -1223,6 +1246,49 @@ type ListControlShopEventsParams struct {
 
 // ListControlShopEventsParamsResourceType defines parameters for ListControlShopEvents.
 type ListControlShopEventsParamsResourceType string
+
+// ListControlOrdersParams defines parameters for ListControlOrders.
+type ListControlOrdersParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Q Case-insensitive substring over the documented identity fields; filters apply across all pages.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Status Case-insensitive exact canonical status match.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListControlProductsParams defines parameters for ListControlProducts.
+type ListControlProductsParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Q Case-insensitive substring over the documented identity fields; filters apply across all pages.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Status Case-insensitive exact canonical status match.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListControlShipmentsParams defines parameters for ListControlShipments.
+type ListControlShipmentsParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Q Case-insensitive substring over the documented identity fields; filters apply across all pages.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Status Case-insensitive exact canonical status match.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ReplaceControlInventoryJSONBody defines parameters for ReplaceControlInventory.
+type ReplaceControlInventoryJSONBody struct {
+	// ExpectedUpdatedAt Exact RFC3339 updated_at from the inventory row; empty string means require absent row.
+	ExpectedUpdatedAt *string `json:"expected_updated_at,omitempty"`
+	OnHandQuantity    int     `json:"on_hand_quantity"`
+}
 
 // ShopeeCancelOrderJSONRequestBody defines body for ShopeeCancelOrder for application/json ContentType.
 type ShopeeCancelOrderJSONRequestBody ShopeeCancelOrderJSONBody
@@ -1265,6 +1331,9 @@ type CreateControlProductJSONRequestBody = ControlProductInput
 
 // UpdateControlProductJSONRequestBody defines body for UpdateControlProduct for application/json ContentType.
 type UpdateControlProductJSONRequestBody = ControlProductPatch
+
+// ReplaceControlInventoryJSONRequestBody defines body for ReplaceControlInventory for application/json ContentType.
+type ReplaceControlInventoryJSONRequestBody ReplaceControlInventoryJSONBody
 
 // Getter for additional properties for ControlOrderDetail. Returns the specified
 // element and whether it was found
@@ -1778,6 +1847,9 @@ type ClientInterface interface {
 	// GetControlDelivery request
 	GetControlDelivery(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetControlMaintenance request
+	GetControlMaintenance(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetControlOrder request
 	GetControlOrder(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1789,11 +1861,17 @@ type ClientInterface interface {
 	// GetControlShipment request
 	GetControlShipment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListControlDeliveries request
+	ListControlDeliveries(ctx context.Context, id string, params *ListControlDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListControlShopEvents request
 	ListControlShopEvents(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListControlOrders request
+	ListControlOrders(ctx context.Context, id string, params *ListControlOrdersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListControlProducts request
-	ListControlProducts(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListControlProducts(ctx context.Context, id string, params *ListControlProductsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateControlProductWithBody request with any body
 	CreateControlProductWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1810,6 +1888,17 @@ type ClientInterface interface {
 	UpdateControlProductWithBody(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateControlProduct(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListControlShipments request
+	ListControlShipments(ctx context.Context, id string, params *ListControlShipmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlWarehouse request
+	GetControlWarehouse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceControlInventoryWithBody request with any body
+	ReplaceControlInventoryWithBody(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceControlInventory(ctx context.Context, id string, productID string, body ReplaceControlInventoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Health request
 	Health(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2274,6 +2363,18 @@ func (c *Client) GetControlDelivery(ctx context.Context, id string, reqEditors .
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetControlMaintenance(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlMaintenanceRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetControlOrder(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetControlOrderRequest(c.Server, id)
 	if err != nil {
@@ -2322,6 +2423,18 @@ func (c *Client) GetControlShipment(ctx context.Context, id string, reqEditors .
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListControlDeliveries(ctx context.Context, id string, params *ListControlDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlDeliveriesRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListControlShopEvents(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListControlShopEventsRequest(c.Server, id, params)
 	if err != nil {
@@ -2334,8 +2447,20 @@ func (c *Client) ListControlShopEvents(ctx context.Context, id string, params *L
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListControlProducts(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListControlProductsRequest(c.Server, id)
+func (c *Client) ListControlOrders(ctx context.Context, id string, params *ListControlOrdersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlOrdersRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListControlProducts(ctx context.Context, id string, params *ListControlProductsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlProductsRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2408,6 +2533,54 @@ func (c *Client) UpdateControlProductWithBody(ctx context.Context, id string, pr
 
 func (c *Client) UpdateControlProduct(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateControlProductRequest(c.Server, id, productID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListControlShipments(ctx context.Context, id string, params *ListControlShipmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlShipmentsRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlWarehouse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlWarehouseRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceControlInventoryWithBody(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceControlInventoryRequestWithBody(c.Server, id, productID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceControlInventory(ctx context.Context, id string, productID string, body ReplaceControlInventoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceControlInventoryRequest(c.Server, id, productID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4728,6 +4901,33 @@ func NewGetControlDeliveryRequest(server string, id string) (*http.Request, erro
 	return req, nil
 }
 
+// NewGetControlMaintenanceRequest generates requests for GetControlMaintenance
+func NewGetControlMaintenanceRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/maintenance")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetControlOrderRequest generates requests for GetControlOrder
 func NewGetControlOrderRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -4840,6 +5040,110 @@ func NewGetControlShipmentRequest(server string, id string) (*http.Request, erro
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListControlDeliveriesRequest generates requests for ListControlDeliveries
+func NewListControlDeliveriesRequest(server string, id string, params *ListControlDeliveriesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/deliveries", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, *params.Q); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -4970,8 +5274,112 @@ func NewListControlShopEventsRequest(server string, id string, params *ListContr
 	return req, nil
 }
 
+// NewListControlOrdersRequest generates requests for ListControlOrders
+func NewListControlOrdersRequest(server string, id string, params *ListControlOrdersParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/orders", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, *params.Q); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListControlProductsRequest generates requests for ListControlProducts
-func NewListControlProductsRequest(server string, id string) (*http.Request, error) {
+func NewListControlProductsRequest(server string, id string, params *ListControlProductsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4994,6 +5402,76 @@ func NewListControlProductsRequest(server string, id string) (*http.Request, err
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, *params.Q); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -5178,6 +5656,198 @@ func NewUpdateControlProductRequestWithBody(server string, id string, productID 
 	}
 
 	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListControlShipmentsRequest generates requests for ListControlShipments
+func NewListControlShipmentsRequest(server string, id string, params *ListControlShipmentsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/shops/%s/shipments", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, *params.Q); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetControlWarehouseRequest generates requests for GetControlWarehouse
+func NewGetControlWarehouseRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/warehouses/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceControlInventoryRequest calls the generic ReplaceControlInventory builder with application/json body
+func NewReplaceControlInventoryRequest(server string, id string, productID string, body ReplaceControlInventoryJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceControlInventoryRequestWithBody(server, id, productID, "application/json", bodyReader)
+}
+
+// NewReplaceControlInventoryRequestWithBody generates requests for ReplaceControlInventory with any type of body
+func NewReplaceControlInventoryRequestWithBody(server string, id string, productID string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "productID", runtime.ParamLocationPath, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control/v1/warehouses/%s/inventory/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -5387,6 +6057,9 @@ type ClientWithResponsesInterface interface {
 	// GetControlDeliveryWithResponse request
 	GetControlDeliveryWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlDeliveryResponse, error)
 
+	// GetControlMaintenanceWithResponse request
+	GetControlMaintenanceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetControlMaintenanceResponse, error)
+
 	// GetControlOrderWithResponse request
 	GetControlOrderWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlOrderResponse, error)
 
@@ -5398,11 +6071,17 @@ type ClientWithResponsesInterface interface {
 	// GetControlShipmentWithResponse request
 	GetControlShipmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlShipmentResponse, error)
 
+	// ListControlDeliveriesWithResponse request
+	ListControlDeliveriesWithResponse(ctx context.Context, id string, params *ListControlDeliveriesParams, reqEditors ...RequestEditorFn) (*ListControlDeliveriesResponse, error)
+
 	// ListControlShopEventsWithResponse request
 	ListControlShopEventsWithResponse(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*ListControlShopEventsResponse, error)
 
+	// ListControlOrdersWithResponse request
+	ListControlOrdersWithResponse(ctx context.Context, id string, params *ListControlOrdersParams, reqEditors ...RequestEditorFn) (*ListControlOrdersResponse, error)
+
 	// ListControlProductsWithResponse request
-	ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error)
+	ListControlProductsWithResponse(ctx context.Context, id string, params *ListControlProductsParams, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error)
 
 	// CreateControlProductWithBodyWithResponse request with any body
 	CreateControlProductWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateControlProductResponse, error)
@@ -5419,6 +6098,17 @@ type ClientWithResponsesInterface interface {
 	UpdateControlProductWithBodyWithResponse(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error)
 
 	UpdateControlProductWithResponse(ctx context.Context, id string, productID string, body UpdateControlProductJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateControlProductResponse, error)
+
+	// ListControlShipmentsWithResponse request
+	ListControlShipmentsWithResponse(ctx context.Context, id string, params *ListControlShipmentsParams, reqEditors ...RequestEditorFn) (*ListControlShipmentsResponse, error)
+
+	// GetControlWarehouseWithResponse request
+	GetControlWarehouseWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlWarehouseResponse, error)
+
+	// ReplaceControlInventoryWithBodyWithResponse request with any body
+	ReplaceControlInventoryWithBodyWithResponse(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceControlInventoryResponse, error)
+
+	ReplaceControlInventoryWithResponse(ctx context.Context, id string, productID string, body ReplaceControlInventoryJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceControlInventoryResponse, error)
 
 	// HealthWithResponse request
 	HealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthResponse, error)
@@ -6116,6 +6806,32 @@ func (r GetControlDeliveryResponse) StatusCode() int {
 	return 0
 }
 
+type GetControlMaintenanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Enabled bool `json:"enabled"`
+	}
+	JSON401 *Error
+	JSON500 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlMaintenanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlMaintenanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetControlOrderResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6198,6 +6914,30 @@ func (r GetControlShipmentResponse) StatusCode() int {
 	return 0
 }
 
+type ListControlDeliveriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON401      *Error
+	JSON403      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListControlShopEventsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6220,6 +6960,30 @@ func (r ListControlShopEventsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListControlShopEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListControlOrdersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON401      *Error
+	JSON403      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlOrdersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlOrdersResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6360,6 +7124,82 @@ func (r UpdateControlProductResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateControlProductResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListControlShipmentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON401      *Error
+	JSON403      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlShipmentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlShipmentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetControlWarehouseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Id        *string                `json:"id,omitempty"`
+		Inventory *[]ControlInventoryRow `json:"inventory,omitempty"`
+		ShopId    *string                `json:"shop_id,omitempty"`
+	}
+	JSON403 *Error
+	JSON404 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlWarehouseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlWarehouseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceControlInventoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON403      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceControlInventoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceControlInventoryResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6740,6 +7580,15 @@ func (c *ClientWithResponses) GetControlDeliveryWithResponse(ctx context.Context
 	return ParseGetControlDeliveryResponse(rsp)
 }
 
+// GetControlMaintenanceWithResponse request returning *GetControlMaintenanceResponse
+func (c *ClientWithResponses) GetControlMaintenanceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetControlMaintenanceResponse, error) {
+	rsp, err := c.GetControlMaintenance(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlMaintenanceResponse(rsp)
+}
+
 // GetControlOrderWithResponse request returning *GetControlOrderResponse
 func (c *ClientWithResponses) GetControlOrderWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlOrderResponse, error) {
 	rsp, err := c.GetControlOrder(ctx, id, reqEditors...)
@@ -6775,6 +7624,15 @@ func (c *ClientWithResponses) GetControlShipmentWithResponse(ctx context.Context
 	return ParseGetControlShipmentResponse(rsp)
 }
 
+// ListControlDeliveriesWithResponse request returning *ListControlDeliveriesResponse
+func (c *ClientWithResponses) ListControlDeliveriesWithResponse(ctx context.Context, id string, params *ListControlDeliveriesParams, reqEditors ...RequestEditorFn) (*ListControlDeliveriesResponse, error) {
+	rsp, err := c.ListControlDeliveries(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlDeliveriesResponse(rsp)
+}
+
 // ListControlShopEventsWithResponse request returning *ListControlShopEventsResponse
 func (c *ClientWithResponses) ListControlShopEventsWithResponse(ctx context.Context, id string, params *ListControlShopEventsParams, reqEditors ...RequestEditorFn) (*ListControlShopEventsResponse, error) {
 	rsp, err := c.ListControlShopEvents(ctx, id, params, reqEditors...)
@@ -6784,9 +7642,18 @@ func (c *ClientWithResponses) ListControlShopEventsWithResponse(ctx context.Cont
 	return ParseListControlShopEventsResponse(rsp)
 }
 
+// ListControlOrdersWithResponse request returning *ListControlOrdersResponse
+func (c *ClientWithResponses) ListControlOrdersWithResponse(ctx context.Context, id string, params *ListControlOrdersParams, reqEditors ...RequestEditorFn) (*ListControlOrdersResponse, error) {
+	rsp, err := c.ListControlOrders(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlOrdersResponse(rsp)
+}
+
 // ListControlProductsWithResponse request returning *ListControlProductsResponse
-func (c *ClientWithResponses) ListControlProductsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error) {
-	rsp, err := c.ListControlProducts(ctx, id, reqEditors...)
+func (c *ClientWithResponses) ListControlProductsWithResponse(ctx context.Context, id string, params *ListControlProductsParams, reqEditors ...RequestEditorFn) (*ListControlProductsResponse, error) {
+	rsp, err := c.ListControlProducts(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6843,6 +7710,41 @@ func (c *ClientWithResponses) UpdateControlProductWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseUpdateControlProductResponse(rsp)
+}
+
+// ListControlShipmentsWithResponse request returning *ListControlShipmentsResponse
+func (c *ClientWithResponses) ListControlShipmentsWithResponse(ctx context.Context, id string, params *ListControlShipmentsParams, reqEditors ...RequestEditorFn) (*ListControlShipmentsResponse, error) {
+	rsp, err := c.ListControlShipments(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlShipmentsResponse(rsp)
+}
+
+// GetControlWarehouseWithResponse request returning *GetControlWarehouseResponse
+func (c *ClientWithResponses) GetControlWarehouseWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetControlWarehouseResponse, error) {
+	rsp, err := c.GetControlWarehouse(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlWarehouseResponse(rsp)
+}
+
+// ReplaceControlInventoryWithBodyWithResponse request with arbitrary body returning *ReplaceControlInventoryResponse
+func (c *ClientWithResponses) ReplaceControlInventoryWithBodyWithResponse(ctx context.Context, id string, productID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceControlInventoryResponse, error) {
+	rsp, err := c.ReplaceControlInventoryWithBody(ctx, id, productID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceControlInventoryResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceControlInventoryWithResponse(ctx context.Context, id string, productID string, body ReplaceControlInventoryJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceControlInventoryResponse, error) {
+	rsp, err := c.ReplaceControlInventory(ctx, id, productID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceControlInventoryResponse(rsp)
 }
 
 // HealthWithResponse request returning *HealthResponse
@@ -8230,6 +9132,48 @@ func ParseGetControlDeliveryResponse(rsp *http.Response) (*GetControlDeliveryRes
 	return response, nil
 }
 
+// ParseGetControlMaintenanceResponse parses an HTTP response from a GetControlMaintenanceWithResponse call
+func ParseGetControlMaintenanceResponse(rsp *http.Response) (*GetControlMaintenanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlMaintenanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetControlOrderResponse parses an HTTP response from a GetControlOrderWithResponse call
 func ParseGetControlOrderResponse(rsp *http.Response) (*GetControlOrderResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8366,6 +9310,46 @@ func ParseGetControlShipmentResponse(rsp *http.Response) (*GetControlShipmentRes
 	return response, nil
 }
 
+// ParseListControlDeliveriesResponse parses an HTTP response from a ListControlDeliveriesWithResponse call
+func ParseListControlDeliveriesResponse(rsp *http.Response) (*ListControlDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListControlShopEventsResponse parses an HTTP response from a ListControlShopEventsWithResponse call
 func ParseListControlShopEventsResponse(rsp *http.Response) (*ListControlShopEventsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8410,6 +9394,46 @@ func ParseListControlShopEventsResponse(rsp *http.Response) (*ListControlShopEve
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListControlOrdersResponse parses an HTTP response from a ListControlOrdersWithResponse call
+func ParseListControlOrdersResponse(rsp *http.Response) (*ListControlOrdersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlOrdersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	}
 
@@ -8645,6 +9669,130 @@ func ParseUpdateControlProductResponse(rsp *http.Response) (*UpdateControlProduc
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListControlShipmentsResponse parses an HTTP response from a ListControlShipmentsWithResponse call
+func ParseListControlShipmentsResponse(rsp *http.Response) (*ListControlShipmentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlShipmentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetControlWarehouseResponse parses an HTTP response from a GetControlWarehouseWithResponse call
+func ParseGetControlWarehouseResponse(rsp *http.Response) (*GetControlWarehouseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlWarehouseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Id        *string                `json:"id,omitempty"`
+			Inventory *[]ControlInventoryRow `json:"inventory,omitempty"`
+			ShopId    *string                `json:"shop_id,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceControlInventoryResponse parses an HTTP response from a ReplaceControlInventoryWithResponse call
+func ParseReplaceControlInventoryResponse(rsp *http.Response) (*ReplaceControlInventoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceControlInventoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
 		var dest Error

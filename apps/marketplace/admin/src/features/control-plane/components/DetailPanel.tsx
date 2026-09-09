@@ -13,6 +13,8 @@ import type { DetailContentProps } from "./details/types";
 import { AccessibleDialog } from "./AccessibleDialog";
 
 interface DetailPanelProps {
+  onOpenResource?: (detail: DetailRequest) => void;
+  onBackResource?: () => void;
   onManageWebhook?: () => void;
   shop?: Shop;
   detail: DetailRequest;
@@ -25,7 +27,7 @@ interface DetailPanelProps {
 
 const detailLabels: Record<DetailRequest["type"], string> = {
   product: "Product catalogue",
-  order: "Order event trail",
+  order: "Order details",
   shipment: "Shipment fulfillment",
   package: "Package allocation",
   warehouse: "Warehouse inventory",
@@ -53,8 +55,8 @@ export function DetailPanel(props: DetailPanelProps) {
         {...props}
         detail={current}
         initialFocusRef={initialFocusRef}
-        onOpen={(next) => setHistory(previous => [...previous, next])}
-        onBack={history.length ? () => setHistory(previous => previous.slice(0, -1)) : undefined}
+        onOpen={props.onOpenResource ?? ((next) => setHistory(previous => [...previous, next]))}
+        onBack={props.onBackResource ?? (history.length ? () => setHistory(previous => previous.slice(0, -1)) : undefined)}
       />
     </AccessibleDialog>
   );
@@ -74,7 +76,7 @@ function DetailPanelContent({
   onOpen: (detail: DetailRequest) => void;
   onBack?: () => void;
 }) {
-  const { data, error, setError, reload, refresh, refreshing, updatedAt } = useDetailData(detail, token);
+  const { data, error, setError, reload, refresh, refreshing, updatedAt } = useDetailData(detail, token, shop?.id);
   const pending = detail.type === "delivery" ? isPendingDelivery(data?.status)
     : detail.type === "order" && Boolean(data?.events?.length) && (!data?.deliveries?.length || data.deliveries.some(item => isPendingDelivery(item.status)));
   const checks = useBoundedRefresh(`${detail.type}:${detail.id}`, Boolean(data && !error && pending), refresh);

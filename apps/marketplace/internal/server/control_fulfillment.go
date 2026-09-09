@@ -30,7 +30,7 @@ func (s *Server) shopOrders(c *gin.Context) {
 	for _, row := range rows {
 		data = append(data, gin.H{"id": row.ID, "order_number": row.OrderNumber, "total_amount": row.TotalAmount, "status": row.Status, "created_at": row.CreatedAt.Time, "updated_at": row.UpdatedAt.Time})
 	}
-	s.controlListResponse(c, data)
+	s.controlSearchResponse(c, data, "id", "order_number")
 }
 
 // shopShipments lists the fulfillment records owned by one shop. Shipments are
@@ -64,7 +64,7 @@ func (s *Server) shopShipments(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, errorBody("DATABASE_ERROR", "could not read shipments"))
 		return
 	}
-	s.controlListResponse(c, data)
+	s.controlSearchResponse(c, data, "id", "tracking_number", "order_id", "order_number")
 }
 
 func (s *Server) shopPackages(c *gin.Context) {
@@ -72,7 +72,7 @@ func (s *Server) shopPackages(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT p.id,p.order_id,o.order_number,p.status,p.created_at,COUNT(pi.order_item_id),COALESCE(w.code,''),COALESCE(w.name,''),COALESCE(p.warehouse_id,'') FROM packages p JOIN orders o ON o.id=p.order_id LEFT JOIN package_items pi ON pi.package_id=p.id LEFT JOIN warehouses w ON w.id=p.warehouse_id WHERE o.shop_id=$1 GROUP BY p.id,o.order_number,w.code,w.name ORDER BY p.created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT p.id,p.order_id,o.order_number,p.status,p.created_at,COUNT(pi.order_item_id),COALESCE(SUM(pi.quantity),0),COALESCE(w.code,''),COALESCE(w.name,''),COALESCE(p.warehouse_id,'') FROM packages p JOIN orders o ON o.id=p.order_id LEFT JOIN package_items pi ON pi.package_id=p.id LEFT JOIN warehouses w ON w.id=p.warehouse_id WHERE o.shop_id=$1 GROUP BY p.id,o.order_number,w.code,w.name ORDER BY p.created_at DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list packages"))
 		return
@@ -82,12 +82,12 @@ func (s *Server) shopPackages(c *gin.Context) {
 	for rows.Next() {
 		var id, orderID, number, status, warehouseCode, warehouseName, warehouseID string
 		var created time.Time
-		var count int
-		if err := rows.Scan(&id, &orderID, &number, &status, &created, &count, &warehouseCode, &warehouseName, &warehouseID); err != nil {
+		var count, units int
+		if err := rows.Scan(&id, &orderID, &number, &status, &created, &count, &units, &warehouseCode, &warehouseName, &warehouseID); err != nil {
 			c.JSON(500, errorBody("DATABASE_ERROR", "could not read package"))
 			return
 		}
-		data = append(data, gin.H{"id": id, "order_id": orderID, "order_number": number, "status": status, "item_count": count, "warehouse_id": warehouseID, "warehouse_code": warehouseCode, "warehouse_name": warehouseName, "created_at": created})
+		data = append(data, gin.H{"id": id, "order_id": orderID, "order_number": number, "status": status, "item_count": count, "unit_count": units, "warehouse_id": warehouseID, "warehouse_code": warehouseCode, "warehouse_name": warehouseName, "created_at": created})
 	}
 	s.controlListResponse(c, data)
 }
@@ -352,7 +352,7 @@ func (s *Server) listCredentials(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT id,client_id,status,created_at,revoked_at FROM credentials WHERE shop_id=$1 ORDER BY created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT id,client_id,status,created_at,revoked_at FROM credentials WHERE shop_id=$1 ORDER BY created_at DESC,id DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list credentials"))
 		return

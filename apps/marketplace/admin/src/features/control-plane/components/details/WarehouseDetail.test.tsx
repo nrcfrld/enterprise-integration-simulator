@@ -5,9 +5,22 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { WarehouseDetail } from "./WarehouseDetail";
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("@/shared/api/controlPlaneClient", () => ({ controlPlaneRequest: request }));
-const data = (count: number) => ({ id: "wh_1", shop_id: "shop_1", inventory: [{ product_id: "prd_1", product_name: "Mug", sku: "MUG", on_hand_quantity: count, reserved_quantity: 0, available_quantity: count }] });
+const data = (count: number) => ({ id: "wh_1", shop_id: "shop_1", inventory: [{ updated_at: `2026-09-09T00:00:${String(count).padStart(2, "0")}Z`, product_id: "prd_1", product_name: "Mug", sku: "MUG", on_hand_quantity: count, reserved_quantity: 0, available_quantity: count }] });
 const props = { token: "token", onReload: vi.fn(), onRefresh: vi.fn(), onNotice: vi.fn(), onError: vi.fn() };
 beforeEach(() => { request.mockReset().mockResolvedValue({ data: [] }); Object.values(props).forEach(value => { if (typeof value === "function") value.mockReset(); }); });
+it("preserves the draft and reloads after a server conflict that was not visible before Save", async () => {
+  request.mockImplementation((_path, _token, options) => options?.method === "PUT" ? Promise.reject(Object.assign(new Error("Inventory changed"), { code: "INVENTORY_CONFLICT" })) : Promise.resolve({ data: [] }));
+  render(<WarehouseDetail {...props} data={data(10)} />);
+  const input = screen.getByLabelText("On hand quantity for Mug");
+  fireEvent.change(input, { target: { value: "15" } });
+  fireEvent.submit(input.closest("form")!);
+  await waitFor(() => expect(props.onError).toHaveBeenLastCalledWith("Inventory changed"));
+  expect(props.onReload).toHaveBeenCalledOnce();
+  expect(input).toHaveValue(15);
+  expect(props.onNotice).not.toHaveBeenCalled();
+  const sent = request.mock.calls.find(call => call[2]?.method === "PUT");
+  expect(JSON.parse(sent![2].body)).toEqual({ on_hand_quantity: 15, expected_updated_at: "2026-09-09T00:00:10Z" });
+});
 it("save → shipment → refresh keeps the clean input at the latest count", async () => {
   const { rerender } = render(<WarehouseDetail {...props} data={data(7)} />);
   const input = screen.getByLabelText("On hand quantity for Mug");
@@ -17,7 +30,7 @@ it("save → shipment → refresh keeps the clean input at the latest count", as
   rerender(<WarehouseDetail {...props} data={data(8)} />);
   expect(input).toHaveValue(8);
   fireEvent.submit(input.closest("form")!);
-  await waitFor(() => expect(request).toHaveBeenLastCalledWith("/control/v1/warehouses/wh_1/inventory/prd_1", "token", { method: "PUT", body: '{"on_hand_quantity":8}' }));
+  await waitFor(() => expect(request).toHaveBeenLastCalledWith("/control/v1/warehouses/wh_1/inventory/prd_1", "token", { method: "PUT", body: '{"on_hand_quantity":8,"expected_updated_at":"2026-09-09T00:00:08Z"}' }));
 });
 it("preserves unsaved edits, blocks conflicts, and guards duplicate submissions", async () => {
   const { rerender } = render(<WarehouseDetail {...props} data={data(10)} />);

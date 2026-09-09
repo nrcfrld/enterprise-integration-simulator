@@ -82,6 +82,122 @@ paths:
               schema: { $ref: '#/components/schemas/ControlPlaneSession' }
         '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /control/v1/warehouses/{id}:
+    get:
+      operationId: getControlWarehouse
+      tags: [Control Plane]
+      summary: Read a warehouse and inventory versions before editing
+      security: [{ ControlPlaneBearer: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Warehouse inventory includes updated_at for conditional replacements.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  shop_id: { type: string }
+                  inventory: { type: array, items: { $ref: '#/components/schemas/ControlInventoryRow' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /control/v1/warehouses/{id}/inventory/{productID}:
+    put:
+      operationId: replaceControlInventory
+      tags: [Control Plane]
+      summary: Replace physical stock with an optional version precondition
+      security: [{ ControlPlaneBearer: [] }]
+      description: The Admin editor always sends expected_updated_at from its last read. A stale version returns 409 INVENTORY_CONFLICT without changing stock. An empty string requires the inventory row to be absent, for Add inventory. Omission retains the legacy unconditional control-API behavior; callers needing conflict protection must send the precondition. Counts below reservations are rejected. The warehouse and inventory are locked while checking and updating.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: productID, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [on_hand_quantity]
+              properties:
+                on_hand_quantity: { type: integer, minimum: 0 }
+                expected_updated_at: { type: string, description: Exact RFC3339 updated_at from the inventory row; empty string means require absent row. }
+            example: { on_hand_quantity: 15, expected_updated_at: '2026-09-09T12:00:00Z' }
+      responses:
+        '200': { description: Physical and aggregate stock updated atomically. }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { description: INVENTORY_CONFLICT; current contains on_hand_quantity, reserved_quantity and updated_at. Refresh and review before retrying. }
+  /control/v1/maintenance:
+    get:
+      operationId: getControlMaintenance
+      tags: [Control Plane]
+      summary: Read global maintenance state for request diagnosis
+      security: [{ ControlPlaneBearer: [] }]
+      description: Readable by signed-in Operators and Admins. Changing maintenance remains Admin-only.
+      responses:
+        '200': { description: Maintenance state., content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /control/v1/shops/{id}/orders:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listControlOrders
+      tags: [Control Plane]
+      summary: Search shop orders
+      description: Search order ID or display order number. Filters are applied before paging and totals, within the authorized shop. An empty result is an empty data array.
+      security: [{ ControlPlaneBearer: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive substring over the documented identity fields; filters apply across all pages. }
+        - { name: status, in: query, schema: { type: string }, description: Case-insensitive exact canonical status match. }
+      responses:
+        '200': { description: Filtered data and page/limit/total/total_pages pagination. }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /control/v1/shops/{id}/shipments:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listControlShipments
+      tags: [Control Plane]
+      summary: Search shop shipments
+      description: Search shipment ID, tracking number, order ID or order number. Filters are applied before paging and totals, within the authorized shop. An empty result is an empty data array.
+      security: [{ ControlPlaneBearer: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive substring over the documented identity fields; filters apply across all pages. }
+        - { name: status, in: query, schema: { type: string }, description: Case-insensitive exact canonical status match. }
+      responses:
+        '200': { description: Filtered data and page/limit/total/total_pages pagination. }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /control/v1/shops/{id}/deliveries:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listControlDeliveries
+      tags: [Control Plane]
+      summary: Search shop deliveries
+      description: Search delivery ID, event ID, registration ID, event type or endpoint. Filters are applied before paging and totals, within the authorized shop. An empty result is an empty data array.
+      security: [{ ControlPlaneBearer: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive substring over the documented identity fields; filters apply across all pages. }
+        - { name: status, in: query, schema: { type: string }, description: Case-insensitive exact canonical status match. }
+      responses:
+        '200': { description: Filtered data and page/limit/total/total_pages pagination. }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /control/v1/shops/{id}/events:
     get:
       operationId: listControlShopEvents
@@ -208,6 +324,12 @@ paths:
       tags: [Control Plane, Products]
       summary: List products managed by a shop owner or administrator
       security: [{ ControlPlaneBearer: [] }]
+      description: Search product ID, SKU or name. Archived (DELETED) products remain excluded; inspect their retained events instead.
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive substring over the documented identity fields; filters apply across all pages. }
+        - { name: status, in: query, schema: { type: string }, description: Case-insensitive exact canonical status match. }
       responses:
         '200': { description: Paginated control-plane catalogue. }
         '401': { $ref: '#/components/responses/Error' }
@@ -684,6 +806,15 @@ components:
             id: { type: string }
             email: { type: string, format: email }
             role: { type: string, enum: [OPERATOR] }
+    ControlInventoryRow:
+      type: object
+      required: [product_id, on_hand_quantity, reserved_quantity, available_quantity, updated_at]
+      properties:
+        product_id: { type: string }
+        on_hand_quantity: { type: integer }
+        reserved_quantity: { type: integer }
+        available_quantity: { type: integer }
+        updated_at: { type: string, format: date-time, description: Preserve exactly as the conditional replacement version. }
     WarehouseInventoryInput:
       type: object
       required: [warehouse_id, on_hand_quantity]

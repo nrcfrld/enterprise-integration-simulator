@@ -1,20 +1,45 @@
 # Implementation Report — Enterprise Integration Simulator
 
-Latest Product & DX audit: 2026-09-09 (implementation verification history below begins 2026-09-04)
+Latest Product & DX update: 2026-09-10 (implementation verification history below begins 2026-09-04)
 PRD: Enterprise Integration Simulator v0.2, updated by Order Lifecycle & API Brief  
 Scope: Marketplace Simulator initial scope plus replacement order lifecycle
 
 ## Latest audit — Marketplace dashboard usability and Developer Experience
 
-**C1–C4 and H1–H17 are implemented. Four Nice-to-Have findings (N1–N4) remain OPEN. C5 is excluded by the user's explicit decision to keep the frontend on port 5173.** Validation limitations for the current High Priority changes are stated below; historical audit text describes the product at that checkpoint.
+**C1–C4, H1–H20 and N1–N3 are implemented. N4 remains open; N5–N7 remain proposed. C5 stays excluded: frontend port 5173 is unchanged.** Historical audit sections describe their earlier checkpoints.
 
-The [audit index](specs/general/UI-IMPROVEMENTS.md) retains original findings and remediation history. The [2026-09-09 audit snapshot](specs/general/UI-AUDIT-2026-09-09.md) records the source-based walkthrough and links to current implementation status.
+The [audit index](specs/general/UI-IMPROVEMENTS.md) retains original findings and remediation history. The [latest post-remediation re-audit](specs/general/UI-REAUDIT-2026-09-09.md) replaces the earlier walkthrough with current evidence and a prioritized implementation plan. The [earlier snapshot](specs/general/UI-AUDIT-2026-09-09.md) is retained as history.
 
 | Priority | Current status |
 | --- | --- |
 | Critical | C1–C4 fixed; C5 excluded (5173 retained). |
-| High Priority | H1–H17 implemented; SQLc generator comparison for H14 PASS. |
-| Nice to Have | N1 list labels/columns, N2 scenario exercises/reset, N3 durable destinations, N4 account/admin discoverability remain open. |
+| High Priority | H1–H20 and promoted N2/N3 implemented. H20 preserves documented legacy unconditional control API calls when the optional version is omitted. |
+| Nice to Have | N1 implemented. N4 account/admin discoverability remains OPEN. N5 observable lesson progress, N6 redacted diagnostic bundles, N7 scalable paged selection remain PROPOSED. |
+
+### Implemented — N1–N3, H18–H20 (2026-09-10)
+
+| Finding | Implemented behavior | Evidence |
+| --- | --- | --- |
+| N2 | Scenarios offers Duplicate delivery, Client timeout and Rate-limit recovery draft presets, expected evidence, English help, integer/range validation, and a separate Clear shop faults write. Try shows shop faults/global maintenance, explicit unknown/error states, refresh/re-entry/focus checks and recovery navigation. Maintenance reads are available to signed-in Operators; writes remain Admin-only. | Scenario preset/clear/range tests; fault-status failure/recovery test; isolated API validation and maintenance role checks. |
+| H20 | Warehouse editor submits the inventory row's `expected_updated_at`; server checks under warehouse/inventory locks before replacing stock. Empty version requires an absent row for Add inventory. Conflict returns 409 INVENTORY_CONFLICT with current values. UI reloads while retaining the unsaved draft; version changes also flag a conflict when quantity is unchanged. | Real shipment consumes 2 from 10; stale request for 15 fails, count stays 8; reviewed version succeeds and another stale writer fails. UI verifies version submission, retained draft and reload. |
+| H19 | Revoke opens a contextual preview with shop/Client ID, current/next Tokopedia signer, last-active-key impact and replacement/recovery steps. Credentials are ordered by full database timestamp and ID, avoiding JavaScript timestamp precision loss. Only explicit revocation sends POST; failure remains retryable. Revoking in this console clears matching simulator credentials/drafts. | Preview/last-key/provider/error tests; existing credential handoff/context tests pass. Worker signer-selection contract remains unchanged. |
+| N3 | URL-backed shop, lesson, operation/resource/package ID, list filters/page and resource detail; browser history retraces related resources and lessons. Login preserves valid bookmarked destinations. Wrong-shop details expose no actions. Guide/reference shortcuts have distinct targets; dashboard and empty-shipment shortcuts select the corresponding provider operation. Current navigation is announced semantically. Secrets remain in memory. | Destination journey tests cover bookmark overriding stored shop, exact operation/ID, Back, related warehouse, wrong-shop rejection, search URLs and exact shortcuts. Existing delayed-shop response and credential-draft journeys pass. |
+| N1 | Orders/Credentials/Users have explicit columns; View order names the full detail. Packages expose distinct Lines/Units, IDs have copy actions and table dates show UTC with exact-value access. Primary provider labels are consistent. Warehouse guide correctly locates dispatch address in detail. | Frontend list regressions; real package relationship/projection regressions; typecheck and lint. |
+| H18 | Control/API lists search orders by ID/number, products by ID/SKU/name, shipments by tracking/ID/linked order, and deliveries by event/registration/type/endpoint. Canonical-status filters apply to the complete authorized collection before paging/totals. UI search/reset and filters are URL-backed. | Filter-before-pagination regression spans 45 matches; real API searches cover each resource and cross-shop isolation. |
+
+**Validation:** 185 frontend tests across 48 files PASS (final run with two workers); TypeScript, ESLint and production build PASS. `go test ./...`, focused `go vet`, and golangci-lint (0 issues) PASS. Three focused race-enabled PostgreSQL/Redis Testcontainers regressions PASS (13.851s): UI recovery/search/inventory conflict, explicit package relationships, event discovery/product inventory. OpenAPI bindings regenerated with the pinned generator. Earlier concurrent frontend/build/Go validation hit timing limits; the final bounded frontend run passed. The first added delivery-search fixture was rejected by the private-target policy; it was corrected to use an isolated database fixture without weakening that policy. No Compose stack or browser E2E was run.
+
+**Compatibility/limits:** Stock version preconditions are optional for legacy control API clients; the Admin always supplies one. Public stock APIs remain read-only. Search still filters a complete server collection before paging, preserving correctness without claiming the N7 scalability work. Revocation impact is a read-time preview, not a transactional credential-rotation protocol. Fault status is checked on entry/focus/manual refresh, not continuously streamed. Saved URLs never restore secrets; a fresh browser session requires credentials again. N4–N7 are not marked implemented.
+
+**Product & DX Review:** Canonical lifecycle, inventory accounting and worker signing policy were preserved. Backend/control reads/writes, OpenAPI plus generated bindings, Admin, Developer Portal, Request Simulator context/navigation, consumer lesson/repository guides, tests, audit index and implementation checklist/report were updated together. No schema migration or sqlc query change was required. Application data and frontend origin 5173 were unchanged.
+
+### Re-audit only — post-remediation Product & DX review (2026-09-09)
+
+Reviewed source baseline **0ad5e3b** against CONTEXT.md. Updated audit documentation and this report; application behavior, API contracts and infrastructure were not changed. No new Critical finding established. H20 covers a server-side write-precondition gap beyond H17's completed refresh/draft fix; it does not reopen that original implementation. N2/N3 were promoted because hidden intentional failures and non-shareable lesson/resource destinations affect the central learning workflow.
+
+Verification: **36 focused frontend tests passed across seven files** (portal navigation, endpoint contracts, prepared requests, retry reliability, warehouse editing and scenarios); **10 durable consumer tests passed** (provider persistence, restart, pagination, stable keys and storage-before-acknowledgement). These verify selected existing behavior, not the proposed improvements. No Docker Compose/browser E2E, full build or broad backend suite was run for this documentation-only review. Source-based concurrency and navigation risks are not represented as reproduced browser failures.
+
+**Product & DX Review:** Domain/backend rules, OpenAPI-facing contracts, Admin, Developer Portal, Request Simulator, examples and relevant tests were inspected together. The new report includes per-finding impact, affected surfaces, concrete recommendations, current journey, documentation/terminology inventory, optional feature proposals and acceptance evidence. All new work remains OPEN/PROPOSED.
 
 ### Implemented — H11–H14, H16, H17 (2026-09-09)
 

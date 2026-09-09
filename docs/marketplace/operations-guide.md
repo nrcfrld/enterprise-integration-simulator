@@ -32,13 +32,41 @@ An operator can access and reset only shops they own; an administrator can reset
 
 ## Warehouse operations
 
-Each shop has an automatically created `WH-DEFAULT` warehouse. The control-plane **Warehouses** page lists origins, dispatch addresses, priority, and aggregate available stock; its detail view shows on-hand, reserved, and available quantity per product. Use **New warehouse** to add an origin with its address, or **Edit warehouse** to complete the default warehouse address and change its status/priority. Use `POST /control/v1/shops/:shop_id/warehouses` to add an origin, `PATCH /control/v1/warehouses/:warehouse_id` to edit it, and `PUT /control/v1/warehouses/:warehouse_id/inventory/:product_id` to set its physical on-hand quantity. The latter rejects a value below the currently reserved quantity and adjusts the compatibility aggregate `products.stock` atomically.
+Each shop has an automatically created `WH-DEFAULT` warehouse. The control-plane **Warehouses** page lists origins, priority, and aggregate available stock; open **View inventory** for the dispatch address and on-hand, reserved, and available quantity per product. Use **New warehouse** to add an origin with its address, or **Edit warehouse** to complete the default warehouse address and change its status/priority. Use `POST /control/v1/shops/:shop_id/warehouses` to add an origin, `PATCH /control/v1/warehouses/:warehouse_id` to edit it, and `PUT /control/v1/warehouses/:warehouse_id/inventory/:product_id` to set its physical on-hand quantity. The latter rejects a value below the currently reserved quantity and adjusts the compatibility aggregate `products.stock` atomically.
 
 Create a product with the **Initial inventory by warehouse** rows. The screen derives global sellable stock from the row total, so operators do not have to reconcile a separate product-stock field. Later, use **Adjust** for a listed product or **Add inventory** to assign another catalogue product to the warehouse.
+
+The editor sends `expected_updated_at` from the inventory row returned by `GET /control/v1/warehouses/:warehouse_id`. The server compares it under a lock before replacing stock. A shipment or another stock edit makes an old version fail with **409 INVENTORY_CONFLICT**; the editor reloads current values and preserves the unsaved count for review. Use **Use latest count**, then re-enter your adjustment. For example, if 10 became 8 while you intended to add 5, review and enter 13 rather than blindly resubmitting 15.
+
+Control API example (use the actual timestamp from your read):
+
+```json
+{"on_hand_quantity":15,"expected_updated_at":"2026-09-09T12:00:00Z"}
+```
+
+For a new inventory row, send `expected_updated_at: ""` to require that it is still absent. Omitting the property retains the legacy unconditional API replacement; clients needing conflict protection must include it. Public provider/warehouse APIs remain read-only for stock adjustments.
+
+## Find and share the right record
+
+Orders searches API ID or display number; Products searches ID, SKU or name; Shipments searches tracking number, shipment ID or linked order; Deliveries searches event ID, registration ID, event type or endpoint. Text search is case-insensitive across all shop records before pagination; canonical-status filters and totals apply to the filtered result. Archived products stay excluded from the catalogue; use Event Logs for their history. The matching control list APIs accept `q`, `status`, `page` and `limit`.
+
+**View order** opens the full order and its relationships. Package **Lines** counts distinct order lines; **Units** sums their quantities. List dates display UTC and retain the exact timestamp in their tooltip. Use named **Copy** actions for displayed API/client IDs. The Orders provider control filters shop choices, not an aggregate of all shops.
+
+Portal lessons/operations, shop context, list filters/page, and selected details use non-secret URL parameters. Examples: `/docs?shop=shop_actual&section=try&endpoint=shopee-get-order&resource_id=ord_actual` and `/orders?shop=shop_actual&detail=order&resource=ord_actual`. Replace the IDs with your own. Browser Back retraces lessons and related resources. Login preserves a bookmarked destination; access is still checked. Integration Guide opens Start here, API Documentation opens the product reference, and simulator shortcuts open Try. The dashboard’s first-request shortcut selects the provider’s order list/search; the empty Shipments shortcut selects that provider’s shipment creation operation. Credentials, signed requests and draft bodies are not included in these URLs.
+
+## Review credential revocation
+
+Credentials → **Revoke** opens an impact preview before sending a revocation. It shows shop/Client ID and whether this is the last active credential. Save a replacement’s one-time values, update the external API client and verify a signed read before retiring its old credential. A replacement has a different idempotency-key scope: inspect current state before retrying mutations through it.
+
+For Tokopedia, the oldest ACTIVE credential (creation time, then ID) signs subsequent webhook attempts, including retries. The preview shows current/next signers; creating a newer credential alone does not switch signing. Prepare the receiver’s next `APP_KEY`/`APP_SECRET`, revoke the current signer, then verify a fresh delivery and pending retries. Another session may change credentials after the preview, so refresh impact when needed. Shopee registration secrets are independent of API credential revocation. Revocation in this console clears matching in-memory simulator credentials and drafts; it cannot clear secrets held by an external client.
 
 ## Failure scenario reference
 
 All scenarios are scoped to one shop. They are intentionally visible in the control plane and never need database access by an integration client.
+
+Choose **Duplicate delivery**, **Client timeout** or **Rate-limit recovery**, read its expected evidence, then **Apply scenario**. A preset replaces the draft fault combination; it is not active until applied. Probability fields accept whole numbers from 0 to 100. **Clear shop faults** writes the zero/false defaults without deleting shop data. It does not remove queued deliveries, undo mutations or disable global maintenance. Reset to seed preserves faults.
+
+The Request Simulator displays active shop faults and global maintenance with **Refresh fault status** and a link to configure/clear faults. Failed checks remain unknown, never “healthy.” Returning to Try or focusing the window refreshes status; settings can still change afterward. All signed-in users can read maintenance status; only Admins can change it. Forced rate limiting keeps returning 429 until cleared; then respect any remaining actual credential quota reset.
 
 | Scenario | Effect |
 | --- | --- |

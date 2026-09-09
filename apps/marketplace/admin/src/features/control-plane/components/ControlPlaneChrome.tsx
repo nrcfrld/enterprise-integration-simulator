@@ -1,26 +1,29 @@
+import { controlDestination } from "@/app/destinations";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CONTROL_NAVIGATION, CONTROL_PATHS, type ControlPage } from "@/app/navigation";
+import { CONTROL_NAVIGATION, type ControlPage } from "@/app/navigation";
 import type { ControlPlaneSession, NoticeMessage, Shop } from "@/shared/types/controlPlane";
 
 const providerFilters = [
   ["ALL", "All providers"],
-  ["SHOPEE_LIKE", "Shopee"],
-  ["TOKOPEDIA_LIKE", "Tokopedia & TikTok Shop"],
+  ["SHOPEE_LIKE", "Shopee-like"],
+  ["TOKOPEDIA_LIKE", "Tokopedia-like"],
 ] as const;
 
 function providerLabel(profile: string) {
   return ({
     SHOPEE_LIKE: "Shopee-like",
-    TOKOPEDIA_LIKE: "Tokopedia & TikTok Shop",
+    TOKOPEDIA_LIKE: "Tokopedia-like",
   } as Record<string, string>)[profile] || "Shopee-like";
 }
 
 export function ControlPlaneSidebar({
+  shopID,
   page,
   session,
   onLogout,
 }: {
+  shopID?: string;
   page: ControlPage;
   session: ControlPlaneSession;
   onLogout: () => void;
@@ -38,7 +41,8 @@ export function ControlPlaneSidebar({
             {section.items.map((item) => (
               <Link
                 key={item.label}
-                to={CONTROL_PATHS[item.page]}
+                to={controlDestination(item.page, shopID, item.page === "Documentation" ? { section: item.label === "Integration Guide" ? "quickstart" : "products" } : undefined)}
+                aria-current={page === item.page && item.showActiveState !== false ? "page" : undefined}
                 title={item.description}
                 className={page === item.page && item.showActiveState !== false ? "active menu-active" : ""}
               >
@@ -84,8 +88,8 @@ export function WorkspaceHeader({
       </div>
       <div className="header-actions">
         {page === "Orders" && (
-          <div className="provider-switcher" aria-label="Order provider filter">
-            <span>Provider</span>
+          <div className="provider-switcher" aria-label="Filter shop choices by provider">
+            <span>Shop provider</span>
             <div role="group" aria-label="Filter orders by provider">
               {providerFilters.map(([profile, label]) => (
                 <button
@@ -118,7 +122,7 @@ export function WorkspaceHeader({
             ))}
           </select>
         </label>
-        <Link className="btn btn-ghost btn-sm" to={CONTROL_PATHS.Shops}>Manage shops</Link>
+        <Link className="btn btn-ghost btn-sm" to={controlDestination("Shops", shopID)}>Manage shops</Link>
         {selectedShop && (
           <span className={`provider-badge badge badge-secondary ${selectedShop.provider_profile.toLowerCase()}`}>
             {providerLabel(selectedShop.provider_profile)}

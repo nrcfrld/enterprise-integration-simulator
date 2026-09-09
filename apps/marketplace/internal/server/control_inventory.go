@@ -28,7 +28,7 @@ func (s *Server) shopProducts(c *gin.Context) {
 	for _, row := range rows {
 		data = append(data, gin.H{"id": row.ID, "sku": row.Sku, "name": row.Name, "category": row.Category, "description": row.Description, "price": row.Price, "stock": row.Stock, "status": row.Status, "created_at": row.CreatedAt.Time, "updated_at": row.UpdatedAt.Time})
 	}
-	s.controlListResponse(c, data)
+	s.controlSearchResponse(c, data, "id", "sku", "name")
 }
 
 // shopWarehouses lists fulfillment origins and their aggregate available stock.
@@ -187,7 +187,8 @@ func (s *Server) warehouseDetail(c *gin.Context) {
 func (s *Server) updateWarehouseInventory(c *gin.Context) {
 	warehouseID, productID := c.Param("id"), c.Param("productID")
 	var input struct {
-		OnHandQuantity int `json:"on_hand_quantity"`
+		OnHandQuantity    int     `json:"on_hand_quantity"`
+		ExpectedUpdatedAt *string `json:"expected_updated_at"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil || input.OnHandQuantity < 0 {
 		c.JSON(400, errorBody("INVALID_REQUEST", "on_hand_quantity must be non-negative"))
@@ -200,7 +201,7 @@ func (s *Server) updateWarehouseInventory(c *gin.Context) {
 	}
 	defer func() { _ = tx.Rollback(c) }()
 	var shop, inventoryShop string
-	if err = tx.QueryRow(c, `SELECT w.shop_id,p.shop_id FROM warehouses w JOIN products p ON p.id=$2 WHERE w.id=$1`, warehouseID, productID).Scan(&shop, &inventoryShop); err != nil || shop != inventoryShop {
+	if err = tx.QueryRow(c, `SELECT w.shop_id,p.shop_id FROM warehouses w JOIN products p ON p.id=$2 WHERE w.id=$1 FOR UPDATE OF w`, warehouseID, productID).Scan(&shop, &inventoryShop); err != nil || shop != inventoryShop {
 		c.JSON(404, errorBody("NOT_FOUND", "warehouse or product not found"))
 		return
 	}
@@ -208,13 +209,24 @@ func (s *Server) updateWarehouseInventory(c *gin.Context) {
 		return
 	}
 	var previousOnHand, reserved int
-	err = tx.QueryRow(c, `SELECT on_hand_quantity,reserved_quantity FROM warehouse_inventory WHERE warehouse_id=$1 AND product_id=$2 FOR UPDATE`, warehouseID, productID).Scan(&previousOnHand, &reserved)
+	var updatedAt time.Time
+	err = tx.QueryRow(c, `SELECT on_hand_quantity,reserved_quantity,updated_at FROM warehouse_inventory WHERE warehouse_id=$1 AND product_id=$2 FOR UPDATE`, warehouseID, productID).Scan(&previousOnHand, &reserved, &updatedAt)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not lock warehouse inventory"))
 		return
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		previousOnHand, reserved = 0, 0
+	}
+	if input.ExpectedUpdatedAt != nil {
+		matches := *input.ExpectedUpdatedAt == "" && errors.Is(err, pgx.ErrNoRows)
+		if expected, parseErr := time.Parse(time.RFC3339Nano, *input.ExpectedUpdatedAt); parseErr == nil && err == nil {
+			matches = expected.Equal(updatedAt)
+		}
+		if !matches {
+			c.JSON(409, gin.H{"error": gin.H{"code": "INVENTORY_CONFLICT", "message": "Inventory changed since you loaded it. Refresh, review the current count, and submit your adjustment again."}, "current": gin.H{"on_hand_quantity": previousOnHand, "reserved_quantity": reserved, "updated_at": updatedAt}})
+			return
+		}
 	}
 	if input.OnHandQuantity < reserved {
 		c.JSON(400, errorBody("INVALID_REQUEST", "on_hand_quantity cannot be lower than reserved_quantity"))

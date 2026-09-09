@@ -162,9 +162,9 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     );
 
     await screen.findByLabelText("Current shop");
-    await user.click(screen.getByRole("button", { name: "Tokopedia & TikTok Shop" }));
+    await user.click(screen.getByRole("button", { name: "Tokopedia-like" }));
     expect(screen.getByLabelText("Current shop")).toHaveValue("shop_2");
-    expect(screen.getByText("Tokopedia & TikTok Shop", { selector: "span.provider-badge" })).toBeVisible();
+    expect(screen.getByText("Tokopedia-like", { selector: "span.provider-badge" })).toBeVisible();
   });
 
   it("opens and closes product detail and create form", async () => {

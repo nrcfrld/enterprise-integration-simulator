@@ -134,7 +134,7 @@ func (s *Server) controlDeliveries(c *gin.Context) {
 	if !s.mustAccessShop(c, shop) {
 		return
 	}
-	rows, err := s.db.Query(c, `SELECT d.id,d.event_id,d.status,d.attempt_count,d.created_at,d.delivered_at,d.next_attempt_at,e.event_type,w.url,CASE WHEN last_attempt.status='FAILURE' THEN COALESCE(last_attempt.failure_reason,last_attempt.response_body,'') ELSE '' END,w.deleted_at IS NOT NULL FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id LEFT JOIN LATERAL (SELECT status,failure_reason,response_body FROM webhook_delivery_attempts WHERE delivery_id=d.id ORDER BY attempt DESC LIMIT 1) last_attempt ON true WHERE w.shop_id=$1 ORDER BY d.created_at DESC`, shop)
+	rows, err := s.db.Query(c, `SELECT d.id,d.webhook_id,d.event_id,d.status,d.attempt_count,d.created_at,d.delivered_at,d.next_attempt_at,e.event_type,w.url,CASE WHEN last_attempt.status='FAILURE' THEN COALESCE(last_attempt.failure_reason,last_attempt.response_body,'') ELSE '' END,w.deleted_at IS NOT NULL FROM webhook_deliveries d JOIN webhooks w ON w.id=d.webhook_id JOIN domain_events e ON e.id=d.event_id LEFT JOIN LATERAL (SELECT status,failure_reason,response_body FROM webhook_delivery_attempts WHERE delivery_id=d.id ORDER BY attempt DESC LIMIT 1) last_attempt ON true WHERE w.shop_id=$1 ORDER BY d.created_at DESC`, shop)
 	if err != nil {
 		c.JSON(500, errorBody("DATABASE_ERROR", "could not list deliveries"))
 		return
@@ -142,18 +142,18 @@ func (s *Server) controlDeliveries(c *gin.Context) {
 	defer rows.Close()
 	data := []gin.H{}
 	for rows.Next() {
-		var id, event, status, eventType, endpoint, failureReason string
+		var id, webhookID, event, status, eventType, endpoint, failureReason string
 		var deleted bool
 		var attempts int
 		var created time.Time
 		var delivered, nextAttempt *time.Time
-		if err := rows.Scan(&id, &event, &status, &attempts, &created, &delivered, &nextAttempt, &eventType, &endpoint, &failureReason, &deleted); err != nil {
+		if err := rows.Scan(&id, &webhookID, &event, &status, &attempts, &created, &delivered, &nextAttempt, &eventType, &endpoint, &failureReason, &deleted); err != nil {
 			c.JSON(500, errorBody("DATABASE_ERROR", "could not read delivery"))
 			return
 		}
-		data = append(data, gin.H{"id": id, "event_id": event, "event_type": eventType, "endpoint": endpoint, "status": status, "attempt_count": attempts, "next_attempt_at": nextAttempt, "failure_reason": failureReason, "webhook_deleted": deleted, "created_at": created, "delivered_at": delivered})
+		data = append(data, gin.H{"id": id, "webhook_id": webhookID, "event_id": event, "event_type": eventType, "endpoint": endpoint, "status": status, "attempt_count": attempts, "next_attempt_at": nextAttempt, "failure_reason": failureReason, "webhook_deleted": deleted, "created_at": created, "delivered_at": delivered})
 	}
-	s.controlListResponse(c, data)
+	s.controlSearchResponse(c, data, "id", "event_id", "webhook_id", "event_type", "endpoint")
 }
 
 func (s *Server) deliveryDetail(c *gin.Context) {

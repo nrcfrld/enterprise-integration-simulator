@@ -29,7 +29,7 @@ export function useControlPlaneResources(
   token: string | null | undefined,
 ) {
   const [shops, setShops] = useState<Shop[]>([]);
-  const [shopID, setShopID] = useState(() => sessionStorage.getItem("marketplace:selected-shop") || "");
+  const [fallbackShopID, setFallbackShopID] = useState(() => sessionStorage.getItem("marketplace:selected-shop") || "");
   const [providerFilter, setProviderFilter] = useState("ALL");
   const [resource, setResource] = useState<{ scope: string; data: ControlPlaneData | null; loading: boolean; error: string; updatedAt?: number } | null>(null);
   const [shopsLoaded, setShopsLoaded] = useState(false);
@@ -37,17 +37,33 @@ export function useControlPlaneResources(
   const requestVersion = useRef(0);
   const shopsVersion = useRef(0);
   const activeToken = useRef(token);
-  const [listPage, setListPage] = useState(1);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const shopID = searchParams.has("shop") ? searchParams.get("shop") || "" : fallbackShopID;
+  const requestedPage = Number(searchParams.get("page") || 1);
+  const listPage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const setListPage = (value: number) => setSearchParams(current => { const next = new URLSearchParams(current); next.set("page", String(value)); if (shopID) next.set("shop", shopID); return next; });
+  const setShopID = (value: string | ((current: string) => string)) => {
+    const id = typeof value === "function" ? value(shopID) : value;
+    setFallbackShopID(id);
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      for (const key of ["page", "detail", "resource", "aggregate_id", "resource_id", "package_id"]) next.delete(key);
+      next.set("shop", id);
+      return next;
+    });
+  };
   const eventFilters = new URLSearchParams();
   for (const key of ["resource_type", "aggregate_id", "event_type"]) {
     const value = searchParams.get(key);
     if (value) eventFilters.set(key, value);
   }
-  const eventQuery = page === "Events" ? eventFilters.toString() : "";
+  if (["Orders", "Products", "Shipments", "Deliveries"].includes(page)) {
+    for (const key of ["q", "status"]) { const value = searchParams.get(key); if (value) eventFilters.set(key, value); }
+  }
+  const filterQuery = page === "Events" || ["Orders", "Products", "Shipments", "Deliveries"].includes(page) ? eventFilters.toString() : "";
   const endpoint = pageEndpoint(page, shopID);
   const route = endpoint && PAGEABLE_CONTROL_PAGES.has(page)
-    ? `${endpoint}?page=${listPage}&limit=20${eventQuery ? `&${eventQuery}` : ""}`
+    ? `${endpoint}?page=${listPage}&limit=20${filterQuery ? `&${filterQuery}` : ""}`
     : endpoint;
 
   const scope = `${token ?? ""}:${route ?? ""}`;
@@ -72,7 +88,7 @@ export function useControlPlaneResources(
       setShopsLoaded(true);
       setShops(records);
       setShopsError("");
-      setShopID((current) => records.some(shop => shop.id === current) ? current : records[0]?.id || "");
+      setFallbackShopID((current) => records.some(shop => shop.id === current) ? current : records[0]?.id || "");
     } catch (error) {
       if (version === shopsVersion.current && activeToken.current === token) {
         setShopsLoaded(true);
@@ -103,11 +119,10 @@ export function useControlPlaneResources(
     }
   }, [route, scope, token]);
 
-  useEffect(() => { if (shopID) sessionStorage.setItem("marketplace:selected-shop", shopID); }, [shopID]);
+  useEffect(() => { if (shopID) sessionStorage.setItem("marketplace:selected-shop", shopID); setFallbackShopID(shopID); }, [shopID]);
   useEffect(() => { void refreshShops(); }, [refreshShops]);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  useEffect(() => setListPage(1), [page, shopID, eventQuery]);
 
   const visibleShops = useMemo(
     () => page === "Orders" && providerFilter !== "ALL"
@@ -135,7 +150,7 @@ export function useControlPlaneResources(
     error: resource?.scope === scope ? resource.error : "",
     refreshing: resource?.scope === scope && resource.loading,
     updatedAt: resource?.scope === scope ? resource.updatedAt : undefined,
-    shopsError,
+    shopsError: shopsError || (shopsLoaded && shopID && !selectedShop ? "This shop is unavailable or you do not have access. Choose another shop." : ""),
     shops,
     shopID,
     setShopID,

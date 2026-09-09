@@ -1,3 +1,4 @@
+import { CLEAR_FAULTS, SCENARIO_EXERCISES } from "@/shared/scenarios";
 import { useEffect, useState, type ReactNode } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type { ControlPlaneData } from "@/shared/types/controlPlane";
@@ -26,6 +27,7 @@ interface ScenarioProps {
 
 export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
   const [form, setForm] = useState<ScenarioConfig>(data || {});
+  const [exercise, setExercise] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => setForm(data || {}), [data]);
@@ -33,14 +35,20 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
     return (
       <p className="empty">Choose a shop before configuring fault injection.</p>
     );
-  const save = async () => {
+  const save = async (values: ScenarioConfig = form) => {
+    for (const [key, value] of Object.entries(values)) {
+      if (typeof value === "number" && (!Number.isInteger(value) || value < 0 || (key.includes("probability") && value > 100))) {
+        setError(`${key.replaceAll("_", " ")}: enter a whole number ${key.includes("probability") ? "from 0 to 100" : "of zero or more"}.`);
+        return;
+      }
+    }
     if (saving) return;
     setSaving(true);
     setError("");
     try {
       await request<unknown>(`/control/v1/shops/${shopID}/scenario`, token, {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
       });
       onSaved();
     } catch (reason) {
@@ -53,55 +61,62 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
     {
       key: "api_slow_ms",
       label: "API slow response (ms)",
-      help: "Tambahkan waktu tunggu ini ketika skenario slow response terpicu. Gunakan bersama probabilitas slow response.",
+      help: "Delay applied when slow response is triggered. Set its probability above zero to enable it.",
     },
     {
       key: "api_slow_probability",
       label: "Slow response probability (%)",
-      help: "Persentase request public API yang akan diberi delay. Nilai 100 berarti setiap request melambat.",
+      help: "Percentage of public requests delayed, from 0 to 100. A value of 100 delays every request.",
     },
     {
       key: "api_random_500_probability",
       label: "Random 500 (%)",
-      help: "Persentase request public API yang langsung menerima HTTP 500 ter-simulasi. Gunakan untuk menguji retry dan error handling client.",
+      help: "Percentage of public requests returning a simulated HTTP 500. Test retry and error handling.",
     },
     {
       key: "api_timeout_probability",
       label: "Timeout (%)",
-      help: "Persentase request public API yang ditahan selama 35 detik. Gunakan untuk menguji timeout client dan pembatalan request.",
+      help: "Percentage of public requests held for 35 seconds. Test client timeout and cancellation.",
     },
     {
       key: "webhook_delay_seconds",
       label: "Webhook delay (s)",
-      help: "Menunda job webhook sebelum dikirim. Nilai ini juga digunakan untuk membuat event order.paid terlambat saat out-of-order aktif.",
+      help: "Delay webhook jobs before sending. Also delays order.paid when out-of-order delivery is enabled.",
     },
   ];
   const flags: Array<{ key: BooleanScenarioKey; label: string; help: string }> = [
     {
       key: "force_rate_limit",
       label: "Force rate limit",
-      help: "Paksa request public API menerima respons rate limit untuk memeriksa backoff dan penghormatan header rate-limit pada client.",
+      help: "Force HTTP 429 to test client backoff. Clear this fault to allow requests again; real quota limits still apply.",
     },
     {
       key: "webhook_duplicate",
       label: "Duplicate webhook",
-      help: "Buat dua delivery untuk event yang sama. Penerima webhook harus melakukan deduplikasi berdasarkan event id.",
+      help: "Create two deliveries for the same event. The receiver must deduplicate by event ID.",
     },
     {
       key: "webhook_out_of_order",
       label: "Out-of-order webhook",
-      help: "Tunda event order.paid agar event setelahnya dapat tiba lebih dulu. Gunakan untuk menguji state machine penerima.",
+      help: "Delay order.paid so later events can arrive first. Fetch current state instead of applying an old payload.",
     },
     {
       key: "webhook_force_failure",
       label: "Force webhook failure",
-      help: "Paksa attempt delivery gagal sebelum HTTP request dibuat. Delivery akan tercatat gagal lalu mengikuti retry terjadwal.",
+      help: "Fail delivery before making an HTTP request. The failed attempt is recorded and scheduled retries follow.",
     },
   ];
   return (
     <article className="scenario card bg-base-100">
       <p className="eyebrow">Fault injection</p>
-      <h2>Turn the happy path off.</h2>
+      <h2>Practice failure and recovery</h2>
+      <p>These settings affect only the selected shop. Resetting sample data preserves them. Clearing faults does not undo events or remove queued deliveries.</p>
+      <label>Learning exercise<select disabled={saving} value={exercise} onChange={event => {
+        setExercise(event.target.value);
+        const preset = SCENARIO_EXERCISES.find(item => item.name === event.target.value);
+        if (preset) setForm({ ...CLEAR_FAULTS, ...preset.config });
+      }}><option value="">Custom settings</option>{SCENARIO_EXERCISES.map(item => <option key={item.name}>{item.name}</option>)}</select></label>
+      {exercise && <p role="note">{SCENARIO_EXERCISES.find(item => item.name === exercise)?.outcome} Choose Apply scenario to activate this exercise.</p>}
       <div className="field-grid">
         {fields.map(({ key, label, help }) => {
           const helpID = `scenario-help-${key}`;
@@ -115,10 +130,12 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
               id={`scenario-${key}`}
               type="number"
               min="0"
+              max={key.includes("probability") ? 100 : undefined}
+              disabled={saving}
               value={form[key] ?? 0}
               aria-describedby={helpID}
               onChange={(event) =>
-                setForm({ ...form, [key]: Number(event.target.value) })
+                (setExercise(""), setForm({ ...form, [key]: Number(event.target.value) }))
               }
             />
           </div>;
@@ -133,10 +150,11 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
                 className="toggle toggle-primary"
                 id={`scenario-${key}`}
                 type="checkbox"
+                disabled={saving}
                 checked={Boolean(form[key])}
                 aria-describedby={helpID}
                 onChange={(event) =>
-                  setForm({ ...form, [key]: event.target.checked })
+                  (setExercise(""), setForm({ ...form, [key]: event.target.checked }))
                 }
               />
               {label}
@@ -149,6 +167,7 @@ export function Scenario({ token, shopID, data, onSaved }: ScenarioProps) {
       <button className="btn btn-primary" disabled={saving} onClick={() => void save()}>
         {saving ? "Applying…" : "Apply scenario"} {!saving && <span>→</span>}
       </button>
+      <button className="btn btn-ghost" disabled={saving} onClick={() => { setExercise(""); setForm({ ...CLEAR_FAULTS }); void save(CLEAR_FAULTS); }}>Clear shop faults</button>
     </article>
   );
 }
@@ -161,7 +180,7 @@ interface ScenarioHelpProps {
 function ScenarioHelp({ id, label, children }: ScenarioHelpProps) {
   return (
     <details className="scenario-help">
-      <summary aria-label={`Penjelasan: ${label}`} title={`Penjelasan ${label}`}>
+      <summary aria-label={`Explanation: ${label}`} title={`Explanation ${label}`}>
         ?
       </summary>
       <span id={id} role="note">{children}</span>
