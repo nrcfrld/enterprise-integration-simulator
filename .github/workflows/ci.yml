@@ -24,7 +24,7 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: make coverage-core
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with: { working-directory: apps/marketplace, version: v2.11.4 }
       - run: bun install --frozen-lockfile
         working-directory: apps/marketplace/admin
