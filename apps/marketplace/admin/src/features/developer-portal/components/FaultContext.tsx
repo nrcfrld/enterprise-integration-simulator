@@ -23,13 +23,21 @@ export function FaultContext({ shopID, token, onConfigure }: { shopID: string; t
     window.addEventListener("focus", refresh);
     return () => { active = false; window.removeEventListener("focus", refresh); };
   }, [shopID, token, generation, refresh]);
-  return <section className="reference-callout" aria-label="Active fault context">
-    <h3>Simulation conditions</h3>
-    <p>{state.faults ? state.faults.length ? state.faults.join(" · ") : "No shop faults enabled at last check." : "Shop fault status unknown / checking…"}</p>
-    <p>{state.maintenance === undefined ? "Global maintenance status unknown / checking…" : state.maintenance ? "Global maintenance is ON: public APIs return 503. Ask an Admin to turn it off on the dashboard." : "Global maintenance is off at last check."}</p>
-    {state.error && <p role="alert">{state.error}</p>}
-    <p>Settings can change in another session. Check again before testing. Clearing shop faults does not reset data or disable global maintenance.</p>
-    <button type="button" onClick={refresh}>Refresh fault status</button>{" "}
-    <button type="button" onClick={onConfigure}>Configure or clear shop faults</button>
+  return <section className="fault-context" aria-labelledby="simulation-conditions-title">
+    <div className="fault-context__summary">
+      <div>
+        <h3 id="simulation-conditions-title">Simulation conditions</h3>
+      </div>
+      <div className="fault-context__status" aria-live="polite">
+        <span>{state.faults ? state.faults.length ? state.faults.join(" · ") : "No shop faults enabled" : "Checking shop faults…"}</span>
+        <span>{state.maintenance === undefined ? "Checking maintenance…" : state.maintenance ? "Global maintenance is on" : "Global maintenance is off"}</span>
+      </div>
+      {state.error && <p className="fault-context__error" role="alert">{state.error}</p>}
+      <p className="fault-context__note">Conditions can change in another session. Refresh before testing a failure scenario.</p>
+    </div>
+    <div className="fault-context__actions">
+      <button className="btn btn-outline" type="button" onClick={refresh}>Refresh status</button>
+      <button className="btn btn-ghost" type="button" onClick={onConfigure}>Manage faults</button>
+    </div>
   </section>;
 }

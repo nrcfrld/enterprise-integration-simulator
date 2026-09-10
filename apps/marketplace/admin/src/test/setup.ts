@@ -6,6 +6,7 @@ afterEach(() => { cleanup(); if (typeof sessionStorage !== "undefined") sessionS
 
 // Reference navigation uses visibility observation; jsdom has no layout observer.
 beforeEach(() => {
+  vi.stubGlobal("scrollTo", vi.fn());
   vi.stubGlobal("IntersectionObserver", class {
     observe() {}
     unobserve() {}

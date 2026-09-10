@@ -124,6 +124,46 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     );
   });
 
+  it("gives documentation one main landmark, a page heading, and route context", async () => {
+    render(
+      <MemoryRouter initialEntries={["/docs/products?shop=shop_1"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Products API reference" })).toBeInTheDocument();
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main-content");
+    await waitFor(() => expect(document.title).toBe("Products API reference · Marketplace Simulator"));
+    await waitFor(() => expect(document.getElementById("main-content")).toHaveFocus());
+  });
+
+  it("allows guests to read documentation without loading protected resources", async () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter initialEntries={["/docs"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Start here" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Enter the simulator" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to console" })).toHaveAttribute("href", "/dashboard");
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("still requires guests to sign in for control-plane routes", () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <ControlPlaneApp />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Enter the simulator" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Back to console" })).not.toBeInTheDocument();
+  });
+
   it("signs in, persists the session, and signs out", async () => {
     localStorage.clear();
     requestMock.mockImplementation((path: string) => {
@@ -164,7 +204,7 @@ describe("ControlPlaneApp critical session and seed flows", () => {
     await screen.findByLabelText("Current shop");
     await user.click(screen.getByRole("button", { name: "Tokopedia-like" }));
     expect(screen.getByLabelText("Current shop")).toHaveValue("shop_2");
-    expect(screen.getByText("Tokopedia-like", { selector: "span.provider-badge" })).toBeVisible();
+    expect(screen.getByLabelText("Current shop")).toHaveDisplayValue("[Tokopedia-like] Tokopedia shop");
   });
 
   it("opens and closes product detail and create form", async () => {

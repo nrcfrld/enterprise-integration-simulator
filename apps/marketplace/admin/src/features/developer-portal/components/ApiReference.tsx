@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { FieldDefinition, PortalEndpoint, ProviderContract, SchemaFieldDefinition } from "../types";
 import { CodeSnippet } from "./CodeSnippet";
 import { HttpMethod } from "./HttpMethod";
@@ -121,7 +121,7 @@ const responseHeaders: Record<ProviderContract, string> = {
 };
 
 function ReferenceTable({ rows, label }: { rows: ReferenceRow[]; label: string }) {
-  return <div className="endpoint-table-wrap"><table className="endpoint-table"><caption>{label}</caption><thead><tr><th>Field</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.location}-${row.name}`}><td><code>{row.name}</code>{row.example && <small>Example: {row.example}</small>}</td><td>{row.location}</td><td><code>{row.type}</code></td><td>{row.required ? <strong className="required-field">Required</strong> : "Optional"}</td><td>{row.description}</td></tr>)}</tbody></table></div>;
+  return <div className="endpoint-table-wrap" role="region" aria-label={`${label}; scroll horizontally to see every column`} tabIndex={0}><table className="endpoint-table"><caption>{label}</caption><thead><tr><th>Field</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.location}-${row.name}`}><td><code>{row.name}</code>{row.example && <small>Example: {row.example}</small>}</td><td>{row.location}</td><td><code>{row.type}</code></td><td>{row.required ? <strong className="required-field">Required</strong> : "Optional"}</td><td>{row.description}</td></tr>)}</tbody></table></div>;
 }
 
 function EndpointArticle({ endpoint, onTry }: { endpoint: PortalEndpoint; onTry: (endpointID: string) => void }) {
@@ -183,33 +183,47 @@ function EndpointArticle({ endpoint, onTry }: { endpoint: PortalEndpoint; onTry:
 export function ApiReference({ title, description, note, groups, endpoints, onTry }: ApiReferenceProps) {
   const items = useMemo(() => endpoints.filter((endpoint) => groups.includes(endpoint.group)), [endpoints, groups]);
   const [activeEndpointID, setActiveEndpointID] = useState(items[0]?.id ?? "");
+  const activeEndpoint = items.find((endpoint) => endpoint.id === activeEndpointID) ?? items[0];
 
   useEffect(() => {
-    setActiveEndpointID(items[0]?.id ?? "");
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (visible) setActiveEndpointID(visible.target.id.replace("endpoint-", ""));
-    }, { rootMargin: "-12% 0px -72%", threshold: [0, 1] });
-    items.forEach((endpoint) => {
-      const element = document.getElementById(`endpoint-${endpoint.id}`);
-      if (element) observer.observe(element);
-    });
-    return () => observer.disconnect();
+    const selectHash = () => {
+      const id = window.location.hash.replace("#endpoint-", "");
+      setActiveEndpointID(items.some((endpoint) => endpoint.id === id) ? id : items[0]?.id ?? "");
+    };
+    selectHash();
+    window.addEventListener("hashchange", selectHash);
+    window.addEventListener("popstate", selectHash);
+    return () => {
+      window.removeEventListener("hashchange", selectHash);
+      window.removeEventListener("popstate", selectHash);
+    };
   }, [items]);
+
+  const selectEndpoint = (event: MouseEvent<HTMLAnchorElement>, endpointID: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setActiveEndpointID(endpointID);
+    window.history.pushState(null, "", `#endpoint-${endpointID}`);
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(`endpoint-${endpointID}`);
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView?.({ block: "start" });
+    });
+  };
 
   return <>
     <section className="reference-heading"><h2>{title}</h2><p>{description}</p></section>
     <div className="reference-note alert alert-info"><b>Before you call</b><p>{note}</p></div>
     <div className="api-reference-layout">
       <aside className="reference-endpoint-nav menu" aria-label={`${title} endpoint navigation`}>
-        <div className="endpoint-nav-heading"><b>On this page</b><span>{items.length} endpoints</span></div>
+        <div className="endpoint-nav-heading"><b>Choose endpoint</b><span>{items.length} endpoints</span></div>
         {contractOrder.map((contract) => {
           const contractItems = items.filter((endpoint) => endpoint.contract === contract);
           if (contractItems.length === 0) return null;
-          return <section key={contract}><p>{contractLabels[contract]}</p>{contractItems.map((endpoint) => <a href={`#endpoint-${endpoint.id}`} key={endpoint.id} aria-current={activeEndpointID === endpoint.id ? "location" : undefined} onClick={() => setActiveEndpointID(endpoint.id)}><HttpMethod method={endpoint.method} /><span>{endpoint.title}</span></a>)}</section>;
+          return <section key={contract}><p>{contractLabels[contract]}</p>{contractItems.map((endpoint) => <a href={`#endpoint-${endpoint.id}`} key={endpoint.id} aria-current={activeEndpoint?.id === endpoint.id ? "location" : undefined} onClick={(event) => selectEndpoint(event, endpoint.id)}><HttpMethod method={endpoint.method} /><span>{endpoint.title}</span></a>)}</section>;
         })}
       </aside>
-      <div className="reference-endpoint-content">{items.map((endpoint) => <EndpointArticle endpoint={endpoint} onTry={onTry} key={endpoint.id} />)}</div>
+      <div className="reference-endpoint-content">{activeEndpoint && <EndpointArticle endpoint={activeEndpoint} onTry={onTry} key={activeEndpoint.id} />}</div>
     </div>
   </>;
 }

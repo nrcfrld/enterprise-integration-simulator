@@ -96,11 +96,20 @@ export const CONTROL_NAVIGATION: readonly ControlNavigationSection[] = [
       },
     ],
   },
+  {
+    label: "ADMINISTRATION",
+    items: [{ label: "Users", page: "Users" }],
+  },
 ];
 
 export const PAGE_BY_PATH: Record<string, ControlPage> = Object.fromEntries(
   Object.entries(CONTROL_PATHS).map(([page, path]) => [path, page]),
 ) as Record<string, ControlPage>;
+
+export function controlPageForPath(pathname: string): ControlPage | undefined {
+  if (pathname === CONTROL_PATHS.Documentation || pathname.startsWith(`${CONTROL_PATHS.Documentation}/`)) return "Documentation";
+  return PAGE_BY_PATH[pathname];
+}
 
 export const PAGEABLE_CONTROL_PAGES = new Set<ControlPage>([
   "Webhooks",

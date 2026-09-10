@@ -1,12 +1,13 @@
 import { controlDestination, readPortalDestination } from "@/app/destinations";
 import { DeveloperPortal } from "../developer-portal/DeveloperPortal";
+import { PORTAL_SECTION_TITLES } from "../developer-portal/types";
 import { API_BASE_URL } from "@/shared/api/controlPlaneClient";
 import type { CredentialHandoff } from "@/shared/types/controlPlane";
 import { RefreshStatus } from "./components/RefreshStatus";
 import { isPendingDelivery, useBoundedRefresh } from "./hooks/useBoundedRefresh";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { PAGE_BY_PATH, CONTROL_PATHS, type ControlPage } from "@/app/navigation";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
+import { controlPageForPath, CONTROL_PATHS, type ControlPage } from "@/app/navigation";
 import type { ControlPlaneSession, CreatedCredential, DetailRequest, FormRequest, NoticeMessage } from "@/shared/types/controlPlane";
 import { LoginPage } from "../auth/LoginPage";
 import { ControlForm } from "./components/ControlForm";
@@ -27,41 +28,93 @@ export function ControlPlaneApp() {
   const entryLocation = useLocation();
   const { session, token, login, logout } = useControlPlaneSession();
   const navigate = useNavigate();
+  if (!session && controlPageForPath(entryLocation.pathname) === "Documentation") return <GuestDocumentation />;
   if (!session) return <LoginPage onLogin={(result) => {
     login(result);
-    navigate(PAGE_BY_PATH[entryLocation.pathname] ? entryLocation.pathname + entryLocation.search : CONTROL_PATHS.Dashboard, { replace: true });
+    navigate(controlPageForPath(entryLocation.pathname) ? entryLocation.pathname + entryLocation.search : CONTROL_PATHS.Dashboard, { replace: true });
   }} />;
   return <AuthenticatedControlPlane key={token} session={session} onLogout={logout} />;
+}
+
+function GuestDocumentation() {
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  const destination = readPortalDestination(location.pathname, params);
+  const section = destination?.section === "control-plane" ? "quickstart" : destination?.section ?? "quickstart";
+
+  useEffect(() => {
+    if (!destination || (location.pathname !== CONTROL_PATHS.Documentation && !params.has("section"))) return;
+    navigate(controlDestination("Documentation", undefined, destination), { replace: true });
+  }, [destination, location.pathname, navigate, params]);
+  useEffect(() => {
+    document.title = `${PORTAL_SECTION_TITLES[section]} · Marketplace Simulator`;
+    if (navigationType !== "POP") window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => document.getElementById("main-content")?.focus({ preventScroll: true }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [navigationType, section]);
+
+  return <div className="documentation-shell">
+    <a className="skip-link" href="#main-content">Skip to content</a>
+    <div className="workspace documentation-workspace">
+      {((!destination) || (params.has("endpoint") && !destination.endpoint)) && <p role="alert">This documentation destination is unavailable. Choose a lesson or operation from the navigation.</p>}
+      <DeveloperPortal
+        destination={destination}
+        onDestination={next => navigate(controlDestination("Documentation", undefined, next))}
+        api={API_BASE_URL}
+        onNavigate={page => navigate(controlDestination(page))}
+      />
+    </div>
+  </div>;
 }
 
 function AuthenticatedControlPlane({ session, onLogout }: { session: ControlPlaneSession; onLogout: () => void }) {
   const location = useLocation();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const [handoff, setHandoff] = useState<CredentialHandoff>();
   const [portalGeneration, setPortalGeneration] = useState(0);
-  const page = PAGE_BY_PATH[location.pathname] || "Dashboard";
+  const page = controlPageForPath(location.pathname) || "Dashboard";
   const resources = useControlPlaneResources(page, session.token);
   const isDocumentation = page === "Documentation";
+  const portalDestination = isDocumentation ? readPortalDestination(location.pathname, params) : undefined;
+  const portalSection = portalDestination?.section === "control-plane" && session.user.role !== "ADMIN" ? "quickstart" : portalDestination?.section ?? "quickstart";
   const go = (next: ControlPage, shopID = resources.shopID) => navigate(controlDestination(next, shopID, next === "Documentation" ? { section: "try" } : undefined));
+  useEffect(() => {
+    if (!isDocumentation || !portalDestination || (location.pathname !== CONTROL_PATHS.Documentation && !params.has("section"))) return;
+    navigate(controlDestination("Documentation", params.get("shop") || resources.shopID, portalDestination), { replace: true });
+  }, [isDocumentation, location.pathname, navigate, params, portalDestination, resources.shopID]);
   useLayoutEffect(() => { setHandoff(undefined); }, [resources.shopID]);
+  useEffect(() => {
+    const title = isDocumentation ? PORTAL_SECTION_TITLES[portalSection] : page;
+    document.title = `${title} · Marketplace Simulator`;
+    if (navigationType !== "POP") window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => document.getElementById("main-content")?.focus({ preventScroll: true }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isDocumentation, navigationType, page, portalSection]);
   const clearPortal = () => { setHandoff(undefined); setPortalGeneration(value => value + 1); };
-  return <main className={isDocumentation ? "documentation-shell" : "app-shell"}>
+  return <div className={isDocumentation ? "documentation-shell" : "app-shell"}>
+    <a className="skip-link" href="#main-content">Skip to content</a>
     {!isDocumentation && <ControlPlaneSidebar shopID={resources.shopID} page={page} session={session} onLogout={onLogout} />}
-    <section className={`workspace ${isDocumentation ? "documentation-workspace" : ""}`}>
-      {!isDocumentation && <WorkspaceHeader page={page} visibleShops={resources.visibleShops} shopID={resources.shopID}
-        selectedShop={resources.selectedShop} providerFilter={resources.providerFilter}
-        onShopChange={resources.setShopID} onProviderChange={resources.chooseOrderProvider} />}
-      {isDocumentation && ((params.has("section") && !readPortalDestination(params)) || (params.has("endpoint") && !readPortalDestination(params)?.endpoint)) && <p role="alert">This documentation destination is unavailable. Choose a lesson or operation from the navigation.</p>}
-      <div hidden={!isDocumentation}>
-        <DeveloperPortal destination={isDocumentation ? readPortalDestination(params) : undefined} onDestination={destination => navigate(controlDestination("Documentation", resources.shopID, destination))} controlToken={isDocumentation ? session.token : undefined} key={`${resources.shopID}:${resources.selectedShop?.provider_profile ?? ""}:${portalGeneration}`} shop={resources.selectedShop} api={API_BASE_URL}
+    <div className={`workspace ${isDocumentation ? "documentation-workspace" : ""}`}>
+      {isDocumentation && ((!portalDestination) || (params.has("endpoint") && !portalDestination?.endpoint)) && <p role="alert">This documentation destination is unavailable. Choose a lesson or operation from the navigation.</p>}
+      <div key="developer-portal" hidden={!isDocumentation}>
+        <DeveloperPortal destination={portalDestination} onDestination={destination => navigate(controlDestination("Documentation", resources.shopID, destination))} controlToken={isDocumentation ? session.token : undefined} key={`${resources.shopID}:${portalGeneration}`} shop={resources.selectedShop} api={API_BASE_URL}
+          canManageUsers={session.user.role === "ADMIN"}
           credentialHandoff={handoff?.shop.id === resources.shopID ? handoff : undefined}
           onHandoffConsumed={() => setHandoff(undefined)} onNavigate={go} />
       </div>
-      <ControlPlaneWorkspace key={`${location.pathname}:${resources.shopID}`} session={session} page={page} resources={resources}
-        onClearPortal={clearPortal} onUseCredential={value => { setHandoff(value); go("Documentation", value.shop.id); }} />
-    </section>
-  </main>;
+      {!isDocumentation && <main id="main-content" tabIndex={-1}>
+        <WorkspaceHeader page={page} visibleShops={resources.visibleShops} shopID={resources.shopID}
+          selectedShop={resources.selectedShop} providerFilter={resources.providerFilter}
+          onShopChange={resources.setShopID} onProviderChange={resources.chooseOrderProvider} />
+        <ControlPlaneWorkspace key={`${location.pathname}:${resources.shopID}`} session={session} page={page} resources={resources}
+          onClearPortal={clearPortal} onUseCredential={value => { setHandoff(value); go("Documentation", value.shop.id); }} />
+      </main>}
+    </div>
+  </div>;
 }
 
 function ControlPlaneWorkspace({ session, page, resources, onUseCredential, onClearPortal }: {

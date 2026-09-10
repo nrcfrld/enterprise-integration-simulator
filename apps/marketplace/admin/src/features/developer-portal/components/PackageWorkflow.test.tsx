@@ -3,6 +3,7 @@ import "@/test/setup";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { RequestSimulator } from "./RequestSimulator";
 import { DeveloperPortal } from "../DeveloperPortal";
 import { ENDPOINT_BY_ID } from "../data/endpoints";
@@ -21,8 +22,8 @@ for (const provider of ["shopee", "tokopedia"]) it(`sends an explicit package or
 it("carries a returned Shopee package and its order into the signed shipment request", async () => {
   const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ error: "", response: { package: { id: "pkg_returned", order_id: "ord_returned" } } }), { status: 200, statusText: "OK" })).mockResolvedValueOnce(new Response("{}", { status: 200, statusText: "OK" })); vi.stubGlobal("fetch", fetch);
   const user = userEvent.setup();
-  render(<DeveloperPortal api="http://localhost:8080" onNavigate={vi.fn()} />);
-  await user.click(screen.getByRole("button", { name: "Request simulator" }));
+  render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={vi.fn()} /></MemoryRouter>);
+  await user.click(screen.getByRole("link", { name: "Request simulator" }));
   await user.click(screen.getByRole("button", { name: "Shopee-like" }));
   await user.click(screen.getByRole("button", { name: /Allocate a Shopee-like package/ }));
   await user.type(screen.getByLabelText("Client ID"), "client"); await user.type(screen.getByLabelText(/Client secret/), "secret");

@@ -65,8 +65,22 @@ export type PortalSection =
   | "quickstart"
   | "try"
   | "authentication"
+  | "control-plane"
   | "webhooks"
   | "products"
   | "warehouses"
   | "orders"
   | "errors";
+
+export const PORTAL_SECTION_TITLES: Record<PortalSection, string> = {
+  quickstart: "Start here",
+  try: "Request simulator",
+  consumer: "Durable consumer exercise",
+  authentication: "Request signing",
+  "control-plane": "Control Plane accounts",
+  products: "Products API reference",
+  warehouses: "Warehouses API reference",
+  orders: "Orders and fulfilment API reference",
+  webhooks: "Webhook API reference",
+  errors: "Errors and limits",
+};

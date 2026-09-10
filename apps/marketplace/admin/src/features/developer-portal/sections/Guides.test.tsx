@@ -4,7 +4,8 @@ import "@/test/setup";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Authentication, QuickStart, Webhooks } from "./Guides";
+import { MemoryRouter } from "react-router-dom";
+import { ControlPlaneAccounts, QuickStart, Webhooks } from "./Guides";
 
 describe("developer portal guides", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -42,7 +43,7 @@ describe("developer portal guides", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<Authentication api="http://localhost:8080" />);
+    render(<MemoryRouter><ControlPlaneAccounts api="http://localhost:8080" /></MemoryRouter>);
 
     await user.clear(screen.getByLabelText("Email"));
     await user.type(screen.getByLabelText("Email"), "operator@example.test");
@@ -68,13 +69,13 @@ describe("developer portal guides", () => {
       .mockRejectedValueOnce(new Error("offline"));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    const { unmount } = render(<Authentication api="http://localhost:8080" />);
+    const { unmount } = render(<MemoryRouter><ControlPlaneAccounts api="http://localhost:8080" /></MemoryRouter>);
 
     await user.click(screen.getByRole("button", { name: "Send registration request" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Email already registered");
 
     unmount();
-    render(<Authentication api="http://localhost:8080" />);
+    render(<MemoryRouter><ControlPlaneAccounts api="http://localhost:8080" /></MemoryRouter>);
     await user.click(screen.getByRole("button", { name: "Send registration request" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not reach the API");
   });

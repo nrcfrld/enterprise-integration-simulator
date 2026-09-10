@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@/test/setup";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -26,7 +26,7 @@ it("returns from credential creation to the edited Tokopedia request, warns on m
  await waitFor(() => expect(screen.getByLabelText("Selected shop context")).toHaveTextContent("Toko learner"));
  await user.click(screen.getByRole("button", { name: /Fulfil an order/ }));
  const body = screen.getByLabelText(/JSON request body/);
- await user.clear(body); await user.paste('{"page_size":7}');
+ fireEvent.change(body, { target: { value: '{"page_size":7}' } });
  await user.click(screen.getByRole("button", { name: "Open Credentials" }));
  await user.click(await screen.findByRole("button", { name: "+ New credential" }));
  await user.click(screen.getByRole("button", { name: "Create →" }));
@@ -45,10 +45,10 @@ it("returns from credential creation to the edited Tokopedia request, warns on m
  expect(screen.getByRole("button", { name: "Send signed request" })).toBeDisabled();
  await user.click(screen.getByRole("button", { name: "Shared resources" }));
  expect(screen.getByRole("button", { name: "Send signed request" })).toBeEnabled();
- await user.click(screen.getByRole("button", { name: "Back to console" }));
+ await user.click(screen.getByRole("link", { name: "Back to console" }));
  await user.selectOptions(screen.getByLabelText("Current shop"), "shop_shopee");
  await user.click(screen.getByRole("link", { name: "API Documentation" }));
- await user.click(screen.getByRole("button", { name: "Request simulator" }));
+ await user.click(screen.getByRole("link", { name: "Request simulator" }));
  expect(screen.getByRole("textbox", { name: "Client ID" })).toHaveValue("");
  expect(screen.getByLabelText(/Client secret/)).toHaveValue("");
  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -58,12 +58,12 @@ it("preserves pasted credentials across a console visit and explicitly clears th
  const user = userEvent.setup();
  render(<MemoryRouter initialEntries={["/docs"]}><ControlPlaneApp /></MemoryRouter>);
  await waitFor(() => expect(screen.getByLabelText("Selected shop context")).toHaveTextContent("Toko learner"));
- await user.click(screen.getByRole("button", { name: "Request simulator" }));
+ await user.click(screen.getByRole("link", { name: "Request simulator" }));
  await user.type(screen.getByRole("textbox", { name: "Client ID" }), "pasted_id");
  await user.type(screen.getByLabelText(/Client secret/), "pasted-secret");
  await user.click(screen.getByRole("button", { name: "Open Credentials" }));
  await user.click(await screen.findByRole("link", { name: "API Documentation" }));
- await user.click(screen.getByRole("button", { name: "Request simulator" }));
+ await user.click(screen.getByRole("link", { name: "Request simulator" }));
  expect(screen.getByLabelText(/Client secret/)).toHaveValue("pasted-secret");
  await user.click(screen.getByRole("button", { name: "Clear credential" }));
  expect(screen.getByLabelText(/Client secret/)).toHaveValue("");

@@ -3,6 +3,7 @@
 import "@/test/setup";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeveloperPortal } from "./DeveloperPortal";
 
@@ -21,8 +22,8 @@ describe("DeveloperPortal navigation", () => {
 
   it("makes receiver verification reachable from Webhooks navigation", async () => {
     const user = userEvent.setup();
-    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
-    await user.click(screen.getByRole("button", { name: "Webhooks" }));
+    render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
+    await user.click(screen.getByRole("link", { name: "Webhooks" }));
     expect(screen.getByRole("heading", { name: "Receive and verify webhook deliveries" })).toBeVisible();
     await user.click(screen.getByText("Verify incoming deliveries"));
     expect(screen.getByText("EVENT + TIMESTAMP + RAW_BODY")).toBeVisible();
@@ -45,7 +46,7 @@ describe("DeveloperPortal navigation", () => {
       }), { status: 200, statusText: "OK" }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+    render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
 
     await user.click(screen.getByRole("button", { name: /Fulfil an order/ }));
     expect(screen.getByText(/Copy order_id from response.order_list into/)).toBeInTheDocument();
@@ -70,34 +71,34 @@ describe("DeveloperPortal navigation", () => {
 
   it("opens every documentation section from the side navigation", async () => {
     const user = userEvent.setup();
-    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+    render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
 
     expect(screen.getByRole("heading", { name: /send your first signed request/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Request signing" }));
+    await user.click(screen.getByRole("link", { name: "Request signing" }));
     expect(screen.getByRole("heading", { name: /choose the signature/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Products" }));
-    expect(screen.getByRole("heading", { name: "Products API reference" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Products" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Products API reference" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Warehouses" }));
-    expect(screen.getByRole("heading", { name: "Warehouses API reference" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Warehouses" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Warehouses API reference" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Orders & fulfilment" }));
-    expect(screen.getByRole("heading", { name: "Orders and fulfilment API reference" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Orders & fulfilment" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Orders and fulfilment API reference" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Webhooks" }));
-    expect(screen.getByRole("heading", { name: "Webhook API reference" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Webhooks" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Webhook API reference" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Errors & limits" }));
+    await user.click(screen.getByRole("link", { name: "Errors & limits" }));
     expect(screen.getByRole("heading", { name: /recover from common responses/i })).toBeInTheDocument();
   });
 
   it("preserves credentials while switching provider contracts and clears them on demand", async () => {
     const user = userEvent.setup();
-    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+    render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
 
-    await user.click(screen.getByRole("button", { name: "Request simulator" }));
+    await user.click(screen.getByRole("link", { name: "Request simulator" }));
     await user.type(screen.getByLabelText("Client ID"), "client_123");
     await user.type(screen.getByLabelText(/Client secret/), "secret_123");
 
@@ -115,25 +116,35 @@ describe("DeveloperPortal navigation", () => {
     expect(onNavigate).toHaveBeenCalledWith("Credentials");
   });
 
-  it("routes console shortcuts to their control-plane pages", async () => {
+  it("exposes console shortcuts as real, shareable links", () => {
+    render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
+
+    expect(screen.getByRole("link", { name: "Back to console" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Manage shops" })).toHaveAttribute("href", "/shops");
+    expect(screen.getByRole("link", { name: "Failure scenarios" })).toHaveAttribute("href", "/scenarios");
+  });
+
+  it("keeps account administration separate and Admin-only", async () => {
     const user = userEvent.setup();
-    render(<DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} />);
+    const { rerender } = render(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} /></MemoryRouter>);
+    expect(screen.queryByRole("link", { name: "Account administration" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Back to console" }));
-    await user.click(screen.getByRole("button", { name: "Manage shops" }));
-    await user.click(screen.getByRole("button", { name: "Failure scenarios" }));
-
-    expect(onNavigate.mock.calls).toEqual([["Dashboard"], ["Shops"], ["Scenarios"]]);
+    rerender(<MemoryRouter><DeveloperPortal api="http://localhost:8080" onNavigate={onNavigate} canManageUsers /></MemoryRouter>);
+    await user.click(screen.getByRole("link", { name: "Account administration" }));
+    expect(screen.getByRole("heading", { name: "Manage Control Plane accounts" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open Users" })).toHaveAttribute("href", "/users");
   });
 });
 
 it("opens the provider-specific durable exercise with runnable downloads", async () => {
   const user = userEvent.setup();
-  render(<DeveloperPortal shop={{ id: "toko_1", name: "Toko", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} api="http://localhost:18080" onNavigate={vi.fn()} />);
-  await user.click(screen.getByRole("button", { name: "Durable consumer exercise" }));
+  render(<MemoryRouter><DeveloperPortal shop={{ id: "toko_1", name: "Toko", status: "ACTIVE", provider_profile: "TOKOPEDIA_LIKE" }} api="http://localhost:18080" onNavigate={vi.fn()} /></MemoryRouter>);
+  await user.click(screen.getByRole("link", { name: "Durable consumer exercise" }));
   expect(screen.getByRole("heading", { name: "Build a durable Tokopedia-like consumer" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Download durable-consumer.mjs" })).toHaveAttribute("download", "durable-consumer.mjs");
   expect(screen.getByRole("link", { name: "Download webhook-receiver.mjs" })).toHaveAttribute("download", "webhook-receiver.mjs");
+  await user.click(screen.getByText("Create and discover a fresh order"));
   expect(screen.getByRole("button", { name: "Search orders (POST)" })).toBeVisible();
+  await user.click(screen.getByText("Prove recovery"));
   expect(screen.getByText(/same persisted retry_key/i)).toBeVisible();
 });

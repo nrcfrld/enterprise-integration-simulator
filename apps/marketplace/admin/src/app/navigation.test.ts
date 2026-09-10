@@ -14,6 +14,7 @@ describe("control-plane navigation", () => {
       ["INTEGRATION", ["API Credentials", "Webhooks", "Webhook Deliveries"]],
       ["SIMULATION", ["Scenarios", "Event Logs"]],
       ["DEVELOPER", ["API Documentation", "Integration Guide"]],
+      ["ADMINISTRATION", ["Users"]],
     ]);
 
     const entries = Object.fromEntries(
@@ -28,5 +29,6 @@ describe("control-plane navigation", () => {
     expect(CONTROL_PATHS[entries["Warehouses & Inventory"].page]).toBe("/warehouses");
     expect(CONTROL_PATHS[entries["Event Logs"].page]).toBe("/events");
     expect(CONTROL_PATHS[entries["Integration Guide"].page]).toBe("/docs");
+    expect(CONTROL_PATHS[entries["Users"].page]).toBe("/users");
   });
 });

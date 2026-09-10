@@ -9,7 +9,9 @@ const statuses: Record<string, string[]> = {
 };
 export function ResourceSearch({ page, shopID }: { page: string; shopID: string }) {
   const [params, setParams] = useSearchParams();
-  return <form className="table-toolbar" key={params.toString()} onSubmit={event => {
+  const hasSearch = ["q", "status", "page"].some(key => params.has(key));
+  const helpID = `resource-search-help-${page.toLowerCase()}`;
+  return <form className="resource-search" key={params.toString()} onSubmit={event => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
     const next = new URLSearchParams(params);
@@ -17,10 +19,14 @@ export function ResourceSearch({ page, shopID }: { page: string; shopID: string 
     for (const key of ["q", "status"]) { const value = String(values.get(key) || "").trim(); if (value) next.set(key, value); else next.delete(key); }
     setParams(next);
   }}>
-    <label>{labels[page]}<input type="search" name="q" defaultValue={params.get("q") || ""} /></label>
-    <label>Status<select name="status" defaultValue={params.get("status") || ""}><option value="">All statuses</option>{statuses[page].map(status => <option key={status}>{status}</option>)}</select></label>
-    <button>Search all records</button>
-    <button type="button" onClick={() => { const next = new URLSearchParams(params); for (const key of ["q", "status", "page"]) next.delete(key); setParams(next); }}>Clear search</button>
-    <small>Search covers all pages in this shop. Text matches are case-insensitive; status uses canonical values.</small>
+    <div className="resource-search-fields">
+      <label><span>{labels[page]}</span><input aria-describedby={helpID} type="search" name="q" defaultValue={params.get("q") || ""} placeholder="Search by ID or name" /></label>
+      <label><span>Status</span><select name="status" defaultValue={params.get("status") || ""}><option value="">All statuses</option>{statuses[page].map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
+    </div>
+    <div className="resource-search-actions">
+      <button className="btn btn-primary" type="submit">Search</button>
+      <button className="btn btn-ghost" type="button" disabled={!hasSearch} onClick={() => { const next = new URLSearchParams(params); for (const key of ["q", "status", "page"]) next.delete(key); setParams(next); }}>Clear</button>
+    </div>
+    <small id={helpID}>Search covers every page in this shop.</small>
   </form>;
 }

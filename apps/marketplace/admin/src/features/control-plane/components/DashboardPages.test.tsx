@@ -35,11 +35,11 @@ describe("Dashboard setup and maintenance states", () => {
     const user = userEvent.setup();
     render(<Dashboard {...props} />);
 
-    const createShop = screen.getByRole("button", { name: "Create shop →" });
+    const createShop = screen.getByRole("button", { name: "Create shop" });
     expect(createShop).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Manage products →" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Configure →" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "View orders and events →" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Manage products" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Configure" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "View orders and events" })).toBeDisabled();
 
     await user.click(createShop);
     expect(props.onForm).toHaveBeenCalledWith({ kind: "shop" });
@@ -91,11 +91,11 @@ describe("Dashboard setup and maintenance states", () => {
 it("marks actual configuration without claiming secret possession or successful integration", async () => {
   const { container } = render(<Dashboard {...props} shopID="shop_1" data={{ shops: 2, orders: 50, setup: { ready: true, seeded: false, products: 1, credential_active: true, webhook_configured: true, webhook_enabled: true } }} />);
   expect(container.querySelectorAll("ol > li.complete")).toHaveLength(4);
-  expect(screen.getByText("All accessible shops")).toBeVisible();
-  expect(screen.getByText("Selected shop configuration")).toBeVisible();
-  expect(screen.getByText(/Configuration is present/)).toHaveTextContent("still need verification");
-  expect(screen.getByText(/These checks are not tracked/)).toBeVisible();
+  expect(screen.getByText("Workspace overview")).toBeVisible();
+  expect(screen.getByText("Configuration status")).toBeVisible();
+  expect(screen.getByText(/Core configuration is present/)).toHaveTextContent("Manual verification");
+  expect(screen.getByText(/Configuration alone does not prove/)).toBeVisible();
   expect(screen.queryByText("Simulator online")).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Test in API Simulator" }));
+  await userEvent.click(screen.getByRole("button", { name: "Open API Simulator" }));
   expect(props.onNavigate).toHaveBeenCalledWith("Documentation");
 });

@@ -1,4 +1,4 @@
-import type { PortalDestination } from "@/app/destinations";
+import { controlDestination, type PortalDestination } from "@/app/destinations";
 import { FaultContext } from "./components/FaultContext";
 import { ConsumerExercise } from "./components/ConsumerExercise";
 import { InventoryGuide } from "./components/InventoryGuide";
@@ -6,14 +6,15 @@ import { LifecycleGuide } from "./components/LifecycleGuide";
 import { FulfillmentGuide } from "./components/FulfillmentGuide";
 import type { Shop, CredentialHandoff } from "@/shared/types/controlPlane";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { ControlPage } from "@/app/navigation";
 import { ENDPOINT_BY_ID, ENDPOINTS } from "./data/endpoints";
 import { ApiReference } from "./components/ApiReference";
 import { CredentialPanel } from "./components/CredentialPanel";
 import { HttpMethod } from "./components/HttpMethod";
 import { RequestSimulator, type SavedRequestDraft } from "./components/RequestSimulator";
-import { Authentication, Errors, QuickStart, Webhooks } from "./sections/Guides";
-import type { IntegrationCredentials, PortalSection } from "./types";
+import { Authentication, ControlPlaneAccounts, Errors, QuickStart, Webhooks } from "./sections/Guides";
+import { PORTAL_SECTION_TITLES, type IntegrationCredentials, type PortalSection } from "./types";
 
 interface DeveloperPortalProps {
   destination?: PortalDestination;
@@ -22,6 +23,7 @@ interface DeveloperPortalProps {
   shop?: Shop;
   credentialHandoff?: CredentialHandoff;
   onHandoffConsumed?: () => void;
+  canManageUsers?: boolean;
   api: string;
   onNavigate: (page: ControlPage) => void;
 }
@@ -48,6 +50,8 @@ function TryIt({ resourceID, packageID, controlToken, drafts, shop, knownCredent
   const contracts = ["shared", "shopee", "tokopedia"] as const;
   const [selectedPackageID, setSelectedPackageID] = useState(packageID || "");
   const [selectedOrderID, setSelectedOrderID] = useState(resourceID || "");
+  const effectivePackageID = packageID ?? selectedPackageID;
+  const effectiveOrderID = resourceID ?? selectedOrderID;
   const selectEndpoint = (id: string) => {
     setSelectedPackageID("");
     setSelectedOrderID("");
@@ -59,15 +63,17 @@ function TryIt({ resourceID, packageID, controlToken, drafts, shop, knownCredent
     drafts.delete("shopee-get-order");
     onSelect("shopee-get-order", orderID);
   };
-  return <>{shop && controlToken && <FaultContext shopID={shop.id} token={controlToken} onConfigure={() => onNavigate("Scenarios")} />}<section className="try-heading"><h2>Make a signed request to the provider you are integrating with.</h2><p>Choose a provider contract first. The simulator signs and sends the exact request shape used by the selected Marketplace API.</p></section><div className="contract-switcher join" aria-label="Provider contract">{contracts.map((contract) => <button key={contract} type="button" className={`btn btn-sm join-item ${endpoint.contract === contract ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(ENDPOINTS.find((item) => item.contract === contract)?.id ?? endpoint.id)}>{contract === "shared" ? "Shared resources" : contract === "shopee" ? "Shopee-like" : "Tokopedia-like"}</button>)}</div><CredentialPanel shop={shop} knownCredential={known} credentials={credentials} onChange={onCredentialsChange} onClear={() => onCredentialsChange({ clientID: "", secret: "", accessToken: "" })} onNavigate={onNavigate} contract={endpoint.contract} /><section className="operation-picker card bg-base-100"><div><h3>Choose an operation</h3><p>Start with a list or search request. It returns ids you can paste into the next lifecycle operation.</p></div><div>{ENDPOINTS.filter((item) => item.contract === endpoint.contract).map((item) => <button type="button" key={item.id} className={`btn ${item.id === endpoint.id ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(item.id)}><HttpMethod method={item.method} /><span><b>{item.title}</b><small>{item.group}</small></span></button>)}</div></section><RequestSimulator drafts={drafts} onSelectResource={(id, resourceID) => { setSelectedPackageID(""); setSelectedOrderID(resourceID); drafts.delete(id); onSelect(id, resourceID); }} blockedReason={mismatch} shopProvider={shop?.provider_profile} key={endpoint.id} endpoint={endpoint} api={api} credentials={credentials} initialPathParams={selectedOrderID ? { id: selectedOrderID } : undefined} onSelectOrder={selectOrder} initialPackageID={selectedPackageID || undefined} onSelectPackage={(orderID, packageID) => { setSelectedOrderID(orderID); setSelectedPackageID(packageID); drafts.delete("shopee-create-shipment"); onSelect("shopee-create-shipment", orderID, packageID); }} /></>;
+  return <>{shop && controlToken && <FaultContext shopID={shop.id} token={controlToken} onConfigure={() => onNavigate("Scenarios")} />}<section className="try-heading"><h2>Send a signed provider request</h2><p>Choose a provider contract, operation, and inputs. The simulator signs the same request shape used by that API.</p></section><div className="contract-switcher join" aria-label="Provider contract">{contracts.map((contract) => <button key={contract} type="button" className={`btn btn-sm join-item ${endpoint.contract === contract ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(ENDPOINTS.find((item) => item.contract === contract)?.id ?? endpoint.id)}>{contract === "shared" ? "Shared resources" : contract === "shopee" ? "Shopee-like" : "Tokopedia-like"}</button>)}</div><CredentialPanel shop={shop} knownCredential={known} credentials={credentials} onChange={onCredentialsChange} onClear={() => onCredentialsChange({ clientID: "", secret: "", accessToken: "" })} onNavigate={onNavigate} contract={endpoint.contract} /><section className="operation-picker card bg-base-100"><div><h3>Choose an operation</h3><p>Start with a list or search request. It returns ids you can paste into the next lifecycle operation.</p></div><div>{ENDPOINTS.filter((item) => item.contract === endpoint.contract).map((item) => <button type="button" key={item.id} className={`btn ${item.id === endpoint.id ? "selected btn-primary" : "btn-ghost"}`} onClick={() => selectEndpoint(item.id)}><HttpMethod method={item.method} /><span><b>{item.title}</b><small>{item.group}</small></span></button>)}</div></section><RequestSimulator drafts={drafts} onSelectResource={(id, resourceID) => { setSelectedPackageID(""); setSelectedOrderID(resourceID); drafts.delete(id); onSelect(id, resourceID); }} blockedReason={mismatch} shopProvider={shop?.provider_profile} key={`${endpoint.id}:${resourceID ?? ""}:${packageID ?? ""}`} endpoint={endpoint} api={api} credentials={credentials} initialPathParams={effectiveOrderID ? { id: effectiveOrderID } : undefined} onSelectOrder={selectOrder} initialPackageID={effectivePackageID || undefined} onSelectPackage={(orderID, packageID) => { setSelectedOrderID(orderID); setSelectedPackageID(packageID); drafts.delete("shopee-create-shipment"); onSelect("shopee-create-shipment", orderID, packageID); }} /></>;
 }
 
-export function DeveloperPortal({ destination, onDestination, controlToken, shop, api, onNavigate, credentialHandoff, onHandoffConsumed }: DeveloperPortalProps) {
+export function DeveloperPortal({ destination, onDestination, controlToken, shop, api, onNavigate, credentialHandoff, onHandoffConsumed, canManageUsers = false }: DeveloperPortalProps) {
   const drafts = useRef(new Map<string, SavedRequestDraft>());
   const [draftGeneration, setDraftGeneration] = useState(0);
   const [localSection, setLocalSection] = useState<PortalSection>("quickstart");
   const [localEndpointID, setLocalEndpointID] = useState(shop?.provider_profile === "TOKOPEDIA_LIKE" ? "tokopedia-search-products" : shop ? "shopee-list-products" : "list-warehouses");
-  const section = destination?.section ?? localSection;
+  const requestedSection = destination?.section ?? localSection;
+  const accountSectionUnavailable = requestedSection === "control-plane" && !canManageUsers;
+  const section = accountSectionUnavailable ? "quickstart" : requestedSection;
   const activeEndpointID = destination?.endpoint ?? localEndpointID;
   const setSection = (value: PortalSection) => { setLocalSection(value); onDestination?.({ section: value, endpoint: activeEndpointID }); };
   const selectEndpoint = (id: string, resourceID?: string, packageID?: string) => {
@@ -98,40 +104,51 @@ export function DeveloperPortal({ destination, onDestination, controlToken, shop
   let content;
   if (section === "quickstart") content = <QuickStart provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} onOpenSection={setSection} />;
   else if (section === "consumer") content = <ConsumerExercise provider={shop?.provider_profile} onNavigate={onNavigate} onTry={openTry} />;
-  else if (section === "try") content = <TryIt resourceID={destination?.resourceID} packageID={destination?.packageID} controlToken={controlToken} key={`${draftGeneration}:${destination?.endpoint ?? ""}:${destination?.resourceID ?? ""}:${destination?.packageID ?? ""}`} drafts={drafts.current} shop={shop} knownCredential={knownCredential} api={api} activeEndpointID={activeEndpointID} onSelect={selectEndpoint} credentials={credentials} onCredentialsChange={value => { setCredentials(value); if (!value.clientID) { setKnownCredential(undefined); drafts.current.clear(); setDraftGeneration(value => value + 1); } }} onNavigate={onNavigate} />;
-  else if (section === "authentication") content = <Authentication api={api} />;
+  else if (section === "try") content = <TryIt resourceID={destination?.resourceID} packageID={destination?.packageID} controlToken={controlToken} key={draftGeneration} drafts={drafts.current} shop={shop} knownCredential={knownCredential} api={api} activeEndpointID={activeEndpointID} onSelect={selectEndpoint} credentials={credentials} onCredentialsChange={value => { setCredentials(value); if (!value.clientID) { setKnownCredential(undefined); drafts.current.clear(); setDraftGeneration(value => value + 1); } }} onNavigate={onNavigate} />;
+  else if (section === "authentication") content = <Authentication />;
+  else if (section === "control-plane") content = <ControlPlaneAccounts api={api} />;
   else if (section === "products") content = <ApiReference title="Products API reference" description="Read the provider catalogue without translating its public field names yourself. Every operation below documents its signing inputs, filters, payload, response envelope, and failure shape." note="Product creation, stock changes, and archival stay in the Admin Control Plane. The public Shopee-like and Tokopedia-like catalogue APIs are intentionally read-only." groups={["Products"]} endpoints={ENDPOINTS} onTry={openTry} />;
   else if (section === "warehouses") content = <><InventoryGuide /><ApiReference title="Warehouses API reference" description="Discover fulfillment origins and inspect their physical, reserved, and available inventory through the shared signed contract." note="Create warehouses and adjust stock in the Admin Control Plane. Public warehouse calls only expose data owned by the credential's shop." groups={["Warehouses"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
   else if (section === "orders") content = <><LifecycleGuide /><FulfillmentGuide /><ApiReference title="Orders and fulfilment API reference" description="Follow each provider's order lifecycle from discovery through package allocation and shipment creation, with state prerequisites and provider-shaped responses visible at every step." note="List or search first and reuse the returned ID. Payment verification and physical shipment progression are simulator control-plane actions; merchant processing, packing, handover, package allocation, shipment creation, and eligible cancellation use these public APIs." groups={["Orders", "Fulfillment"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
   else if (section === "webhooks") content = <><Webhooks onTry={openTry} onOpenConsumer={() => setSection("consumer")} /><ApiReference title="Webhook API reference" description="Register, list, or configure callback destinations using the event vocabulary and signing contract of each provider." note="Deliveries are asynchronous and at-least-once. Verify the exact raw bytes, then durably deduplicate and accept the event before returning 2xx." groups={["Webhooks"]} endpoints={ENDPOINTS} onTry={openTry} /></>;
   else content = <Errors />;
 
+  const sectionLink = (value: PortalSection, label: string) => <Link
+    to={controlDestination("Documentation", shop?.id, { section: value, endpoint: value === "try" ? activeEndpointID : undefined })}
+    aria-current={section === value ? "page" : undefined}
+    className={section === value ? "selected" : ""}
+    onClick={() => setLocalSection(value)}
+  >{label}</Link>;
+
   return <div className="docs-portal">
-    <header className="portal-topbar navbar"><div className="portal-wordmark"><span>MARKETPLACE</span><b>Developer</b></div><div className="portal-links"><a className="btn btn-ghost btn-sm" href={`${api}/openapi.yaml`} target="_blank" rel="noreferrer">OpenAPI spec</a><a className="btn btn-ghost btn-sm" href={`${api}/swagger/index.html`} target="_blank" rel="noreferrer">API explorer</a><button type="button" className="quiet btn btn-primary btn-sm" onClick={() => onNavigate("Dashboard")}>Back to console</button></div></header>
+    <header className="portal-topbar navbar"><div className="portal-wordmark"><span>MARKETPLACE</span><b>Developer</b></div><div className="portal-links"><a className="btn btn-ghost btn-sm" href={`${api}/openapi.yaml`} target="_blank" rel="noreferrer">OpenAPI spec</a><a className="btn btn-ghost btn-sm" href={`${api}/swagger/index.html`} target="_blank" rel="noreferrer">API explorer</a><Link className="quiet btn btn-primary btn-sm" to={controlDestination("Dashboard", shop?.id)}>Back to console</Link></div></header>
     <div className="portal-frame">
-      <aside className="portal-rail menu" aria-label="Developer documentation">
-        <button type="button" aria-current={section === "quickstart" ? "page" : undefined} className={section === "quickstart" ? "selected" : ""} onClick={() => setSection("quickstart")}>Start here</button>
-        <button type="button" aria-current={section === "try" ? "page" : undefined} className={section === "try" ? "selected" : ""} onClick={() => setSection("try")}>Request simulator</button>
-        <button type="button" aria-current={section === "consumer" ? "page" : undefined} className={section === "consumer" ? "selected" : ""} onClick={() => setSection("consumer")}>Durable consumer exercise</button>
+      <nav className="portal-rail menu" aria-label="Developer documentation">
+        {sectionLink("quickstart", "Start here")}
+        {sectionLink("try", "Request simulator")}
+        {sectionLink("consumer", "Durable consumer exercise")}
         <p>CONCEPTS</p>
-        <button type="button" aria-current={section === "authentication" ? "page" : undefined} className={section === "authentication" ? "selected" : ""} onClick={() => setSection("authentication")}>Request signing</button>
+        {sectionLink("authentication", "Request signing")}
         <p>REFERENCE</p>
-        <button type="button" aria-current={section === "products" ? "page" : undefined} className={section === "products" ? "selected" : ""} onClick={() => setSection("products")}>Products</button>
-        <button type="button" aria-current={section === "warehouses" ? "page" : undefined} className={section === "warehouses" ? "selected" : ""} onClick={() => setSection("warehouses")}>Warehouses</button>
-        <button type="button" aria-current={section === "orders" ? "page" : undefined} className={section === "orders" ? "selected" : ""} onClick={() => setSection("orders")}>Orders &amp; fulfilment</button>
-        <button type="button" aria-current={section === "webhooks" ? "page" : undefined} className={section === "webhooks" ? "selected" : ""} onClick={() => setSection("webhooks")}>Webhooks</button>
-        <button type="button" aria-current={section === "errors" ? "page" : undefined} className={section === "errors" ? "selected" : ""} onClick={() => setSection("errors")}>Errors &amp; limits</button>
+        {sectionLink("products", "Products")}
+        {sectionLink("warehouses", "Warehouses")}
+        {sectionLink("orders", "Orders & fulfilment")}
+        {sectionLink("webhooks", "Webhooks")}
+        {sectionLink("errors", "Errors & limits")}
         <p>SIMULATOR</p>
-        <button type="button" onClick={() => onNavigate("Shops")}>Manage shops</button>
-        <button type="button" onClick={() => onNavigate("Scenarios")}>Failure scenarios</button>
-      </aside>
-      <main className="portal-main">
+        <Link to={controlDestination("Shops", shop?.id)}>Manage shops</Link>
+        <Link to={controlDestination("Scenarios", shop?.id)}>Failure scenarios</Link>
+        {canManageUsers && <><p>ADMIN</p>{sectionLink("control-plane", "Account administration")}</>}
+      </nav>
+      <main id="main-content" className="portal-main" tabIndex={-1}>
+        <h1 className="sr-only">{PORTAL_SECTION_TITLES[section]}</h1>
+        {accountSectionUnavailable && <p className="page-hint alert alert-error" role="alert">Account administration is available to Admins. Use Start here for the integration workflow.</p>}
         {shop ? <div className="portal-context" aria-label="Selected shop context">
           <span>Current shop</span>
           <strong>{shop.name}</strong>
           <span>{shop.provider_profile === "TOKOPEDIA_LIKE" ? "Tokopedia-like API" : "Shopee-like API"}</span>
           <code>{shop.id}</code>
-        </div> : <div className="portal-context portal-context-empty"><span>No shop selected</span><button type="button" onClick={() => onNavigate("Shops")}>Choose a shop</button></div>}
+        </div> : <div className="portal-context portal-context-empty"><span>No shop selected</span><Link to={controlDestination("Shops")}>Choose a shop</Link></div>}
         {content}
       </main>
     </div>

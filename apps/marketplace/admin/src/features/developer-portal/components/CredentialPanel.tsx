@@ -18,9 +18,15 @@ export function CredentialPanel({ shop, knownCredential, credentials, onChange, 
     <section className="credential-panel">
       <div>
         <h3>Integration credential{shop ? ` for ${shop.name}` : ""}</h3>
-        <p>This is different from your dashboard login. Create an active credential in Control plane → Credentials, then paste its Client ID and secret here.{tokopedia && " Tokopedia-like requests also need the one-time access token."}</p>
-        <p>{knownCredential ? <>Known Client ID: <code>{knownCredential.credential.client_id}</code> · {knownCredential.shop.name} · {knownCredential.shop.provider_profile} (transferred from Credentials).</> : "Pasted credential ownership is not verified here. Use a credential created for the current shop."}</p>
-        <p>If the one-time values are lost or were seeded, revoke that credential and create a new one. Use in simulator returns here with the new values.</p>
+        <p>Use an active API credential created for this shop. It is separate from your dashboard login.{tokopedia && " Tokopedia-like requests also need the one-time access token."}</p>
+        {knownCredential && <p className="credential-panel__known">Using <code>{knownCredential.credential.client_id}</code> from {knownCredential.shop.name}.</p>}
+        <details className="credential-guidance">
+          <summary>Credential handling notes</summary>
+          <div>
+            {!knownCredential && <p>Pasted credential ownership is not verified here. Use a credential created for the current shop.</p>}
+            <p>If a one-time secret is lost, revoke that credential and create a new one.</p>
+          </div>
+        </details>
         <button type="button" className="link-button" onClick={() => onNavigate("Credentials")}>Open Credentials</button>
       </div>
       <div className="credential-fields">

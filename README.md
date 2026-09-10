@@ -1,53 +1,49 @@
 # Enterprise Integration Simulator
 
-Marketplace Simulator is a local, multi-user sandbox for practicing production-like marketplace integrations. Its public boundary is a signed REST API and signed webhooks; the control plane is available at the bundled admin UI.
+Marketplace Simulator is a local learning environment for practicing signed APIs, webhooks, retries, failures, and recovery against Shopee-like and Tokopedia-like contracts. It is designed for entry-level and junior integration developers.
 
-## Quick start
+## Start here
 
-```bash
-docker compose up --build
-```
+1. Start the complete local stack:
 
-## Development shortcuts
+   ```bash
+   docker compose up --build
+   ```
 
-Run `make help` from the repository root (or `apps/marketplace`) to see the
-available shortcuts. `make test` and `make check` run the complete suite,
-including Testcontainers; use `make test-fast` when Docker is unavailable.
-Other common commands are `make docker-build` and `make compose-up`.
+2. Open [Admin UI](http://localhost:5173) and sign in with `admin@example.test` / `change-me-now`, or select **Create account** to create an Operator.
+3. Select the demo shop or create one, then create an API credential and save its one-time secret.
+4. Open **Documentation → Request simulator**, choose the shop's provider, and send a product list/search request.
+5. Continue with an order and webhook exercise from **Documentation → Start here**.
+
+Control Plane accounts only open the Admin UI. Public API requests use a shop integration credential; the two credential types are not interchangeable.
+
+## Choose your guide
+
+| Goal | Start here |
+| --- | --- |
+| Send a first signed request and follow an order workflow | [Integration guide](docs/marketplace/integration-guide.md) |
+| Receive, verify, and retry webhook deliveries | [Webhook guide](docs/marketplace/webhook-guide.md) |
+| Configure or troubleshoot the local environment | [Operations guide](docs/marketplace/operations-guide.md) |
+| Understand services, persistence, and worker boundaries | [Backend architecture](docs/marketplace/backend-architecture.md) |
+| Inspect every public request and response schema | [OpenAPI](apps/marketplace/openapi/openapi.yaml) or [Swagger UI](http://localhost:18080/swagger/index.html) |
+
+Minimal signed clients are available in [Go](apps/marketplace/examples/go-client) and [Node.js/TypeScript](apps/marketplace/examples/node-client).
+
+## Local endpoints
 
 - Admin UI: http://localhost:5173
 - API: http://localhost:18080
 - OpenAPI: http://localhost:18080/openapi.yaml
-- Interactive Swagger UI: http://localhost:18080/swagger/index.html
+- Swagger UI: http://localhost:18080/swagger/index.html
 - Metrics: http://localhost:18080/metrics
 
-The bootstrap account is `admin@example.test` / `change-me-now`. Override all `MARKETPLACE_*` variables before using a non-local environment.
+The first Compose volume includes **Marketplace Demo Store**, 100 products, 50 historical orders, an unusable sample credential, and a disabled webhook. Create a credential when you need a usable one-time secret. Resetting a shop deletes its credentials, catalogue, orders, events, and webhook history; the UI shows the full impact before confirmation.
 
-New participants can use **Create account** on the Admin sign-in screen. It creates an `OPERATOR` account and signs them in immediately; it cannot create an Admin account or act as an integration credential. The first workflow is: `Create account → create shop → configure catalogue → create credential → test the signed provider API`.
+The bootstrap account and default `MARKETPLACE_*` values are for local development only. Follow the [operations guide](docs/marketplace/operations-guide.md#safe-local-operation) before running outside a trusted local environment.
 
-On a fresh Compose volume, the API automatically creates **Marketplace Demo Store** with 100 realistic products, 50 completed historical orders, one active integration credential, and one disabled example webhook registration. Seed and reset never reveal a client or webhook secret. Create a credential from **Credentials** when you need a one-time client secret.
+## Development shortcuts
 
-Orders use the lifecycle `UNPAID → PAID → PROCESSING → READY_TO_SHIP → SHIPPED → IN_DELIVERY → DELIVERED → COMPLETED`. The external order boundary is provider-specific: payment verification, shipment movement, and completion remain simulator control-plane operations.
-
-Each shop has either a `SHOPEE_LIKE` or `TOKOPEDIA_LIKE` profile. `SHOPEE_LIKE` applies payment expiry, a seller fulfillment SLA, and customer/seller/system-specific cancellation eligibility; `TOKOPEDIA_LIKE` represents the combined Tokopedia & Shop / TikTok Shop integration boundary. Every shop has a default **Warehouse** and may add more fulfillment origins. At order creation, the simulator atomically selects the highest-priority active warehouse that can fulfill every item, reserves its inventory, and records it on the order. A **Package** contains allocated order items for that warehouse, and a Shipment carries logistics/tracking for that package. Payment and SLA expiry are enforced asynchronously through indexed, leased `SKIP LOCKED` batches and a bounded worker pool, so multiple worker replicas can safely drain large due-order backlogs.
-
-`SHOPEE_LIKE` has an intentionally separate external integration contract at `/api/shopee/v1`: partner-style signing headers, page-number pagination, provider-specific errors/rate-limit headers, `order_sn` and `item_*` terminology, package/shipment creation, and transformed webhook event/payloads. It is a simulator-owned Shopee-like adapter contract, not a claim of production Shopee API compatibility. The shared `/api/v1` HMAC API is limited to warehouse and webhook resources.
-
-`TOKOPEDIA_LIKE` exposes `/api/tokopedia/v202309`: `app_key`/`timestamp`/`sign` query signing, `x-tts-access-token`, opaque page tokens, an external status mapping, `{code,message,request_id,data}` responses, and numeric signed webhook envelopes. It models one contemporary combined Tokopedia & Shop / TikTok Shop contract rather than the retired standalone Tokopedia Open API.
-
-For `SHOPEE_LIKE`, cancellation reasons are validated: customer (`CHANGE_OF_MIND`, `DUPLICATE_ORDER`, `ADDRESS_ISSUE`), seller (`OUT_OF_STOCK`, `SELLER_UNFULFILLABLE`), and system (`PAYMENT_EXPIRED`, `PAYMENT_FAILED`, `SELLER_SLA_EXPIRED`). Packages may allocate partial quantities of one order item; a package must not exceed the remaining unallocated quantity.
-
-Every state-changing public endpoint requires `Idempotency-Key`. The key is scoped by credential and operation: an identical successful retry replays the original status/body, a different request returns `409`, and concurrent duplicates receive a retryable in-progress conflict. A success response is published only after its replay record is durable; a finalization failure returns an indeterminate server error without leaking the buffered success response. Read and provider search operations do not require the header.
-
-In Admin UI, **Shipments** is a separate fulfillment workspace. It lists only the selected shop’s shipment records and can advance an existing shipment one valid state at a time. Tracking/provider/pickup details are set only when an external developer creates the shipment through that shop’s Shopee-like or Tokopedia-like order contract.
-
-The **Orders → Simulate order → Mass order** mode sends up to 250 order attempts through a configurable pool of 2–50 concurrent workers. Point every attempt at the same low-stock product to exercise the real transactional inventory-reservation path; the live result reports created versus rejected orders so oversell protection can be inspected directly.
-
-Inventory is reserved atomically during order creation and released for permitted cancellation/payment failure or expiry. Marking a shipment `SHIPPED` atomically converts its package reservation into physical warehouse stock usage. The shared HMAC API exposes read-only `GET /api/v1/warehouses` and `GET /api/v1/warehouses/{id}`; warehouse setup and stock adjustment are control-plane operations. A shipment can also take the return-to-sender path `DELIVERY_FAILED → RETURNING → RETURNED`; the linked order becomes `RETURNED` once every shipment has returned.
-
-Products can be created, inspected, edited, and archived from the Control Plane. Archival is rejected while active inventory reservations exist, and database constraints independently prevent empty or over-allocated packages. In production mode, webhook destinations are protected against local/private IP targets, DNS rebinding, and unsafe redirects; see the operations guide for the development override.
-
-See the [integration guide](docs/marketplace/integration-guide.md), [webhook guide](docs/marketplace/webhook-guide.md), and [operations guide](docs/marketplace/operations-guide.md). For minimal signed clients, use `go run ./examples/go-client` or the [Node.js/TypeScript example](apps/marketplace/examples/node-client) after exporting its credential as environment variables.
+Run `make help` from the repository root or `apps/marketplace`. Use `make test-fast` without Docker, `make test` for the complete test suite, and `make check` for the full quality gate.
 
 ## Contract and code generation
 

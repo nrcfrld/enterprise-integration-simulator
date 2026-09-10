@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { controlPlaneRequest } from "@/shared/api/controlPlaneClient";
 import type { ControlPlaneSession } from "@/shared/types/controlPlane";
 
@@ -12,6 +12,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState("change-me-now");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { document.title = "Sign in · Marketplace Simulator"; }, []);
 
   const chooseMode = (nextMode: "login" | "register") => {
     setMode(nextMode);
@@ -48,9 +50,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       <form className="login-card card bg-base-100" onSubmit={submit}>
         <p className="eyebrow">Control plane</p>
         <h2>{mode === "login" ? "Enter the simulator" : "Create your operator account"}</h2>
-        <div className="login-mode tabs tabs-box" role="tablist" aria-label="Account action">
-          <button type="button" role="tab" aria-selected={mode === "login"} className={`tab ${mode === "login" ? "selected tab-active" : "quiet"}`} onClick={() => chooseMode("login")}>Sign in</button>
-          <button type="button" role="tab" aria-selected={mode === "register"} className={`tab ${mode === "register" ? "selected tab-active" : "quiet"}`} onClick={() => chooseMode("register")}>Create account</button>
+        <div className="login-mode tabs tabs-box" role="group" aria-label="Account action">
+          <button type="button" aria-pressed={mode === "login"} className={`tab ${mode === "login" ? "selected tab-active" : "quiet"}`} onClick={() => chooseMode("login")}>Sign in</button>
+          <button type="button" aria-pressed={mode === "register"} className={`tab ${mode === "register" ? "selected tab-active" : "quiet"}`} onClick={() => chooseMode("register")}>Create account</button>
         </div>
         {mode === "register" && <p className="form-help">New accounts start as Operators. An Admin can manage users and assign shop ownership.</p>}
         <label>Email<input className="input input-bordered" required autoComplete="email" value={email} type="email" onChange={(event) => setEmail(event.target.value)} /></label>

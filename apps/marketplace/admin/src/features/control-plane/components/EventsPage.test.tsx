@@ -35,7 +35,7 @@ describe("shop event discovery", () => {
     expect(onRefresh).toHaveBeenCalledOnce();
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(onPageChange).toHaveBeenCalledWith(2);
-    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByLabelText("Current filters")).toHaveTextContent("?shop=shop_a");
   });
 });

@@ -1,5 +1,5 @@
 import { controlDestination } from "@/app/destinations";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CONTROL_NAVIGATION, type ControlPage } from "@/app/navigation";
 import type { ControlPlaneSession, NoticeMessage, Shop } from "@/shared/types/controlPlane";
@@ -28,14 +28,34 @@ export function ControlPlaneSidebar({
   session: ControlPlaneSession;
   onLogout: () => void;
 }) {
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigation = CONTROL_NAVIGATION.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => item.page !== "Users" || session.user.role === "ADMIN"),
+  })).filter((section) => section.items.length > 0);
+
+  useEffect(() => setNavigationOpen(false), [page]);
+
   return (
-    <aside className="sidebar-panel">
-      <div className="brand">
-        <span className="signal" />
-        <span>MARKET<br />OPS</span>
+    <aside className="sidebar-panel" data-navigation-open={navigationOpen}>
+      <div className="sidebar-mobile-header">
+        <div className="brand">
+          <span className="signal" aria-hidden="true" />
+          <span>MARKET<br />OPS</span>
+        </div>
+        <button
+          type="button"
+          className="mobile-navigation-toggle btn btn-ghost"
+          aria-controls="primary-navigation"
+          aria-expanded={navigationOpen}
+          onClick={() => setNavigationOpen((open) => !open)}
+        >
+          <span>Menu</span>
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18"><path d="m5 7.5 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
       </div>
-      <nav className="sidebar-navigation menu" aria-label="Primary navigation">
-        {CONTROL_NAVIGATION.map((section) => (
+      <nav id="primary-navigation" className="sidebar-navigation menu" aria-label="Primary navigation" data-open={navigationOpen}>
+        {navigation.map((section) => (
           <div className="navigation-section" key={section.label}>
             <p className="nav-label">{section.label}</p>
             {section.items.map((item) => (
@@ -45,6 +65,7 @@ export function ControlPlaneSidebar({
                 aria-current={page === item.page && item.showActiveState !== false ? "page" : undefined}
                 title={item.description}
                 className={page === item.page && item.showActiveState !== false ? "active menu-active" : ""}
+                onClick={() => setNavigationOpen(false)}
               >
                 {item.label}
               </Link>
@@ -80,11 +101,16 @@ export function WorkspaceHeader({
   onProviderChange,
 }: WorkspaceHeaderProps) {
   const [shopFilter, setShopFilter] = useState("");
+  const summary = page === "Dashboard"
+    ? "Set up and verify your marketplace integration."
+    : selectedShop
+      ? `${page} for ${selectedShop.name}`
+      : `Choose a shop to work with ${page.toLowerCase()}.`;
   return (
     <header className="workspace-header navbar">
-      <div>
-        <p className="eyebrow">{page === "Dashboard" ? "Integration runbook" : "Control plane"}</p>
+      <div className="workspace-title">
         <h1>{page}</h1>
+        <p>{summary}</p>
       </div>
       <div className="header-actions">
         {page === "Orders" && (
@@ -122,8 +148,8 @@ export function WorkspaceHeader({
             ))}
           </select>
         </label>
-        <Link className="btn btn-ghost btn-sm" to={controlDestination("Shops", shopID)}>Manage shops</Link>
-        {selectedShop && (
+        <Link className="header-manage-link" to={controlDestination("Shops", shopID)}>Manage shops</Link>
+        {selectedShop && page !== "Orders" && (
           <span className={`provider-badge badge badge-secondary ${selectedShop.provider_profile.toLowerCase()}`}>
             {providerLabel(selectedShop.provider_profile)}
           </span>

@@ -4,6 +4,16 @@ The simulator is an external system. Do not query its database or rely on contro
 
 The committed OpenAPI contract is available as `/openapi.yaml`; use `/swagger/index.html` for an interactive view of the same specification.
 
+## First integration
+
+1. Open the Admin UI and select or create the shop you want to integrate with. The shop profile chooses the Shopee-like or Tokopedia-like public contract.
+2. Open **API Credentials**, create a credential, and save every one-time value. Tokopedia-like requests also need the returned access token.
+3. Open **Documentation → Request simulator**, select the matching provider, and send its product list/search request.
+4. List/search orders, reuse the returned API ID, and follow the provider's fulfilment actions. Payment verification and physical shipment progression remain Control Plane simulations.
+5. Register a webhook, trigger an order event, verify the delivery signature, and inspect its attempt history in the Control Plane.
+
+Start with read-only requests. Introduce retries, idempotency, duplicate deliveries, timeouts, and other failure scenarios only after the normal path works. Reset sample data before creating credentials or webhooks because reset removes the shop's integration setup and history.
+
 ## Developer Portal and request simulator
 
 Open **Documentation → Request simulator** in the Admin UI to run every public
@@ -52,47 +62,6 @@ Errors use a stable envelope:
 Treat `error.code` as programmatic and `message` as developer-facing text. Public API errors include authentication (`INVALID_CLIENT`, `INVALID_SIGNATURE`, `REQUEST_EXPIRED`), request validation (`INVALID_REQUEST`, `INVALID_CURSOR`, `INVALID_DATE`, `INVALID_SORT`), resource lookup (`NOT_FOUND`), idempotency (`IDEMPOTENCY_KEY_REQUIRED`), and simulation behavior (`RATE_LIMIT_EXCEEDED`, `SIMULATED_FAILURE`, `MARKETPLACE_MAINTENANCE`).
 
 Rate-limited responses use HTTP `429` and expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (Unix seconds). Back off until the reset time; scenarios can force this path for one shop. The same headers are present on successful authenticated public requests, so a client can make a proactive decision before it receives a `429`.
-
-## First integration
-
-Use **Manage shops** beside **Current shop** to create or select a shop. A newly
-created shop becomes the current selection and opens its Dashboard. Dashboard
-counts cover **all accessible shops**; configuration checks describe only the
-selected shop. They record catalog/credential/webhook configuration, not proof
-that you saved a secret, signed a request, or processed a callback.
-
-For a first request, open the API Simulator, choose the selected shop's provider,
-and use credentials you saved when creating them. Test Shopee's
-`GET /api/shopee/v1/orders` or Tokopedia's
-`POST /api/tokopedia/v202309/orders/search`. A successful response verifies this
-request; the dashboard does not persist completion of this learning exercise.
-
-The optional **Reset shop to sample data** action (also **Reset to seed** in
-Products) permanently deletes credentials, webhook registrations and delivery
-history, orders/packages/shipments/events, products and warehouse inventory.
-It creates 100 products, 50 completed historical orders, a sample credential
-whose secret is unavailable, and a disabled example webhook. Warehouse
-definitions and scenario settings remain. The confirmation names the affected
-shop. To keep existing data, add products instead. After reset, create and save
-a new credential, revoke the unusable sample credential, and configure your
-receiver again. Historical orders do not demonstrate successful delivery.
-
-Resource lists and details expose **Refresh** and the last successful update
-time. Delivery lists and order/delivery details check asynchronous work every
-five seconds, up to twelve sequential checks while deliveries are pending (or
-while waiting for delivery creation). Checking stops on completion, error,
-navigation, or that limit. Use Refresh to start another check window for longer
-delays. A failed refresh leaves previous data visible with an error; initial
-load failures offer retry. "No deliveries yet" is not proof of a missing webhook.
-Single-order simulation opens the created order, whose delivery links open its
-attempts. Verify your receiver's durable processing separately from HTTP success.
-
-1. Select/create the intended shop. If you want seed fixtures, use Reset to seed **before** creating credentials and webhooks; reset deletes earlier setup and history.
-2. Create an API credential and start the [provider-specific receiver](webhook-guide.md#runnable-receiver). The shop profile selects outbound verification even when you register through the shared API. Tokopedia uses the oldest ACTIVE app credential shown in Admin Webhooks; its callback secret is unused.
-3. Sign `POST /api/v1/webhooks` and register a worker-reachable endpoint for `order.created`, `order.paid`, `order.ready_to_ship`, and `order.shipped`. For Shopee, save the registration secret and configure the receiver with it before triggering an event. Registrations reject unsupported event types; product lifecycle subscriptions include `product.created`, `product.updated`, and `product.deleted`.
-4. Create or progress an order. Verify exact raw bytes before processing, then durably accept/deduplicate using `X-Shopee-Event-Id` for Shopee or body `tts_notification_id` for Tokopedia. Return 2xx after durable acceptance and fetch current provider state from your inbox worker before acting.
-5. Inspect delivery attempts in the control plane, then enable scenarios to test your recovery path. Do not reset the shop between registration and delivery testing.
-
 
 Products are provider-specific at the public boundary. Shopee-like uses `GET /api/shopee/v1/products?page_no=&page_size=` with `item_*` fields and partner signing; Tokopedia-like uses `POST /api/tokopedia/v202309/products/search` with `data.products`, opaque page tokens, app-key signing, and an access token. Use each provider’s product detail endpoint for one product. Catalogue creation, updates, stock, and archive remain Admin Control Plane operations so warehouse inventory and product events stay atomic.
 

@@ -71,6 +71,7 @@ export function ResourcePage({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const rows = Array.isArray(data?.data) ? data.data : [];
+  const totalRecords = data?.pagination?.total ?? rows.length;
   const actions: Partial<Record<ResourcePageName, readonly [FormKind, string] | null>> = {
     Products: ["product", "New product"],
     Warehouses: ["warehouse", "New warehouse"],
@@ -114,11 +115,11 @@ export function ResourcePage({
     Users: "No users on this page. Administrators can create an operator account.",
   };
   return (
-    <>
+    <section className={`resource-page resource-page-${page.toLowerCase()}`}>
       {revokingID && shop && <CredentialRevocation id={revokingID} shop={shop} token={token} onClose={() => setRevokingID(undefined)} onRevoked={async () => { await onRefresh(); onNotice("Credential revoked. Update your client and verify delivery before resuming."); }} />}
       {error && <p role="alert" className="error alert alert-error">{error}</p>}
       {pending && <p role="status">Saving action…</p>}
-      <div className="page-hint alert alert-info">
+      <p className="resource-summary">
         {page === "Orders"
           ? "Orders trigger the event timeline. Inspect one to see every resulting webhook delivery."
           : page === "Shipments"
@@ -128,28 +129,31 @@ export function ResourcePage({
           : page === "Credentials"
             ? "Credentials are for the external integrator; the secret is visible only when it is created."
             : "Manage records for the selected shop."}
-      </div>
+      </p>
       {page === "Products" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Warehouses")}>Manage warehouse inventory</button>}
       {page === "Credentials" && onNavigate && <button className="btn btn-ghost" onClick={() => onNavigate("Documentation")}>Return to request simulator</button>}
       {inRouter && ["Orders", "Products", "Shipments", "Deliveries"].includes(page) && <ResourceSearch page={page} shopID={shopID} />}
-      <div className="table-toolbar">
-        {action && (
-          <button className="btn btn-primary" onClick={() => onForm({ kind: action[0] })}>
-            + {action[1]}
-          </button>
-        )}
-        {page === "Products" && shopID && (
-          <button className="danger btn btn-error btn-soft" disabled={isSeeding} onClick={() => void onSeed()}>
-            {isSeeding ? "Resetting…" : "Reset to seed"}
-          </button>
-        )}
-        <span>
-          {rows.length} record{rows.length === 1 ? "" : "s"}
-        </span>
+      <div className="resource-list-header">
+        <div>
+          <h2>All {page.toLowerCase()}</h2>
+          <p>{totalRecords} record{totalRecords === 1 ? "" : "s"}{data?.pagination && totalRecords !== rows.length ? ` · ${rows.length} on this page` : ""}</p>
+        </div>
+        <div className="resource-list-actions">
+          {page === "Products" && shopID && (
+            <button className="danger btn btn-error btn-soft" disabled={isSeeding} onClick={() => void onSeed()}>
+              {isSeeding ? "Resetting…" : "Reset to seed"}
+            </button>
+          )}
+          {action && (
+            <button className="btn btn-primary" onClick={() => onForm({ kind: action[0] })}>
+              + {action[1]}
+            </button>
+          )}
+        </div>
       </div>
       <div className="table-wrap card bg-base-100">
         {rows.length ? (
-          <table className="records-table table table-zebra">
+          <table className="records-table table">
             <thead>
               <tr>
                 {columns(rows[0], page).map((key) => (
@@ -178,45 +182,46 @@ export function ResourcePage({
                     )}
                     {page === "Orders" && (
                       <button
+                        className="btn btn-ghost btn-sm row-detail-action"
                         onClick={() => onDetail({ type: "order", id: row.id })}
                       >
                         View order
                       </button>
                     )}
                     {page === "Shipments" && (
-                      <button onClick={() => onDetail({ type: "shipment", id: row.id })}>
+                      <button className="btn btn-ghost btn-sm row-detail-action" onClick={() => onDetail({ type: "shipment", id: row.id })}>
                         View shipment
                       </button>
                     )}
                     {page === "Packages" && (
-                      <button onClick={() => onDetail({ type: "package", id: row.id })}>
+                      <button className="btn btn-ghost btn-sm row-detail-action" onClick={() => onDetail({ type: "package", id: row.id })}>
                         View package
                       </button>
                     )}
                     {page === "Warehouses" && (
                       <>
-                        <button onClick={() => onDetail({ type: "warehouse", id: row.id })}>
+                        <button className="btn btn-ghost btn-sm row-detail-action" onClick={() => onDetail({ type: "warehouse", id: row.id })}>
                           View inventory
                         </button>
-                        <button className="quiet" onClick={() => onForm({ kind: "warehouse", initial: row })}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => onForm({ kind: "warehouse", initial: row })}>
                           Edit warehouse
                         </button>
                       </>
                     )}
                     {page === "Deliveries" && (
                       <>
-                        <button
+                        <button className="btn btn-ghost btn-sm row-detail-action"
                           onClick={() =>
                             onDetail({ type: "delivery", id: row.id })
                           }
                         >
                           Attempts
                         </button>
-                        {row.webhook_deleted ? <span>Webhook deleted · history retained</span> : <button disabled={pending} onClick={() => void retry(row.id)}>Retry</button>}
+                        {row.webhook_deleted ? <span>Webhook deleted · history retained</span> : <button className="btn btn-ghost btn-sm" disabled={pending} onClick={() => void retry(row.id)}>Retry</button>}
                       </>
                     )}
                     {page === "Credentials" && row.status === "ACTIVE" && (
-                      <button
+                      <button className="danger btn btn-error btn-soft btn-sm"
                         disabled={pending}
                         onClick={() => setRevokingID(row.id)}
                       >
@@ -237,7 +242,7 @@ export function ResourcePage({
         )}
       </div>
       <Pagination pagination={data?.pagination} page={listPage} onChange={onPageChange} />
-    </>
+    </section>
   );
 }
 
@@ -287,6 +292,8 @@ function RecordValue({ name, value, onError, onNotice }: { name: string; value: 
   if (value == null) return <>—</>;
   const text = String(value);
   if (name.endsWith("_at") && !Number.isNaN(Date.parse(text))) return <time dateTime={text} title={text}>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(text))} UTC</time>;
-  if (name === "id" || name.endsWith("_id")) return <><code>{text}</code> <button className="btn btn-ghost btn-xs" aria-label={`Copy ${name.replaceAll("_", " ")} ${text}`} onClick={() => { void navigator.clipboard.writeText(text).then(() => onNotice("ID copied"), () => onError("Could not copy. Select and copy the displayed ID.")); }}>Copy</button></>;
+  if (name === "status") return <span className={`status-badge status-${text.toLowerCase()}`} aria-label={text}>{text.replaceAll("_", " ").toLowerCase()}</span>;
+  if (["price", "total_amount"].includes(name) && Number.isFinite(Number(value))) return <span className="numeric-value">{new Intl.NumberFormat("id-ID").format(Number(value))}</span>;
+  if (name === "id" || name.endsWith("_id")) return <span className="record-id"><code>{text}</code> <button className="btn btn-ghost btn-xs" aria-label={`Copy ${name.replaceAll("_", " ")} ${text}`} onClick={() => { void navigator.clipboard.writeText(text).then(() => onNotice("ID copied"), () => onError("Could not copy. Select and copy the displayed ID.")); }}>Copy</button></span>;
   return <>{text}</>;
 }

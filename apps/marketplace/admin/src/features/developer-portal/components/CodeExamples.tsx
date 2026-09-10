@@ -11,9 +11,15 @@ interface CodeExamplesProps {
 export function CodeExamples({ endpoint, input }: CodeExamplesProps) {
   return (
     <section className="code-examples">
-      <h3>Export this request to Node.js</h3>
-      <p>Uses the current edited path, query, raw body, and operation key. Set the credential environment variables and run with Node 20+ or Bun. Authentication timestamps and signatures are regenerated on every attempt; keep the same idempotency key when retrying. Never share a response that contains one-time secrets.</p>
-      <CodeSnippet value={buildNodeExample(endpoint, input)} language="javascript" />
+      <details>
+        <summary>
+          <span><strong>Export this request to Node.js</strong><small>Ready-to-run example using the current request</small></span>
+        </summary>
+        <div className="code-examples__content">
+          <p>Set the credential environment variables and run with Node 20+ or Bun. The example uses the current path, query, body, and operation key. Keep the same idempotency key when retrying, and never share one-time secrets.</p>
+          <CodeSnippet value={buildNodeExample(endpoint, input)} language="javascript" />
+        </div>
+      </details>
     </section>
   );
 }

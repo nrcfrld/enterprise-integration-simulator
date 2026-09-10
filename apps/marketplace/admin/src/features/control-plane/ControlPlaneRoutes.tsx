@@ -94,7 +94,7 @@ export function ControlPlaneRoutes({
         }
       />
       <Route
-        path={CONTROL_PATHS.Documentation}
+        path={`${CONTROL_PATHS.Documentation}/*`}
         element={null}
       />
       <Route

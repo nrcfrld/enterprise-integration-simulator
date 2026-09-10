@@ -159,7 +159,7 @@ it("recovers an initial load failure and keeps details visible on refresh failur
   await user.click(screen.getByRole("button", { name: "Refresh" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Refresh unavailable");
   expect(screen.getByRole("heading", { name: "ORD-001" })).toBeVisible();
-  expect(screen.getByText(/Last updated/)).toBeVisible();
+  expect(screen.getByText(/Updated/)).toBeVisible();
 });
 
 

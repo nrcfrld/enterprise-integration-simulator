@@ -26,17 +26,17 @@ beforeEach(() => {
   });
 });
 it("restores the bookmarked shop, endpoint and ID; guide links and Back select exact lessons", async () => {
-  open("/docs?shop=shop_b&section=try&endpoint=shopee-get-order&resource_id=ord_b");
+  open("/docs/simulator?shop=shop_b&endpoint=shopee-get-order&resource_id=ord_b");
   await waitFor(() => expect(screen.getByLabelText("Selected shop context")).toHaveTextContent("shop_b"));
   expect(screen.getByDisplayValue("ord_b")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Errors & limits" }));
-  expect(screen.getByTestId("position")).toHaveTextContent("section=errors");
+  fireEvent.click(screen.getByRole("link", { name: "Errors & limits" }));
+  expect(screen.getByTestId("position")).toHaveTextContent("/docs/errors");
   fireEvent.click(screen.getByRole("button", { name: "Browser Back" }));
   expect(screen.getByDisplayValue("ord_b")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Back to console" }));
+  fireEvent.click(screen.getByRole("link", { name: "Back to console" }));
   fireEvent.click(screen.getByRole("link", { name: "Integration Guide" }));
-  expect(screen.getByTestId("position")).toHaveTextContent("section=quickstart");
-  expect(screen.getByRole("button", { name: "Start here" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByTestId("position")).toHaveTextContent("/docs/start");
+  expect(screen.getByRole("link", { name: "Start here" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByTestId("position")).not.toHaveTextContent("secret");
 });
 it("restores a detail, follows its warehouse, and returns through browser history", async () => {
@@ -65,9 +65,9 @@ it("searches all records in the URL-selected shop and retains filters in its URL
 });
 it("dashboard and empty shipment shortcuts open the promised provider operation", async () => {
   open("/dashboard?shop=shop_b");
-  fireEvent.click(await screen.findByRole("button", { name: "Test in API Simulator" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open API Simulator" }));
   expect(screen.getByTestId("position")).toHaveTextContent("endpoint=shopee-list-orders");
-  fireEvent.click(screen.getByRole("button", { name: "Back to console" }));
+  fireEvent.click(screen.getByRole("link", { name: "Back to console" }));
   fireEvent.click(screen.getByRole("link", { name: "Shipments" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open API Simulator" }));
   expect(screen.getByTestId("position")).toHaveTextContent("endpoint=shopee-create-shipment");

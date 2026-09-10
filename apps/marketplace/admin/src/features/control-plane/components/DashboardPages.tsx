@@ -16,6 +16,18 @@ function providerLabel(profile: string) {
   return ({ SHOPEE_LIKE: "Shopee-like", TOKOPEDIA_LIKE: "Tokopedia-like" } as Record<string, string>)[profile] || "Shopee-like";
 }
 
+function CheckIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 10 3 3 7-7" /></svg>;
+}
+
+function ArrowRightIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h12m-5-5 5 5-5 5" /></svg>;
+}
+
+function ChevronDownIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 8 5 5 5-5" /></svg>;
+}
+
 interface DashboardProps {
   onTryOrders?: () => void;
   data: ControlPlaneData | null;
@@ -72,11 +84,18 @@ export function Dashboard({ onTryOrders, data, shopID, token, role, onNavigate, 
       action: () => onNavigate("Webhooks"),
     },
   ];
+  const completeSteps = steps.filter((step) => step.complete).length;
   return (
-    <>
-      <p className="page-hint">{data ? "Dashboard data loaded from the control API. Public API and webhook worker health are not verified here." : "Dashboard data has not loaded yet."}</p>
-      <h2>All accessible shops</h2>
-      <div className="metrics stats">
+    <div className="dashboard-page">
+      <section className="dashboard-overview" aria-labelledby="dashboard-overview-title">
+        <div className="dashboard-section-heading">
+          <div>
+            <h2 id="dashboard-overview-title">Workspace overview</h2>
+            <p>{data ? "Control-plane records for the shops you can access." : "Dashboard data has not loaded yet."}</p>
+          </div>
+          {data && <p className="dashboard-data-note">This view does not verify Public API or webhook worker health.</p>}
+        </div>
+        <div className="metrics stats">
         {[
           ["Shops", data?.shops],
           ["Orders", data?.orders],
@@ -87,82 +106,96 @@ export function Dashboard({ onTryOrders, data, shopID, token, role, onNavigate, 
             <strong className="stat-value">{value ?? "—"}</strong>
           </article>
         ))}
-      </div>
-      <section className="runbook">
-        <div className="runbook-intro card">
-          <p className="eyebrow">Start here</p>
-          <h2>Configure the selected shop, then verify your integration.</h2>
-          <p>
-            A webhook registration is only a destination and event filter. Order
-            changes create the events; the worker delivers matching events
-            asynchronously.
-          </p>
         </div>
-        <ol>
-          {steps.map(({ number, title, description, complete, action, label }) => (
-            <li key={number} className={complete ? "complete" : ""}>
-              <span className="step-number">{complete ? "✓" : number}</span>
-              <div>
-                <b>{title}</b>
-                <p>{description}</p>
-              </div>
-              <button
-                className="quiet btn btn-ghost btn-sm"
-                disabled={!shopID && number !== "1"}
-                onClick={() => void action()}
-              >
-                {label}{" "}
-                <span>→</span>
-              </button>
-            </li>
-          ))}
+      </section>
+
+      <section className="dashboard-setup" aria-labelledby="dashboard-setup-title">
+        <div className="dashboard-section-heading">
+          <div>
+            <h2 id="dashboard-setup-title">Set up this shop</h2>
+            <p>Complete the control-plane configuration before testing the public integration.</p>
+          </div>
+          <span className="setup-progress">{completeSteps} of {steps.length} complete</span>
+        </div>
+        <div className="dashboard-setup-grid">
+          <ol className="setup-steps">
+            {steps.map(({ number, title, description, complete, action, label }) => (
+              <li key={number} className={complete ? "complete" : ""}>
+                <span className="step-number">{complete ? <CheckIcon /> : number}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <p>{description}</p>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={!shopID && number !== "1"}
+                  onClick={() => void action()}
+                >
+                  {label}<ArrowRightIcon />
+                </button>
+              </li>
+            ))}
+          </ol>
+          <aside className="setup-readiness" aria-label="Integration setup readiness">
+            <h3>Configuration status</h3>
+            <p>{data?.setup?.ready ? "Core configuration is present. Manual verification is still required." : "Finish the missing items, then verify requests and delivery."}</p>
+            <ul className="setup-checks">
+              {[
+                { label: "Catalog", complete: (data?.setup?.products ?? 0) > 0, detail: `${data?.setup?.products || 0} products` },
+                { label: "Credential", complete: data?.setup?.credential_active, detail: "active integration credential" },
+                { label: "Webhook", complete: data?.setup?.webhook_configured, detail: "registration saved" },
+                { label: "Delivery", complete: data?.setup?.webhook_enabled, detail: "enabled; reachability unverified" },
+              ].map(({ label, complete, detail }) => (
+                <li key={label} className={complete ? "complete" : ""}>
+                  <span className="setup-check-icon">{complete ? <CheckIcon /> : "—"}</span>
+                  <span><strong>{label}</strong><small>{detail}</small></span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <section className="dashboard-verification" aria-labelledby="dashboard-verification-title">
+        <div className="dashboard-section-heading">
+          <div>
+            <h2 id="dashboard-verification-title">Verify the integration</h2>
+            <p>Configuration alone does not prove that credentials, delivery, or external processing work.</p>
+          </div>
+          <p className="dashboard-data-note">Complete these checks in order.</p>
+        </div>
+        <ol className="verification-steps">
+          <li><span className="verification-number">1</span><div><strong>Test a signed request</strong><p>Use the API Simulator with this shop’s provider and your saved credentials, then confirm a successful response.</p></div><button className="btn btn-primary btn-sm" disabled={!shopID} onClick={() => onTryOrders ? onTryOrders() : onNavigate("Documentation")}>Open API Simulator<ArrowRightIcon /></button></li>
+          <li><span className="verification-number">2</span><div><strong>Trigger an order event</strong><p>Simulate a new order and inspect its event trail. Historical sample orders are not proof of webhook delivery.</p></div><button className="btn btn-ghost btn-sm" disabled={!shopID} onClick={() => onForm({ kind: "order" })}>Simulate order<ArrowRightIcon /></button></li>
+          <li><span className="verification-number">3</span><div><strong>Confirm delivery and processing</strong><p>Inspect attempts for HTTP success, then confirm your application verified, stored, and processed the event once.</p></div><button className="btn btn-ghost btn-sm" disabled={!shopID} onClick={() => onNavigate("Deliveries")}>Inspect deliveries<ArrowRightIcon /></button></li>
         </ol>
       </section>
-      <section className="setup-readiness card" aria-label="Integration setup readiness">
+
+      <section className="dashboard-event-flow" aria-labelledby="event-flow-title">
         <div>
-          <h2>Selected shop configuration</h2>
-          <p>{data?.setup?.ready ? "Configuration is present. Signed requests and receiver processing still need verification." : "Complete the remaining configuration, then verify requests and delivery."}</p>
+          <h2 id="event-flow-title">Follow an order from change to delivery</h2>
+          <p>Every order change produces a durable event before webhook matching and delivery.</p>
         </div>
-        <div className="setup-checks">
-          {[
-            { label: "Catalog", complete: (data?.setup?.products ?? 0) > 0, detail: `${data?.setup?.products || 0} products` },
-            { label: "Credential", complete: data?.setup?.credential_active, detail: "active integration credential" },
-            { label: "Webhook", complete: data?.setup?.webhook_configured, detail: "registration saved" },
-            { label: "Delivery enabled", complete: data?.setup?.webhook_enabled, detail: "delivery enabled; reachability not verified" },
-          ].map(({ label, complete, detail }) => <div key={label} className={complete ? "complete" : ""}><b>{complete ? "Configured" : "Missing"}</b><span>{label}</span><small>{detail}</small></div>)}
-        </div>
-      </section>
-      <section className="runbook" aria-label="Integration verification">
-        <h2>Verify the integration yourself</h2>
-        <p>These checks are not tracked by the dashboard. A saved credential does not prove you have its secret, and a successful delivery does not prove your application processed it.</p>
-        <ol>
-          <li><div><b>Test your first signed request</b><p>Open the API Simulator, select this shop’s provider, and use your saved credentials. Shopee lists orders with GET orders; Tokopedia uses POST orders/search. Confirm a successful response.</p></div><button disabled={!shopID} onClick={() => onTryOrders ? onTryOrders() : onNavigate("Documentation")}>Test in API Simulator</button></li>
-          <li><div><b>Trigger an order event</b><p>Simulate a new order and inspect its event trail. The 50 sample orders are completed historical records, not proof of webhook delivery.</p></div><button disabled={!shopID} onClick={() => onForm({ kind: "order" })}>Simulate order</button></li>
-          <li><div><b>Verify delivery and processing</b><p>Inspect attempts for an HTTP success, then confirm your external application verified, stored, and processed the event once.</p></div><button disabled={!shopID} onClick={() => onNavigate("Deliveries")}>Inspect deliveries</button></li>
+        <ol aria-label="Order event delivery flow">
+          <li>Order state</li><li>Durable event</li><li>Matching webhook</li><li>Delivery log</li>
         </ol>
-      </section>
-      <section className="page-hint" aria-label="Sample data reset">
-        <h2>Optional sample data reset</h2>
-        <p>This replaces shop data with 100 products and 50 historical orders. It deletes credentials, webhook registrations and delivery history, orders, packages, shipments, events, products and inventory. Warehouse definitions and scenario settings remain. Add products above to keep existing data.</p>
-        <button className="danger btn btn-error btn-soft" disabled={!shopID || isSeeding} onClick={() => void onSeed()}>{isSeeding ? "Resetting…" : "Reset shop to sample data"}</button>
-      </section>
-      <section className="flow-explainer">
-        <p className="eyebrow">What happens after an order changes?</p>
-        <div>
-          <span>Order state</span>
-          <i>→</i>
-          <span>Durable event</span>
-          <i>→</i>
-          <span>Matching webhook</span>
-          <i>→</i>
-          <span>Delivery log</span>
-        </div>
-        <button className="btn btn-primary" disabled={!shopID} onClick={() => onNavigate("Orders")}>
-          View orders and events <span>→</span>
+        <button className="btn btn-ghost btn-sm" disabled={!shopID} onClick={() => onNavigate("Orders")}>
+          View orders and events<ArrowRightIcon />
         </button>
       </section>
+
+      <details className="sample-reset">
+        <summary>
+          <span><strong>Reset sample data</strong><small>Optional destructive action</small></span>
+          <ChevronDownIcon />
+        </summary>
+        <div>
+          <p>This replaces shop data with 100 products and 50 historical orders. It deletes credentials, webhook registrations and delivery history, orders, packages, shipments, events, products and inventory. Warehouse definitions and scenario settings remain.</p>
+          <button className="danger btn btn-error btn-soft" disabled={!shopID || isSeeding} onClick={() => void onSeed()}>{isSeeding ? "Resetting…" : "Reset shop to sample data"}</button>
+        </div>
+      </details>
       {role === "ADMIN" && <MaintenanceControl token={token} />}
-    </>
+    </div>
   );
 }
 
@@ -198,8 +231,7 @@ function MaintenanceControl({ token }: { token: string | null | undefined }) {
   return (
     <section className={`maintenance-control card ${enabled ? "active" : ""}`}>
       <div>
-        <p className="eyebrow">Admin-only global control</p>
-        <h2>Maintenance mode</h2>
+        <h2>Maintenance mode <span className="admin-badge">Administrator</span></h2>
         <p>
           Return a documented 503 from the public API across every shop. Use it
           to validate maintenance handling, then turn it off again.

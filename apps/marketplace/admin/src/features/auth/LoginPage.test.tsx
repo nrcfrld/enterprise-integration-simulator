@@ -45,7 +45,8 @@ describe("LoginPage critical authentication flows", () => {
     const user = userEvent.setup();
     render(<LoginPage onLogin={onLogin} />);
 
-    await user.click(screen.getByRole("tab", { name: "Create account" }));
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(screen.getByRole("button", { name: "Create account" })).toHaveAttribute("aria-pressed", "true");
     await user.type(screen.getByLabelText("Email"), "operator@example.test");
     await user.type(screen.getByLabelText("Password"), "safe-password");
     await user.click(screen.getByRole("button", { name: "Create account →" }));
